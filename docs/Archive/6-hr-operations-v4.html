@@ -1,0 +1,1829 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AvyERP · HR Operations</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+/* ── THEME ── */
+[data-theme="dark"]{
+  --bg:#07090f;--bg2:#0c0f1a;--surface:#111520;--card:#161b2a;--card2:#1c2235;
+  --border:#232d42;--border2:#2e3a52;--text:#e2e8f5;--text2:#8496b4;--text3:#4a5a78;
+  --accent:#4f8ef7;--accent2:#2563eb;--glow:rgba(79,142,247,.15);
+  --green:#22c55e;--gbg:rgba(34,197,94,.1);
+  --amber:#f59e0b;--abg:rgba(245,158,11,.1);
+  --rose:#f43f5e;--rbg:rgba(244,63,94,.1);
+  --violet:#a855f7;--vbg:rgba(168,85,247,.1);
+  --cyan:#22d3ee;--cbg:rgba(34,211,238,.1);
+  --orange:#fb923c;--obg:rgba(251,146,60,.1);
+  --shadow:0 8px 40px rgba(0,0,0,.5);--shadowsm:0 2px 12px rgba(0,0,0,.3);
+  --ibg:#0c0f1a;--drawer-bg:#0e1221;
+}
+[data-theme="light"]{
+  --bg:#f1f5fd;--bg2:#e8eef8;--surface:#fff;--card:#fff;--card2:#f7f9ff;
+  --border:#dde5f5;--border2:#c8d5eb;--text:#111827;--text2:#4a5b78;--text3:#94a3b8;
+  --accent:#2563eb;--accent2:#1d4ed8;--glow:rgba(37,99,235,.08);
+  --green:#16a34a;--gbg:rgba(22,163,74,.07);
+  --amber:#d97706;--abg:rgba(217,119,6,.07);
+  --rose:#e11d48;--rbg:rgba(225,29,72,.07);
+  --violet:#7c3aed;--vbg:rgba(124,58,237,.07);
+  --cyan:#0891b2;--cbg:rgba(8,145,178,.07);
+  --orange:#ea580c;--obg:rgba(234,88,12,.07);
+  --shadow:0 4px 24px rgba(0,0,0,.08);--shadowsm:0 2px 8px rgba(0,0,0,.05);
+  --ibg:#f7f9ff;--drawer-bg:#f0f4fb;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;font-size:14px}
+body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;transition:background .3s,color .3s;overflow-x:hidden}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+
+/* ── VIEWPORT + THEME SWITCHER (always top-right, outside everything) ── */
+.vp-ctrl{
+  position:fixed;top:10px;right:10px;z-index:9999;
+  display:flex;align-items:center;gap:3px;
+  background:var(--card);border:1px solid var(--border2);
+  border-radius:30px;padding:3px 4px;box-shadow:var(--shadowsm);
+  white-space:nowrap;
+}
+.vp-btn,.theme-btn{
+  display:flex;align-items:center;gap:4px;
+  padding:5px 10px;border-radius:20px;
+  font-size:.65rem;font-weight:700;cursor:pointer;
+  border:none;background:transparent;color:var(--text2);
+  transition:all .2s;font-family:'Sora',sans-serif;
+}
+.vp-btn.on{background:var(--accent);color:#fff}
+.theme-btn:hover,.vp-btn:hover{color:var(--accent)}
+.vp-sep{width:1px;height:14px;background:var(--border);flex-shrink:0}
+@media(max-width:480px){
+  .vp-ctrl{top:8px;right:8px;padding:2px 3px}
+  .vp-btn,.theme-btn{padding:4px 7px;font-size:.6rem}
+}
+
+/* ── HEADER ── */
+.hdr{
+  position:sticky;top:0;z-index:200;height:54px;
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;
+  padding:0 22px;padding-right:260px;
+  backdrop-filter:blur(16px);
+}
+.logo{display:flex;align-items:center;gap:9px}
+.logo-mark{
+  width:30px;height:30px;border-radius:8px;
+  background:linear-gradient(135deg,var(--accent),var(--violet));
+  display:flex;align-items:center;justify-content:center;
+  font-size:.85rem;font-weight:800;color:#fff;
+}
+.logo-txt{font-size:.95rem;font-weight:800;letter-spacing:-.4px}
+.logo-txt span{color:var(--accent)}
+.hdr-mod{
+  padding:3px 11px;border-radius:20px;
+  background:var(--rbg);border:1px solid var(--rose);
+  font-size:.64rem;font-weight:700;color:var(--rose);
+}
+.hdr-div{width:1px;height:18px;background:var(--border)}
+.hdr-bc{font-size:.72rem;color:var(--text2)}
+.hdr-bc b{color:var(--text)}
+.hdr-sp{flex:1}
+.hdr-pills{display:flex;gap:10px;align-items:center}
+.hpill{
+  display:flex;align-items:center;gap:5px;
+  padding:4px 11px;border-radius:20px;
+  background:var(--card);border:1px solid var(--border);
+  font-size:.67rem;font-weight:600;color:var(--text2);
+}
+.hpill b{color:var(--text)}
+
+/* ── SUBNAV ── */
+.subnav{
+  position:sticky;top:54px;z-index:190;
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  display:flex;padding:0 22px;overflow-x:auto;scrollbar-width:none;
+}
+.subnav::-webkit-scrollbar{display:none}
+.snav{
+  display:flex;align-items:center;gap:7px;
+  padding:11px 16px;font-size:.73rem;font-weight:600;
+  color:var(--text3);cursor:pointer;white-space:nowrap;
+  border-bottom:2.5px solid transparent;transition:all .2s;
+}
+.snav:hover{color:var(--text);background:var(--glow)}
+.snav.on{color:var(--accent);border-bottom-color:var(--accent)}
+.snav-dot{
+  width:6px;height:6px;border-radius:50%;
+  background:var(--rose);animation:pulse 1.8s infinite;
+}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.snav-ct{
+  font-family:'JetBrains Mono',monospace;font-size:.57rem;
+  padding:1px 6px;border-radius:8px;
+}
+
+/* ── LAYOUT ── */
+.layout{display:flex;min-height:calc(100vh - 94px)}
+
+/* SIDEBAR */
+.sb{
+  width:224px;flex-shrink:0;
+  background:var(--bg2);border-right:1px solid var(--border);
+  padding:14px 0;position:sticky;top:94px;
+  height:calc(100vh - 94px);overflow-y:auto;scrollbar-width:thin;
+}
+.sb-sec{
+  padding:9px 17px 3px;
+  font-size:.58rem;font-weight:800;letter-spacing:1.3px;
+  color:var(--text3);text-transform:uppercase;
+}
+.sb-item{
+  display:flex;align-items:center;gap:9px;
+  padding:8px 18px;font-size:.73rem;font-weight:500;
+  color:var(--text2);cursor:pointer;
+  border-left:3px solid transparent;transition:all .15s;
+}
+.sb-item:hover{color:var(--text);background:var(--glow)}
+.sb-item.on{color:var(--accent);background:var(--glow);border-left-color:var(--accent);font-weight:700}
+.sb-ico{font-size:.9rem;width:18px;text-align:center}
+.sb-ct{
+  margin-left:auto;font-family:'JetBrains Mono',monospace;
+  font-size:.58rem;color:var(--text3);background:var(--surface);
+  padding:1px 6px;border-radius:7px;
+}
+
+/* MAIN */
+.main{flex:1;padding:22px;overflow:hidden;min-width:0}
+
+/* ── SECTION ── */
+.sec{display:none}
+.sec.on{display:block;animation:fadeUp .22s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── PAGE INFO BUTTON (top-right of each section) ── */
+.sec-topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:20px;
+}
+.sec-title{
+  display:flex;align-items:center;gap:10px;
+}
+.sec-title h2{font-size:1rem;font-weight:800}
+.sec-title .sec-icon{
+  width:36px;height:36px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;font-size:1.1rem;
+}
+.pageinfo-btn{
+  display:flex;align-items:center;gap:6px;
+  padding:6px 14px;border-radius:20px;
+  background:var(--card);border:1px solid var(--border2);
+  font-size:.68rem;font-weight:700;color:var(--text2);
+  cursor:pointer;transition:all .2s;
+  font-family:'Sora',sans-serif;
+}
+.pageinfo-btn:hover{border-color:var(--accent);color:var(--accent)}
+.pageinfo-btn svg{width:14px;height:14px;stroke:currentColor}
+
+/* ── METRICS ── */
+.metrics{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));
+  gap:10px;margin-bottom:18px;
+}
+.met{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:12px;padding:14px 16px;transition:border-color .2s,transform .2s;
+}
+.met:hover{border-color:var(--accent);transform:translateY(-2px)}
+.met-val{font-size:1.55rem;font-weight:800;font-family:'JetBrains Mono',monospace;line-height:1;margin-bottom:4px}
+.met-lbl{font-size:.65rem;color:var(--text2)}
+.met-sub{font-size:.62rem;margin-top:5px;font-weight:600}
+.up{color:var(--green)}.dn{color:var(--rose)}.neu{color:var(--text3)}
+
+/* ── ALERTS ── */
+.alert{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:12px 16px;border-radius:11px;border:1px solid;
+  margin-bottom:14px;font-size:.75rem;
+}
+.al-amber{background:var(--abg);border-color:var(--amber);color:var(--amber)}
+.al-green{background:var(--gbg);border-color:var(--green);color:var(--green)}
+.al-blue{background:var(--glow);border-color:var(--accent);color:var(--accent)}
+.al-rose{background:var(--rbg);border-color:var(--rose);color:var(--rose)}
+.al-body{flex:1;color:var(--text)}
+.al-body b{color:inherit}
+.al-lnk{font-weight:700;text-decoration:none;color:inherit;border-bottom:1px solid currentColor}
+
+/* ── QUICK ACTIONS ── */
+.qa-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+  gap:10px;margin-bottom:20px;
+}
+.qa{
+  background:var(--card);border:1.5px solid var(--border);
+  border-radius:13px;padding:16px 12px;cursor:pointer;
+  text-align:center;transition:all .2s;
+  display:flex;flex-direction:column;align-items:center;gap:7px;
+}
+.qa:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+.qa-ico{font-size:1.5rem}
+.qa-lbl{font-size:.7rem;font-weight:700;line-height:1.3}
+.qa-sub{font-size:.6rem;color:var(--text2)}
+
+/* ── CARDS ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:13px;overflow:hidden}
+.ch{padding:13px 17px;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--border)}
+.ch h3{font-size:.8rem;font-weight:700;flex:1}
+.cd{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.ctag{font-family:'JetBrains Mono',monospace;font-size:.57rem;color:var(--text3);background:var(--surface);padding:2px 7px;border-radius:7px}
+.cb{padding:14px 17px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+
+/* ── TABLE ── */
+.tw{overflow-x:auto;border-radius:11px;border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:.74rem}
+thead th{
+  text-align:left;padding:10px 13px;
+  font-size:.61rem;font-weight:700;color:var(--text3);
+  text-transform:uppercase;letter-spacing:.7px;
+  background:var(--card2);border-bottom:1px solid var(--border);white-space:nowrap;
+}
+tbody td{padding:10px 13px;border-bottom:1px solid var(--border);vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--glow)}
+.ec{display:flex;align-items:center;gap:9px}
+.av{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:#fff;flex-shrink:0}
+
+/* ── BADGES ── */
+.b{display:inline-flex;align-items:center;gap:3px;font-size:.61rem;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.bg{background:var(--gbg);color:var(--green)}
+.ba{background:var(--abg);color:var(--amber)}
+.br{background:var(--rbg);color:var(--rose)}
+.bb{background:var(--glow);color:var(--accent)}
+.bv{background:var(--vbg);color:var(--violet)}
+.bc{background:var(--cbg);color:var(--cyan)}
+.bo{background:var(--obg);color:var(--orange)}
+
+/* ── FORMS ── */
+.fshell{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.fbar{background:var(--card2);border-bottom:1px solid var(--border);padding:13px 18px;display:flex;align-items:center;gap:10px}
+.fbar h3{font-size:.86rem;font-weight:700;flex:1}
+.fbody{padding:20px}
+.frow{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:14px;margin-bottom:14px}
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg label{font-size:.67rem;font-weight:700;color:var(--text2);letter-spacing:.2px}
+.req{color:var(--rose)}
+.fi,.fs,.fta{
+  background:var(--ibg);border:1.5px solid var(--border);
+  border-radius:8px;padding:8px 12px;font-size:.76rem;
+  color:var(--text);font-family:'Sora',sans-serif;
+  transition:border .2s;outline:none;width:100%;
+  -webkit-appearance:none;
+}
+.fi:focus,.fs:focus,.fta:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--glow)}
+.fi:disabled{opacity:.55;cursor:not-allowed}
+.fs{
+  cursor:pointer;appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%238496b4' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 11px center;padding-right:30px;
+  background-color:var(--ibg);
+}
+.fs option{background:var(--surface);color:var(--text);padding:6px}
+.fta{resize:vertical;min-height:76px}
+.fhint{font-size:.61rem;color:var(--text3);margin-top:1px}
+.fdiv{font-size:.64rem;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;padding:11px 0 7px;border-top:1px solid var(--border);margin-top:6px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 16px;border-radius:8px;font-size:.72rem;font-weight:700;cursor:pointer;border:none;transition:all .2s;font-family:'Sora',sans-serif;white-space:nowrap}
+.btn-p{background:var(--accent);color:#fff}.btn-p:hover{background:var(--accent2);transform:translateY(-1px)}
+.btn-o{background:transparent;border:1.5px solid var(--border);color:var(--text2)}.btn-o:hover{border-color:var(--accent);color:var(--accent)}
+.btn-g{background:var(--green);color:#fff}.btn-g:hover{opacity:.88;transform:translateY(-1px)}
+.btn-a{background:var(--amber);color:#fff}
+.btn-r{background:var(--rose);color:#fff}
+.btn-sm{padding:5px 11px;font-size:.66rem}
+.btn-xs{padding:3px 8px;font-size:.61rem}
+
+/* ── STEPPER ── */
+.stepper{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+.stepper::-webkit-scrollbar{display:none}
+.sdot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;flex-shrink:0;font-family:'JetBrains Mono',monospace}
+.sdot.done{background:var(--green);color:#fff}
+.sdot.now{background:var(--accent);color:#fff;box-shadow:0 0 0 4px var(--glow)}
+.sdot.todo{background:var(--card2);color:var(--text3);border:2px solid var(--border)}
+.slbl{font-size:.66rem;font-weight:600;margin:0 7px;color:var(--text2);white-space:nowrap}
+.slbl.now{color:var(--accent)}
+.sline{width:26px;height:2px;background:var(--border);flex-shrink:0}
+.sline.done{background:var(--green)}
+
+/* ── IMPACT BOX ── */
+.impact{border:1px solid;border-radius:10px;padding:12px 15px;margin:10px 0;display:flex;align-items:center;gap:10px;font-size:.75rem}
+.impact.amber{border-color:var(--amber);background:var(--abg);color:var(--amber)}
+.impact.green{border-color:var(--green);background:var(--gbg);color:var(--green)}
+.impact.rose{border-color:var(--rose);background:var(--rbg);color:var(--rose)}
+.impact-body{flex:1;color:var(--text)}
+
+/* ── ATTENDANCE CALENDAR ── */
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:10px}
+.cal-dh{font-size:.58rem;font-weight:700;text-align:center;color:var(--text3);padding:3px}
+.cal-d{aspect-ratio:1;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.63rem;font-weight:600;cursor:pointer;background:var(--card2);transition:all .2s;position:relative}
+.cal-d:hover{transform:scale(1.1);z-index:1}
+.cal-d.P{background:var(--gbg);color:var(--green);border:1px solid var(--green)}
+.cal-d.A{background:var(--rbg);color:var(--rose);border:1px solid var(--rose)}
+.cal-d.H{background:var(--abg);color:var(--amber);border:1px solid var(--amber)}
+.cal-d.W{background:var(--surface);color:var(--text3)}
+.cal-d.V{background:var(--vbg);color:var(--violet);border:1px solid var(--violet)}
+.cal-d.sel{box-shadow:0 0 0 2.5px var(--accent);transform:scale(1.12);z-index:2}
+.cal-d.em{visibility:hidden}
+
+/* ── TIMELINE ── */
+.tl{display:flex;flex-direction:column}
+.tl-row{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--border)}
+.tl-row:last-child{border-bottom:none}
+.tl-ico{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;flex-shrink:0;margin-top:1px}
+.tl-bd{flex:1}
+.tl-nm{font-size:.74rem;font-weight:700;margin-bottom:2px}
+.tl-mt{font-size:.64rem;color:var(--text2)}
+.tl-t{font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--text3);flex-shrink:0;margin-top:3px}
+
+/* ── TOGGLE ── */
+.tog{width:36px;height:19px;border-radius:11px;background:var(--border2);cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;display:inline-block}
+.tog::after{content:'';position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.tog.on{background:var(--accent)}.tog.on::after{transform:translateX(17px)}
+
+/* ── APPROVAL CARD ── */
+.apv-card{padding:10px 12px;border-radius:10px;border:1px solid;margin-bottom:8px}
+
+/* ── EMI TABLE ── */
+.emi-table{width:100%;border-collapse:collapse;font-size:.7rem}
+.emi-table th{text-align:left;padding:7px 11px;font-size:.59rem;font-weight:700;color:var(--text3);background:var(--card2);border-bottom:1px solid var(--border)}
+.emi-table td{padding:7px 11px;border-bottom:1px solid var(--border)}
+.emi-table tr.cur td{background:var(--glow)}
+.emi-table tr.paid td{opacity:.45}
+
+/* ── KANBAN ── */
+.kanban{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:12px}
+.kb-col{background:var(--card2);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.kb-h{padding:9px 13px;font-size:.7rem;font-weight:700;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.kb-b{padding:9px;display:flex;flex-direction:column;gap:7px}
+.kb-card{background:var(--card);border:1px solid var(--border);border-radius:9px;padding:10px 12px;font-size:.71rem;cursor:pointer;transition:border-color .2s,transform .2s}
+.kb-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.kb-nm{font-weight:700;margin-bottom:2px}
+.kb-sub{color:var(--text2);font-size:.64rem}
+
+/* ══════════════════════════════════════════
+   PAGE INFO DRAWER
+══════════════════════════════════════════ */
+.drawer-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.55);
+  z-index:800;opacity:0;pointer-events:none;transition:opacity .25s;
+}
+.drawer-overlay.open{opacity:1;pointer-events:all}
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;
+  width:520px;max-width:96vw;
+  background:var(--drawer-bg);
+  border-left:1px solid var(--border2);
+  z-index:900;overflow-y:auto;
+  transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);
+  display:flex;flex-direction:column;
+}
+@media(max-width:600px){
+  .drawer{width:100vw;max-width:100vw;border-left:none}
+}
+.drawer.open{transform:translateX(0)}
+.drawer-hdr{
+  padding:16px 20px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;position:sticky;top:0;
+  background:var(--drawer-bg);z-index:10;
+}
+.drawer-hdr h3{font-size:.88rem;font-weight:800;flex:1}
+.drawer-close{
+  width:28px;height:28px;border-radius:50%;border:none;
+  background:var(--card2);color:var(--text2);cursor:pointer;
+  font-size:.85rem;display:flex;align-items:center;justify-content:center;
+  transition:all .2s;flex-shrink:0;
+}
+.drawer-close:hover{background:var(--rose);color:#fff}
+.drawer-body{padding:20px;flex:1}
+
+/* Drawer content styles */
+.dw-section{margin-bottom:22px}
+.dw-section h4{
+  font-size:.72rem;font-weight:800;color:var(--accent);
+  text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;
+  display:flex;align-items:center;gap:7px;
+}
+.dw-section h4::after{content:'';flex:1;height:1px;background:var(--border)}
+.dw-pipeline{display:flex;align-items:center;flex-wrap:wrap;gap:0;overflow-x:auto;padding-bottom:4px}
+.dw-step{display:flex;flex-direction:column;align-items:center;gap:5px;flex-shrink:0}
+.dw-box{
+  border-radius:10px;padding:9px 13px;text-align:center;
+  min-width:88px;font-size:.67rem;font-weight:700;border:1.5px solid;
+}
+.dw-box .dw-n{font-family:'JetBrains Mono',monospace;font-size:.6rem;margin-bottom:4px;display:block;opacity:.7}
+.dw-box .dw-ico{font-size:1rem;margin-bottom:2px;display:block}
+.dw-arrow{font-size:1rem;color:var(--text3);margin:0 3px;padding-bottom:12px}
+.dw-fi-row{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid var(--border)}
+.dw-fi-row:last-child{border-bottom:none}
+.dw-fi-ico{font-size:.82rem;margin-top:1px}
+.dw-fi-bd{flex:1}
+.dw-fi-nm{font-size:.73rem;font-weight:700;margin-bottom:1px}
+.dw-fi-ds{font-size:.66rem;color:var(--text2);line-height:1.5}
+.dw-fi-tp{font-family:'JetBrains Mono',monospace;font-size:.58rem;color:var(--violet);background:var(--vbg);padding:1px 6px;border-radius:5px;flex-shrink:0;align-self:flex-start;margin-top:2px}
+.dw-smart{display:flex;flex-direction:column;gap:6px}
+.dw-smart-item{
+  display:flex;align-items:flex-start;gap:8px;
+  padding:8px 11px;background:var(--glow);border-radius:8px;
+  font-size:.7rem;color:var(--text2);line-height:1.5;
+}
+.dw-smart-item::before{content:'→';color:var(--accent);font-weight:700;flex-shrink:0;margin-top:1px}
+.dw-tag-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.dw-tag{font-size:.64rem;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid}
+
+/* ── TAP HIGHLIGHT REMOVAL ── */
+button,select,input,.qa,.snav,.sb-item,.btn,.mob-nav-item{
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+}
+
+/* ── MOBILE BOTTOM NAV ── */
+.mob-nav{
+  display:none;
+  position:fixed;bottom:0;left:0;right:0;z-index:300;
+  background:var(--bg2);border-top:1px solid var(--border);
+  padding:6px 0 max(6px, env(safe-area-inset-bottom));
+  grid-template-columns:repeat(5,1fr);
+}
+body.mob .mob-nav{display:grid}
+body.mob .layout{padding-bottom:60px}
+.mob-nav-item{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:4px 2px;cursor:pointer;transition:all .2s;
+  font-size:.55rem;font-weight:700;color:var(--text3);
+}
+.mob-nav-item .mn-ico{font-size:1.1rem}
+.mob-nav-item.on{color:var(--accent)}
+.mob-nav-item:active{transform:scale(.9)}
+body.mob .sb{display:none}
+body.mob .layout{flex-direction:column;padding-bottom:64px}
+body.mob .main{padding:12px;width:100%}
+body.mob .hdr{padding:0 12px;padding-right:200px;height:50px}
+body.mob .hdr-mod,body.mob .hdr-div,body.mob .hdr-bc,body.mob .hdr-pills{display:none}
+body.mob .logo-txt{font-size:.85rem}
+body.mob .hdr-sp{flex:1}
+body.mob .subnav{padding:0 4px;top:50px}
+body.mob .snav{padding:8px 9px;font-size:.65rem;gap:5px}
+body.mob .metrics{grid-template-columns:1fr 1fr;gap:8px}
+body.mob .met{padding:11px 10px}
+body.mob .met-val{font-size:1.25rem}
+body.mob .met-sub{font-size:.58rem}
+body.mob .two{grid-template-columns:1fr !important}
+body.mob .three{grid-template-columns:1fr !important}
+body.mob .frow{grid-template-columns:1fr !important}
+body.mob .qa-grid{grid-template-columns:repeat(2,1fr);gap:8px}
+body.mob .qa{padding:12px 10px;gap:5px}
+body.mob .qa-ico{font-size:1.25rem}
+body.mob .qa-lbl{font-size:.65rem}
+body.mob .qa-sub{font-size:.57rem}
+body.mob .sec-topbar{gap:8px;margin-bottom:14px}
+body.mob .sec-title h2{font-size:.82rem}
+body.mob .sec-title .sec-icon{width:30px;height:30px;font-size:.9rem;border-radius:8px}
+body.mob .pageinfo-btn .pi-label{display:none}
+body.mob .pageinfo-btn{padding:5px 9px;gap:3px;font-size:.62rem}
+body.mob .tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+body.mob table{min-width:440px;font-size:.68rem}
+body.mob thead th{padding:7px 9px;font-size:.56rem}
+body.mob tbody td{padding:7px 9px}
+body.mob .stepper{padding:10px 12px;gap:0}
+body.mob .slbl{font-size:.58rem;margin:0 4px}
+body.mob .sdot{width:22px;height:22px;font-size:.6rem}
+body.mob .sline{width:18px}
+body.mob .fshell{border-radius:10px}
+body.mob .fbar{padding:11px 13px;flex-wrap:wrap;gap:6px}
+body.mob .fbar h3{font-size:.78rem;min-width:0;flex:1}
+body.mob .fbody{padding:14px}
+body.mob .impact{flex-direction:column;align-items:flex-start;gap:5px;font-size:.7rem}
+body.mob .apv-card{padding:9px 10px}
+body.mob .cal-grid{gap:2px}
+body.mob .cal-d{font-size:.54rem;border-radius:4px}
+body.mob .cal-dh{font-size:.52rem;padding:2px}
+body.mob .alert{padding:9px 11px;font-size:.69rem}
+body.mob .ch{padding:10px 12px}
+body.mob .ch h3{font-size:.74rem}
+body.mob .cb{padding:11px 12px}
+body.mob .btn-xs{padding:4px 8px;font-size:.61rem}
+body.mob .btn-sm{padding:5px 10px;font-size:.64rem}
+body.mob .tl-nm{font-size:.69rem}
+body.mob .tl-mt{font-size:.6rem}
+body.mob .emi-table{font-size:.64rem}
+body.mob .emi-table th{padding:6px 8px;font-size:.56rem}
+body.mob .emi-table td{padding:6px 8px}
+/* audit filter row */
+body.mob #s9>div:first-of-type{flex-direction:column;align-items:stretch;gap:8px}
+body.mob #s9>div:first-of-type .fs{width:100% !important}
+body.mob #s9>div:first-of-type .fi{width:100% !important}
+body.mob #s9>div:first-of-type div[style*="flex:1"]{display:none}
+/* EC avatar smaller */
+body.mob .av{width:26px;height:26px;font-size:.62rem}
+@media(max-width:380px){
+  body.mob .slbl{display:none}
+  body.mob .sline{width:12px}
+  body.mob .snav-ct{display:none}
+}
+
+/* ── APPROVAL WORKFLOW BANNER ── */
+.apwf{border-radius:12px;border:1.5px solid;padding:14px 16px;margin:12px 0;display:flex;align-items:flex-start;gap:12px}
+.apwf.pending{border-color:var(--amber);background:var(--abg)}
+.apwf.sent{border-color:var(--accent);background:var(--glow)}
+.apwf.approved{border-color:var(--green);background:var(--gbg)}
+.apwf.rejected{border-color:var(--rose);background:var(--rbg)}
+.apwf-ico{font-size:1.2rem;flex-shrink:0;margin-top:1px}
+.apwf-bd{flex:1}
+.apwf-title{font-size:.78rem;font-weight:800;margin-bottom:3px}
+.apwf-meta{font-size:.66rem;color:var(--text2);line-height:1.6}
+.apwf-steps{display:flex;gap:0;margin-top:10px;flex-wrap:wrap}
+.apwf-step{display:flex;align-items:center;gap:6px;padding:5px 11px;background:var(--card2);border:1px solid var(--border);font-size:.65rem;font-weight:700;color:var(--text3);white-space:nowrap}
+.apwf-step:first-child{border-radius:7px 0 0 7px}
+.apwf-step:last-child{border-radius:0 7px 7px 0}
+.apwf-step.done{background:var(--gbg);border-color:var(--green);color:var(--green)}
+.apwf-step.now{background:var(--glow);border-color:var(--accent);color:var(--accent)}
+
+/* ── REPORTS TAB SYSTEM ── */
+.rtabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.rtab{padding:6px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--card);font-size:.7rem;font-weight:700;color:var(--text2);cursor:pointer;transition:all .2s}
+.rtab.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.rtab:hover:not(.on){border-color:var(--accent);color:var(--accent)}
+.rview{display:none}
+.rview.on{display:block;animation:fadeUp .2s ease}
+
+/* ── REPORT CARD ── */
+.rpt-card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px}
+.rpt-hdr{background:var(--card2);padding:12px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+.rpt-hdr h4{font-size:.8rem;font-weight:700;flex:1}
+.rpt-body{padding:14px 16px}
+.rpt-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.rpt-filters .fi,.rpt-filters .fs{height:32px;padding:4px 10px;font-size:.7rem}
+.rpt-filters .fs{padding-right:26px}
+.rpt-kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:14px}
+.rpt-kpi{background:var(--card2);border:1px solid var(--border);border-radius:9px;padding:10px 12px;text-align:center}
+.rpt-kpi-v{font-size:1.3rem;font-weight:800;font-family:'JetBrains Mono',monospace;line-height:1}
+.rpt-kpi-l{font-size:.59rem;color:var(--text2);margin-top:3px}
+.chart-row{display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:.68rem}
+.chart-lbl{width:100px;flex-shrink:0;text-align:right;color:var(--text2);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chart-bar-bg{flex:1;height:20px;background:var(--card2);border-radius:5px;overflow:hidden}
+.chart-bar{height:100%;border-radius:5px;transition:width .6s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;padding:0 7px}
+.chart-bar span{font-size:.61rem;font-weight:700;color:#fff;white-space:nowrap}
+.chart-val{width:55px;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:.65rem;font-weight:700}
+
+/* ── ROW FLASH ON SELECT ── */
+@keyframes rowFlash{0%{background:rgba(79,142,247,.35)}100%{background:var(--glow)}}
+.row-selected td{animation:rowFlash .45s ease forwards !important}
+
+/* ── SEND APPROVAL AREA ── */
+.send-approval-area{background:var(--card2);border:1.5px dashed var(--border2);border-radius:11px;padding:14px 16px;margin-top:12px}
+.send-approval-area.active{border-style:solid;border-color:var(--accent);background:var(--glow)}
+.sa-title{font-size:.74rem;font-weight:800;margin-bottom:3px}
+.sa-sub{font-size:.65rem;color:var(--text2);margin-bottom:10px;line-height:1.5}
+.co-note{font-size:.64rem;color:var(--text3);background:var(--card2);border:1px solid var(--border);border-radius:7px;padding:6px 10px;margin-top:6px;display:flex;align-items:flex-start;gap:5px}
+.co-note b{color:var(--violet)}
+
+/* mobile */
+body.mob .rtabs{gap:5px}
+body.mob .rtab{padding:5px 10px;font-size:.65rem}
+body.mob .rpt-filters{flex-direction:column}
+body.mob .rpt-filters .fi,body.mob .rpt-filters .fs{width:100%}
+body.mob .rpt-kpi-row{grid-template-columns:1fr 1fr}
+body.mob .chart-lbl{width:70px;font-size:.6rem}
+body.mob .apwf-steps{gap:0}
+body.mob .apwf-step{padding:4px 8px;font-size:.6rem}
+</style>
+</head>
+<body>
+
+<!-- ══ VIEWPORT + THEME SWITCHER ══ -->
+<div class="vp-ctrl">
+  <button class="vp-btn on" id="vd" onclick="setView('d')">🖥️ Desktop</button>
+  <div class="vp-sep"></div>
+  <button class="vp-btn" id="vm" onclick="setView('m')">📱 Mobile</button>
+  <div class="vp-sep"></div>
+  <button class="theme-btn" id="tbtn" onclick="toggleTheme()">☀️ Light</button>
+</div>
+
+<!-- ══ PAGE INFO DRAWER ══ -->
+<div class="drawer-overlay" id="overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-hdr">
+    <div style="font-size:1rem">ℹ️</div>
+    <h3 id="drawer-title">Page Information</h3>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+</div>
+
+<!-- ══ HEADER ══ -->
+<div class="hdr">
+  <div class="logo">
+    <div class="logo-mark">A</div>
+    <div class="logo-txt">Avy<span>ERP</span></div>
+  </div>
+  <div class="hdr-mod">📋 HR Operations</div>
+  <div class="hdr-div"></div>
+  <div class="hdr-bc">HRMS → Transactions → <b>HR Operations</b></div>
+  <div class="hdr-sp"></div>
+  <div class="hdr-pills">
+    <div class="hpill">👥 <b>487</b> Active</div>
+    <div class="hpill">⚠️ <b>7</b> Pending</div>
+    <div class="hpill" style="color:var(--green)">💰 <b>Mar 2026</b> Open</div>
+  </div>
+</div>
+
+<!-- ══ SUBNAV ══ -->
+<div class="subnav">
+  <div class="snav on" onclick="showSec('s0',this)">📊 Overview</div>
+  <div class="snav" onclick="showSec('s1',this)">📅 Attendance <span class="snav-ct" style="background:var(--rbg);color:var(--rose)">4</span></div>
+  <div class="snav" onclick="showSec('s2',this)">🌴 Leave <span class="snav-ct" style="background:var(--abg);color:var(--amber)">2</span></div>
+  <div class="snav" onclick="showSec('s3',this)">🎁 Bonus</div>
+  <div class="snav" onclick="showSec('s4',this)">💳 Loans <span class="snav-ct" style="background:var(--rbg);color:var(--rose)">3</span></div>
+  <div class="snav" onclick="showSec('s5',this)">💻 Assets</div>
+  <div class="snav" onclick="showSec('s6',this)">📄 Letters</div>
+  <div class="snav" onclick="showSec('s7',this)">⚖️ Discipline</div>
+  <div class="snav" onclick="showSec('s8',this)">🛡️ Compliance</div>
+  <div class="snav" onclick="showSec('s9',this)">🔍 Audit <span class="snav-dot"></span></div>
+</div>
+
+<!-- ══ LAYOUT ══ -->
+<div class="layout">
+
+<!-- SIDEBAR -->
+<div class="sb" id="sb">
+  <div class="sb-sec">HR Operations</div>
+  <div class="sb-item on" onclick="showSec('s0',null)"><span class="sb-ico">📊</span> Dashboard</div>
+  <div class="sb-sec">Daily Operations</div>
+  <div class="sb-item" onclick="showSec('s1',null)"><span class="sb-ico">📅</span> Attendance Adj. <span class="sb-ct">4</span></div>
+  <div class="sb-item" onclick="showSec('s2',null)"><span class="sb-ico">🌴</span> Leave Override <span class="sb-ct">2</span></div>
+  <div class="sb-item" onclick="showSec('s3',null)"><span class="sb-ico">🎁</span> Bonus Upload</div>
+  <div class="sb-sec">Financial</div>
+  <div class="sb-item" onclick="showSec('s4',null)"><span class="sb-ico">💳</span> Loans & Advances <span class="sb-ct">3</span></div>
+  <div class="sb-sec">Assets & Docs</div>
+  <div class="sb-item" onclick="showSec('s5',null)"><span class="sb-ico">💻</span> Asset Management</div>
+  <div class="sb-item" onclick="showSec('s6',null)"><span class="sb-ico">📄</span> HR Letters</div>
+  <div class="sb-sec">Governance</div>
+  <div class="sb-item" onclick="showSec('s7',null)"><span class="sb-ico">⚖️</span> Discipline</div>
+  <div class="sb-item" onclick="showSec('s8',null)"><span class="sb-ico">🛡️</span> Compliance</div>
+  <div class="sb-item" onclick="showSec('s9',null)"><span class="sb-ico">🔍</span> Audit Trail</div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+<!-- ═══ S0: OVERVIEW ═══ -->
+<div id="s0" class="sec on">
+  <div class="sec-topbar">
+    <div class="sec-title">
+      <div class="sec-icon" style="background:var(--rbg)">📋</div>
+      <h2>HR Operations — Dashboard</h2>
+    </div>
+    <button class="pageinfo-btn" onclick="openDrawer('s0')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      Page Info
+    </button>
+  </div>
+
+  <div class="metrics">
+    <div class="met"><div class="met-val" style="color:var(--rose)">7</div><div class="met-lbl">Pending Actions</div><div class="met-sub dn">↑ 2 since yesterday</div></div>
+    <div class="met"><div class="met-val" style="color:var(--amber)">4</div><div class="met-lbl">Attendance Fixes</div><div class="met-sub neu">Cutoff: Mar 13</div></div>
+    <div class="met"><div class="met-val" style="color:var(--cyan)">2</div><div class="met-lbl">Leave Overrides</div><div class="met-sub up">↑ Approved</div></div>
+    <div class="met"><div class="met-val" style="color:var(--green)">₹2.8L</div><div class="met-lbl">Bonus Pending</div><div class="met-sub neu">18 employees</div></div>
+    <div class="met"><div class="met-val" style="color:var(--violet)">3</div><div class="met-lbl">Loan Applications</div><div class="met-sub up">₹5.2L requested</div></div>
+    <div class="met"><div class="met-val" style="color:var(--orange)">12</div><div class="met-lbl">Assets Issued</div><div class="met-sub neu">This week</div></div>
+  </div>
+
+  <div class="alert al-amber"><span>⚠️</span><div class="al-body"><b>Payroll cutoff in 3 days (Mar 13)</b> — 4 attendance corrections pending. Unresolved items will be excluded from March payroll. <a class="al-lnk" href="#" onclick="showSec('s1',null);return false">Review now →</a></div></div>
+  <div class="alert al-blue"><span>💡</span><div class="al-body"><b>Q1 Bonus batch ready</b> — Finance approved ₹2.8L pool. Pending HR upload to payroll. <a class="al-lnk" href="#" onclick="showSec('s3',null);return false">Upload →</a></div></div>
+
+  <div style="font-size:.76rem;font-weight:800;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">⚡ Quick Actions</div>
+  <div class="qa-grid">
+    <div class="qa" onclick="showSec('s1',null)" style="border-color:var(--rose)"><div class="qa-ico">📅</div><div class="qa-lbl" style="color:var(--rose)">Attendance Override</div><div class="qa-sub">Fix punch data</div></div>
+    <div class="qa" onclick="showSec('s2',null)" style="border-color:var(--cyan)"><div class="qa-ico">🌴</div><div class="qa-lbl" style="color:var(--cyan)">Leave Override</div><div class="qa-sub">Adjust balances</div></div>
+    <div class="qa" onclick="showSec('s3',null)" style="border-color:var(--green)"><div class="qa-ico">🎁</div><div class="qa-lbl" style="color:var(--green)">Bonus Upload</div><div class="qa-sub">Bulk incentives</div></div>
+    <div class="qa" onclick="showSec('s4',null)" style="border-color:var(--amber)"><div class="qa-ico">💳</div><div class="qa-lbl" style="color:var(--amber)">Process Loan</div><div class="qa-sub">Advance / EMI</div></div>
+    <div class="qa" onclick="showSec('s5',null)" style="border-color:var(--violet)"><div class="qa-ico">💻</div><div class="qa-lbl" style="color:var(--violet)">Issue Asset</div><div class="qa-sub">Device / card</div></div>
+    <div class="qa" onclick="showSec('s6',null)" style="border-color:var(--accent)"><div class="qa-ico">📄</div><div class="qa-lbl" style="color:var(--accent)">Generate Letter</div><div class="qa-sub">Offer / experience</div></div>
+    <div class="qa" onclick="showSec('s7',null)" style="border-color:var(--orange)"><div class="qa-ico">⚖️</div><div class="qa-lbl" style="color:var(--orange)">Warning Notice</div><div class="qa-sub">Disciplinary action</div></div>
+    <div class="qa" onclick="showSec('s8',null)" style="border-color:var(--text3)"><div class="qa-ico">🛡️</div><div class="qa-lbl" style="color:var(--text2)">Compliance</div><div class="qa-sub">Statutory filings</div></div>
+  </div>
+
+  <div class="two">
+    <div class="card">
+      <div class="ch"><div class="cd" style="background:var(--amber)"></div><h3>Recent Activity</h3><span class="ctag">Today</span></div>
+      <div class="cb">
+        <div class="tl">
+          <div class="tl-row"><div class="tl-ico" style="background:var(--abg)">✏️</div><div class="tl-bd"><div class="tl-nm">Attendance corrected — Rajesh Kumar</div><div class="tl-mt">Mar 09 punch-out fixed · Biometric fault · By Priya Sharma</div></div><div class="tl-t">10:22 AM</div></div>
+          <div class="tl-row"><div class="tl-ico" style="background:var(--cbg)">🌴</div><div class="tl-bd"><div class="tl-nm">Leave credited — Sneha Nair</div><div class="tl-mt">+2 Casual Leave · Policy correction · By HR Admin</div></div><div class="tl-t">09:45 AM</div></div>
+          <div class="tl-row"><div class="tl-ico" style="background:var(--vbg)">💻</div><div class="tl-bd"><div class="tl-nm">MacBook issued — Arjun Mehta</div><div class="tl-mt">S/N: FVFXM2024 · Condition: New · E-sign pending</div></div><div class="tl-t">09:10 AM</div></div>
+          <div class="tl-row"><div class="tl-ico" style="background:var(--gbg)">💳</div><div class="tl-bd"><div class="tl-nm">Loan approved — Deepika Rao</div><div class="tl-mt">₹80,000 · 10 EMI · ₹8,000/month from April</div></div><div class="tl-t">Yesterday</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><div class="cd" style="background:var(--rose)"></div><h3>Pending Approvals</h3><span class="ctag">7 items</span></div>
+      <div class="cb" style="display:flex;flex-direction:column;gap:8px">
+        <div class="apv-card" style="border-color:var(--rose);background:var(--rbg)"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><b style="font-size:.75rem">Rajesh Kumar — Attendance · Mar 9</b><span class="b br">Missing Out</span></div><div style="font-size:.66rem;color:var(--text2);margin-bottom:7px">Impact: -₹3,200 from March payroll</div><div style="display:flex;gap:5px"><button class="btn btn-g btn-xs">Approve</button><button class="btn btn-o btn-xs">Reject</button></div></div>
+        <div class="apv-card" style="border-color:var(--amber);background:var(--abg)"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><b style="font-size:.75rem">Aditya Kumar — Loan · ₹1,20,000</b><span class="b ba">Finance Review</span></div><div style="font-size:.66rem;color:var(--text2);margin-bottom:7px">12 EMI · ₹10,000/month personal loan</div><div style="display:flex;gap:5px"><button class="btn btn-a btn-xs">Review</button></div></div>
+        <div class="apv-card" style="border-color:var(--green);background:var(--gbg)"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><b style="font-size:.75rem">Q1 Bonus Batch · 18 employees</b><span class="b bg">Finance Approved</span></div><div style="font-size:.66dim;color:var(--text2);margin-bottom:7px;font-size:.66rem">₹2,80,000 total · Ready to merge</div><div style="display:flex;gap:5px"><button class="btn btn-g btn-xs">Merge to Payroll</button></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S1: ATTENDANCE ═══ -->
+<div id="s1" class="sec">
+  <div class="sec-topbar">
+    <div class="sec-title">
+      <div class="sec-icon" style="background:var(--rbg)">📅</div>
+      <h2>Attendance Adjustment</h2>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="rtabs" style="margin-bottom:0">
+        <div class="rtab on" id="s1-tab-form" onclick="switchTab('s1','form')">⚙️ Override</div>
+        <div class="rtab" id="s1-tab-report" onclick="switchTab('s1','report')">📊 Reports</div>
+      </div>
+      <button class="pageinfo-btn" onclick="openDrawer('s1')">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <span class="pi-label">Page Info</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- FORM VIEW -->
+  <div class="rview on" id="s1-form">
+    <div class="alert al-amber"><span>⚠️</span><div class="al-body"><b>4 corrections pending</b> before payroll lock on Mar 13. Total salary impact: <b>-₹16,800</b> if unresolved. Click any row → Fix button to jump to correction form.</div></div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="ch"><div class="cd" style="background:var(--rose)"></div><h3>Pending Corrections</h3><span class="ctag">4 this month</span></div>
+      <div class="cb" style="padding:0">
+        <div class="tw">
+          <table>
+            <thead><tr><th>Employee</th><th>Date</th><th>Issue</th><th>Salary Impact</th><th>Action</th></tr></thead>
+            <tbody>
+              <tr id="att-row-1" style="cursor:pointer" onclick="selectAttRow(1,event)">
+                <td><div class="ec"><div class="av" style="background:var(--accent)">RK</div><div><div style="font-weight:700">Rajesh Kumar</div><div style="font-size:.62rem;color:var(--text2)">Engineering · EMP-0089</div></div></div></td>
+                <td>Mar 09</td><td><span class="b ba">Missing Out</span></td><td style="color:var(--rose);font-weight:700">-₹3,200</td>
+                <td><button class="btn btn-p btn-xs" onclick="selectAttRow(1,event)">Fix ↓</button></td>
+              </tr>
+              <tr id="att-row-2" style="cursor:pointer" onclick="selectAttRow(2,event)">
+                <td><div class="ec"><div class="av" style="background:var(--green)">SP</div><div><div style="font-weight:700">Sunita Patel</div><div style="font-size:.62rem;color:var(--text2)">Marketing · EMP-0134</div></div></div></td>
+                <td>Mar 05</td><td><span class="b br">Marked Absent</span></td><td style="color:var(--rose);font-weight:700">-₹4,800</td>
+                <td><button class="btn btn-p btn-xs" onclick="selectAttRow(2,event)">Fix ↓</button></td>
+              </tr>
+              <tr id="att-row-3" style="cursor:pointer" onclick="selectAttRow(3,event)">
+                <td><div class="ec"><div class="av" style="background:var(--violet)">AM</div><div><div style="font-weight:700">Arjun Mehta</div><div style="font-size:.62rem;color:var(--text2)">Sales · EMP-0211</div></div></div></td>
+                <td>Mar 07</td><td><span class="b ba">Late In</span></td><td style="color:var(--amber)">Warning</td>
+                <td><button class="btn btn-p btn-xs" onclick="selectAttRow(3,event)">Fix ↓</button></td>
+              </tr>
+              <tr id="att-row-4" style="cursor:pointer" onclick="selectAttRow(4,event)">
+                <td><div class="ec"><div class="av" style="background:var(--orange)">VN</div><div><div style="font-weight:700">Vandana Nair</div><div style="font-size:.62rem;color:var(--text2)">Finance · EMP-0076</div></div></div></td>
+                <td>Mar 02</td><td><span class="b br">No Punch</span></td><td style="color:var(--rose);font-weight:700">-₹5,600</td>
+                <td><button class="btn btn-p btn-xs" onclick="selectAttRow(4,event)">Fix ↓</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- CORRECTION FORM — auto-scrolled to on row click -->
+    <div class="fshell" id="att-form-shell">
+      <div class="fbar">
+        <h3>Override Form — <span id="att-emp-name">Rajesh Kumar · Mar 09</span></h3>
+        <span class="b br" id="att-issue-badge">Missing Punch-Out</span>
+      </div>
+      <div class="fbody">
+        <div class="two" style="gap:20px">
+          <!-- Calendar side -->
+          <div>
+            <div class="fdiv">March 2026 — Click a flagged date to load it</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+              <span style="font-size:.61rem;display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:3px;background:var(--gbg);border:1px solid var(--green);display:inline-block"></span>Present</span>
+              <span style="font-size:.61rem;display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:3px;background:var(--rbg);border:1px solid var(--rose);display:inline-block"></span>Absent/LOP</span>
+              <span style="font-size:.61rem;display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:3px;background:var(--abg);border:1px solid var(--amber);display:inline-block"></span>Late/Half</span>
+              <span style="font-size:.61rem;display:flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:3px;background:var(--vbg);border:1px solid var(--violet);display:inline-block"></span>Holiday</span>
+            </div>
+            <div class="cal-grid" id="att-cal">
+              <div class="cal-dh">M</div><div class="cal-dh">T</div><div class="cal-dh">W</div><div class="cal-dh">T</div><div class="cal-dh">F</div><div class="cal-dh">S</div><div class="cal-dh">S</div>
+              <div class="cal-d em"></div><div class="cal-d em"></div><div class="cal-d em"></div><div class="cal-d em"></div>
+              <div class="cal-d P">1</div><div class="cal-d W">2</div><div class="cal-d W">3</div>
+              <div class="cal-d P">4</div>
+              <div class="cal-d A pending-day" data-day="5" data-row="2" onclick="calSelAndLoad(this,5)" title="Mar 5 — Marked Absent">5</div>
+              <div class="cal-d P">6</div>
+              <div class="cal-d H pending-day" data-day="7" data-row="3" onclick="calSelAndLoad(this,7)" title="Mar 7 — Late In">7</div>
+              <div class="cal-d P">8</div>
+              <div class="cal-d A sel pending-day" data-day="9" data-row="1" onclick="calSelAndLoad(this,9)" title="Mar 9 — Missing Out">9</div>
+              <div class="cal-d W">10</div><div class="cal-d W">11</div>
+              <div class="cal-d P">12</div><div class="cal-d P">13</div><div class="cal-d P">14</div>
+              <div class="cal-d V">15</div><div class="cal-d P">16</div><div class="cal-d W">17</div><div class="cal-d W">18</div>
+              <div class="cal-d P">19</div><div class="cal-d P">20</div><div class="cal-d P">21</div><div class="cal-d P">22</div><div class="cal-d P">23</div><div class="cal-d W">24</div><div class="cal-d W">25</div>
+              <div class="cal-d P">26</div>
+              <div class="cal-d A pending-day" data-day="2" data-row="4" onclick="calSelAndLoad(this,2)" title="Mar 2 — No Punch">2</div>
+              <div class="cal-d P">28</div><div class="cal-d P">29</div><div class="cal-d P">30</div><div class="cal-d W">31</div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px">
+              <div style="background:var(--gbg);border-radius:7px;padding:7px;text-align:center"><div style="font-size:.95rem;font-weight:800;color:var(--green)">22</div><div style="font-size:.58rem;color:var(--text2)">Present</div></div>
+              <div style="background:var(--rbg);border-radius:7px;padding:7px;text-align:center"><div style="font-size:.95rem;font-weight:800;color:var(--rose)">2</div><div style="font-size:.58rem;color:var(--text2)">LOP</div></div>
+              <div style="background:var(--abg);border-radius:7px;padding:7px;text-align:center"><div style="font-size:.95rem;font-weight:800;color:var(--amber)">1</div><div style="font-size:.58rem;color:var(--text2)">Late</div></div>
+              <div style="background:var(--vbg);border-radius:7px;padding:7px;text-align:center"><div style="font-size:.95rem;font-weight:800;color:var(--violet)">1</div><div style="font-size:.58rem;color:var(--text2)">Holiday</div></div>
+            </div>
+          </div>
+
+          <!-- Right: Correction fields -->
+          <div>
+            <div class="fdiv">Correction — <span id="att-date-lbl">Mar 09, 2026</span></div>
+            <div class="alert al-rose" style="margin-bottom:12px;cursor:pointer" title="Click to auto-fill form" onclick="attAlertClick()">
+              <span>⚠️</span><div class="al-body" id="att-alert-text"><b>Current:</b> In 09:05 · Out <b>MISSING</b> → system marked as half-day</div>
+            </div>
+            <div class="frow" style="margin-bottom:10px">
+              <div class="fg"><label>Corrected In Time</label><input class="fi" id="att-in" type="time" value="09:05"/></div>
+              <div class="fg"><label>Corrected Out Time <span class="req">*</span></label><input class="fi" id="att-out" type="time" value="18:30"/></div>
+            </div>
+            <div class="fg" style="margin-bottom:10px"><label>Work Mode</label>
+              <select class="fs" id="att-mode"><option>Office</option><option>Work From Home</option><option>On Duty / Field</option></select>
+            </div>
+            <div class="fg" style="margin-bottom:10px"><label>Reason <span class="req">*</span></label>
+              <textarea class="fta" id="att-reason" style="min-height:65px">Biometric scanner offline from 5 PM on 2nd floor. Employee attended full day — confirmed by manager sign-off and physical register.</textarea>
+            </div>
+            <div class="fg" style="margin-bottom:10px"><label>Attach Evidence</label>
+              <div style="border:1.5px dashed var(--border);border-radius:8px;padding:12px;text-align:center;cursor:pointer;font-size:.7rem;color:var(--text2)" onclick="this.style.borderColor='var(--accent)'">📎 Manager email / badge log / register scan</div>
+            </div>
+            <div class="impact amber" id="att-impact"><span>💰</span><div class="impact-body">LOP reduced by 0.5 day → <b>+₹3,200</b> added to March payroll</div></div>
+
+            <!-- APPROVAL WORKFLOW -->
+            <div id="att-apwf-area" class="send-approval-area active" style="margin-top:14px">
+              <div class="sa-title">📤 Approval Workflow</div>
+              <div class="sa-sub" id="att-apwf-desc">This correction requires <b>Manager + Payroll</b> sign-off before it affects payroll. Approvers will be notified by email & in-app.</div>
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+                <div class="fg" style="flex:1;margin:0"><label style="font-size:.62rem">Add Note for Approver</label><input class="fi" style="font-size:.7rem;padding:6px 10px" placeholder="Optional context for manager…"/></div>
+              </div>
+              <div style="display:flex;gap:7px">
+                <button class="btn btn-o btn-sm">💾 Save Draft</button>
+                <button class="btn btn-p" style="flex:1" onclick="sendAttApproval()">📤 Send for Approval</button>
+              </div>
+              <div class="co-note" style="margin-top:8px"><span>⚙️</span><span>Approval chain controlled in <b>Company Setup → HR Workflow → Attendance Override</b>. Currently: Manager → Payroll Head.</span></div>
+            </div>
+
+            <!-- STATUS BANNER (shown after send) -->
+            <div id="att-status-banner" style="display:none" class="apwf sent" style="margin-top:12px">
+              <div class="apwf-ico">📬</div>
+              <div class="apwf-bd">
+                <div class="apwf-title">Sent for Approval</div>
+                <div class="apwf-meta" id="att-status-meta">Submitted by HR Admin · Mar 10, 2026 10:22 AM · Ref: ATT-ADJ-2026-0041</div>
+                <div class="apwf-steps">
+                  <div class="apwf-step done">✓ HR Submitted</div>
+                  <div class="apwf-step now">⏳ Mgr: Priya Sharma</div>
+                  <div class="apwf-step">Payroll Head</div>
+                  <div class="apwf-step">Payroll Lock</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /s1-form -->
+
+  <!-- REPORTS VIEW -->
+  <div class="rview" id="s1-report">
+    <div class="rpt-filters">
+      <select class="fs" style="width:150px"><option>March 2026</option><option>February 2026</option><option>Q1 2026</option></select>
+      <select class="fs" style="width:140px"><option>All Departments</option><option>Engineering</option><option>Sales</option><option>Marketing</option></select>
+      <select class="fs" style="width:140px"><option>All Types</option><option>Missing Punch</option><option>Absent Override</option><option>Late In</option></select>
+      <button class="btn btn-p btn-sm">🔍 Run</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-o btn-sm">📥 Excel</button>
+      <button class="btn btn-o btn-sm">📄 PDF</button>
+    </div>
+    <div class="rpt-kpi-row">
+      <div class="rpt-kpi"><div class="rpt-kpi-v" style="color:var(--rose)">4</div><div class="rpt-kpi-l">Pending Fixes</div></div>
+      <div class="rpt-kpi"><div class="rpt-kpi-v" style="color:var(--amber)">18</div><div class="rpt-kpi-l">Total This Month</div></div>
+      <div class="rpt-kpi"><div class="rpt-kpi-v" style="color:var(--green)">14</div><div class="rpt-kpi-l">Resolved</div></div>
+      <div class="rpt-kpi"><div class="rpt-kpi-v" style="color:var(--violet)">₹38,400</div><div class="rpt-kpi-l">Payroll Impact</div></div>
+    </div>
+    <div class="rpt-card">
+      <div class="rpt-hdr"><span>📊</span><h4>Corrections by Department</h4><span class="ctag">Mar 2026</span></div>
+      <div class="rpt-body">
+        <div class="chart-row"><div class="chart-lbl">Engineering</div><div class="chart-bar-bg"><div class="chart-bar" style="width:72%;background:var(--accent)"><span>8</span></div></div><div class="chart-val" style="color:var(--accent)">8 cases</div></div>
+        <div class="chart-row"><div class="chart-lbl">Sales</div><div class="chart-bar-bg"><div class="chart-bar" style="width:45%;background:var(--amber)"><span>5</span></div></div><div class="chart-val" style="color:var(--amber)">5 cases</div></div>
+        <div class="chart-row"><div class="chart-lbl">Marketing</div><div class="chart-bar-bg"><div class="chart-bar" style="width:27%;background:var(--violet)"><span>3</span></div></div><div class="chart-val" style="color:var(--violet)">3 cases</div></div>
+        <div class="chart-row"><div class="chart-lbl">Finance</div><div class="chart-bar-bg"><div class="chart-bar" style="width:18%;background:var(--green)"><span>2</span></div></div><div class="chart-val" style="color:var(--green)">2 cases</div></div>
+      </div>
+    </div>
+    <div class="rpt-card">
+      <div class="rpt-hdr"><span>📋</span><h4>Correction Detail Log</h4><button class="btn btn-o btn-xs">Export</button></div>
+      <div style="padding:0">
+        <div class="tw"><table>
+          <thead><tr><th>Employee</th><th>Dept</th><th>Date</th><th>Issue Type</th><th>Corrected By</th><th>Salary Δ</th><th>Approval</th></tr></thead>
+          <tbody>
+            <tr><td>Priya Singh</td><td>Eng</td><td>Mar 01</td><td>Missing Out</td><td>HR Admin</td><td style="color:var(--green)">+₹3,200</td><td><span class="b bg">Approved</span></td></tr>
+            <tr><td>Ravi Kumar</td><td>Sales</td><td>Mar 03</td><td>Absent Override</td><td>HR Admin</td><td style="color:var(--green)">+₹4,800</td><td><span class="b bg">Approved</span></td></tr>
+            <tr><td>Meena Joshi</td><td>Mktg</td><td>Mar 04</td><td>Late In</td><td>Team Lead</td><td>-</td><td><span class="b ba">Pending</span></td></tr>
+            <tr><td>Rajesh Kumar</td><td>Eng</td><td>Mar 09</td><td>Missing Out</td><td>HR Admin</td><td style="color:var(--rose)">-₹3,200</td><td><span class="b ba">In Review</span></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+  </div><!-- /s1-report -->
+</div>
+
+<!-- ═══ S2: LEAVE OVERRIDE ═══ -->
+<div id="s2" class="sec">
+  <div class="sec-topbar">
+    <div class="sec-title">
+      <div class="sec-icon" style="background:var(--cbg)">🌴</div>
+      <h2>Leave Override</h2>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="rtabs" style="margin-bottom:0">
+        <div class="rtab on" id="s2-tab-form" onclick="switchTab('s2','form')">⚙️ Override</div>
+        <div class="rtab" id="s2-tab-report" onclick="switchTab('s2','report')">📊 Reports</div>
+      </div>
+      <button class="pageinfo-btn" onclick="openDrawer('s2')">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <span class="pi-label">Page Info</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="rview on" id="s2-form">
+    <div class="two" style="margin-bottom:16px">
+      <div class="card">
+        <div class="ch"><div class="cd" style="background:var(--cyan)"></div><h3>Team Leave Snapshot</h3><span class="ctag">Mar 2026</span><span style="font-size:.62rem;color:var(--text2);margin-left:4px">Click a row to load employee</span></div>
+        <div class="cb" style="padding:0">
+          <div class="tw"><table>
+            <thead><tr><th>Employee</th><th>EL</th><th>SL</th><th>CL</th><th>Comp-off</th><th>Flag</th></tr></thead>
+            <tbody>
+              <tr style="cursor:pointer" onclick="selectLeaveRow('Sneha Nair','EMP-2023-0142','CL',0,this)"><td><div class="ec"><div class="av" style="background:var(--accent)">SN</div><span>Sneha Nair</span></div></td><td>12</td><td>4</td><td style="color:var(--rose);font-weight:700">0</td><td>2</td><td><span class="b ba">Low CL</span></td></tr>
+              <tr style="cursor:pointer" onclick="selectLeaveRow('Meera Pillai','EMP-2022-0078','SL',-3,this)"><td><div class="ec"><div class="av" style="background:var(--green)">MP</div><span>Meera Pillai</span></div></td><td>8</td><td style="color:var(--rose);font-weight:700">-3</td><td>1</td><td>0</td><td><span class="b br">SL Deficit</span></td></tr>
+              <tr style="cursor:pointer" onclick="selectLeaveRow('Arun Tiwari','EMP-2021-0034','EL',18,this)"><td><div class="ec"><div class="av" style="background:var(--violet)">AT</div><span>Arun Tiwari</span></div></td><td>18</td><td>7</td><td>3</td><td>5</td><td><span class="b bg">Normal</span></td></tr>
+              <tr style="cursor:pointer" onclick="selectLeaveRow('Priya Kapoor','EMP-2024-0011','EL',5,this)"><td><div class="ec"><div class="av" style="background:var(--orange)">PK</div><span>Priya Kapoor</span></div></td><td>5</td><td>2</td><td>0</td><td>3</td><td><span class="b ba">Low EL</span></td></tr>
+            </tbody>
+          </table></div>
+        </div>
+      </div>
+      <div class="fshell" id="leave-form-shell">
+        <div class="fbar"><h3>Leave Balance Override — <span id="lv-emp-name">Sneha Nair</span></h3><span class="b bc" id="lv-sync-tag">ESS Sync: Instant</span></div>
+        <div class="fbody">
+          <div class="frow">
+            <div class="fg"><label>Employee <span class="req">*</span></label><input class="fi" id="lv-emp" value="Sneha Nair — EMP-2023-0142"/></div>
+            <div class="fg"><label>Leave Year</label><select class="fs"><option>2026-27</option><option>2025-26</option></select></div>
+          </div>
+          <div class="frow">
+            <div class="fg"><label>Leave Type <span class="req">*</span></label>
+              <select class="fs" id="lv-type" onchange="updateLeaveHint()"><option>Casual Leave (CL)</option><option>Earned Leave (EL)</option><option>Sick Leave (SL)</option><option>Compensatory Off</option><option>Maternity Leave</option></select>
+            </div>
+            <div class="fg"><label>Action</label>
+              <div style="display:flex;gap:10px;margin-top:6px">
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.74rem;font-weight:600"><input type="radio" name="lva" value="credit" checked onchange="updateLeaveHint()"/> ➕ Credit</label>
+                <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.74rem;font-weight:600"><input type="radio" name="lva" value="debit" onchange="updateLeaveHint()"/> ➖ Debit</label>
+              </div>
+            </div>
+            <div class="fg"><label>Days <span class="req">*</span></label><input class="fi" id="lv-days" type="number" value="2" min="0.5" step="0.5" oninput="updateLeaveHint()"/><div class="fhint" id="lv-hint">Current: 0 CL → After: +2 = 2 CL</div></div>
+          </div>
+          <div class="fg" style="margin-bottom:12px"><label>Reason <span class="req">*</span></label>
+            <textarea class="fta" style="min-height:60px">Policy correction — incorrect CL deduction in January cycle. Ref: HR-ADJ-2026-0023.</textarea>
+          </div>
+          <div class="impact green" id="lv-impact"><span>✅</span><div class="impact-body">Sneha's CL: 0 → 2. ESS updates instantly. Employee notified via push.</div></div>
+
+          <!-- APPROVAL WORKFLOW -->
+          <div id="lv-apwf-area" class="send-approval-area active" style="margin-top:12px">
+            <div class="sa-title">📤 Approval & Notification</div>
+            <div class="sa-sub">Leave override will be sent to <b>HR Head</b> for confirmation. Employee is notified on approval via push + email.</div>
+            <div style="display:flex;gap:7px;margin-top:8px">
+              <button class="btn btn-o btn-sm">💾 Save Draft</button>
+              <button class="btn btn-p" style="flex:1" onclick="sendLeaveApproval()">📤 Send for Approval</button>
+            </div>
+            <div class="co-note" style="margin-top:8px"><span>⚙️</span><span>Workflow configured in <b>Company Setup → HR Workflow → Leave Override</b>. Currently: HR Head only.</span></div>
+          </div>
+          <div id="lv-status-banner" style="display:none" class="apwf sent">
+            <div class="apwf-ico">📬</div>
+            <div class="apwf-bd">
+              <div class="apwf-title">Sent for Approval</div>
+              <div class="apwf-meta">Submitted Mar 10, 2026 · Ref: LV-OVR-2026-0018</div>
+              <div class="apwf-steps">
+                <div class="apwf-step done">✓ HR Submitted</div>
+                <div class="apwf-step now">⏳ HR Head Review</div>
+                <div class="apwf-step">ESS Update</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rview" id="s2-report">
+    <div class="rpt-filters">
+      <select class="fs" style="width:150px"><option>2026-27</option><option>2025-26</option></select>
+      <select class="fs" style="width:140px"><option>All Leave Types</option><option>Casual Leave</option><option>Earned Leave</option><option>Sick Leave</option></select>
+      <button class="btn btn-p btn-sm">🔍 Run</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-o btn-sm">📥 Excel</button>
+    </div>
+    <div class="rpt-kpi-row">
+      <div class="rpt-kpi"><div class="rpt-kpi-v" style="color:var(--cyan)">23</div><div class="rpt-kpi-l">Overrides YTD</div></div>
+      <div class="rpt-kpi"><div class="rpt-kpi-v" style="color:var(--green)">+48</div><div class="rpt-kpi-l">Days Credited</div></div>
+      <div class="rpt-kpi"><div class="rpt-kpi-v" style="color:var(--rose)">-12</div><div class="rpt-kpi-l">Days Debited</div></div>
+      <div class="rpt-kpi"><div class="rpt-kpi-v" style="color:var(--amber)">3</div><div class="rpt-kpi-l">Pending Approval</div></div>
+    </div>
+    <div class="rpt-card">
+      <div class="rpt-hdr"><span>📊</span><h4>Override Activity by Leave Type</h4></div>
+      <div class="rpt-body">
+        <div class="chart-row"><div class="chart-lbl">Casual Leave</div><div class="chart-bar-bg"><div class="chart-bar" style="width:65%;background:var(--cyan)"><span>9 cases</span></div></div><div class="chart-val" style="color:var(--cyan)">+18 days</div></div>
+        <div class="chart-row"><div class="chart-lbl">Earned Leave</div><div class="chart-bar-bg"><div class="chart-bar" style="width:50%;background:var(--green)"><span>7 cases</span></div></div><div class="chart-val" style="color:var(--green)">+14 days</div></div>
+        <div class="chart-row"><div class="chart-lbl">Sick Leave</div><div class="chart-bar-bg"><div class="chart-bar" style="width:36%;background:var(--amber)"><span>5 cases</span></div></div><div class="chart-val" style="color:var(--amber)">+12 days</div></div>
+        <div class="chart-row"><div class="chart-lbl">Comp-off</div><div class="chart-bar-bg"><div class="chart-bar" style="width:14%;background:var(--violet)"><span>2 cases</span></div></div><div class="chart-val" style="color:var(--violet)">+4 days</div></div>
+      </div>
+    </div>
+    <div class="rpt-card">
+      <div class="rpt-hdr"><span>📋</span><h4>Leave Override Log</h4><button class="btn btn-o btn-xs">Export</button></div>
+      <div style="padding:0"><div class="tw"><table>
+        <thead><tr><th>Employee</th><th>Leave Type</th><th>Action</th><th>Days</th><th>Reason</th><th>By</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Sneha Nair</td><td>CL</td><td><span class="b bg">Credit</span></td><td>+2</td><td>Policy correction</td><td>HR Admin</td><td><span class="b ba">Pending</span></td></tr>
+          <tr><td>Meera Pillai</td><td>SL</td><td><span class="b bg">Credit</span></td><td>+3</td><td>SL deficit resolution</td><td>HR Admin</td><td><span class="b bg">Approved</span></td></tr>
+          <tr><td>Raj Kumar</td><td>EL</td><td><span class="b br">Debit</span></td><td>-2</td><td>Excess leave taken</td><td>Team Lead</td><td><span class="b bg">Approved</span></td></tr>
+        </tbody>
+      </table></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S3: BONUS ═══ -->
+<div id="s3" class="sec">
+  <div class="sec-topbar">
+    <div class="sec-title">
+      <div class="sec-icon" style="background:var(--gbg)">🎁</div>
+      <h2>Bonus & Incentive Upload</h2>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="rtabs" style="margin-bottom:0">
+        <div class="rtab on" id="s3-tab-form" onclick="switchTab('s3','form')">⚙️ Upload</div>
+        <div class="rtab" id="s3-tab-report" onclick="switchTab('s3','report')">📊 Reports</div>
+      </div>
+      <button class="pageinfo-btn" onclick="openDrawer('s3')">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <span class="pi-label">Page Info</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="rview on" id="s3-form">
+    <div class="card" style="margin-bottom:16px">
+      <div class="ch"><div class="cd" style="background:var(--green)"></div><h3>Q1 2026 — Bonus Batch</h3><span class="b bg">Ready to Merge</span></div>
+      <div class="cb" style="padding:0">
+        <div class="tw"><table>
+          <thead><tr><th>Employee</th><th>Department</th><th>Type</th><th>Gross</th><th>TDS (30%)</th><th>Net</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Raj Verma</td><td>Sales</td><td>Performance</td><td>₹25,000</td><td>₹7,500</td><td>₹17,500</td><td><span class="b bg">Approved</span></td></tr>
+            <tr><td>Priya S.</td><td>Marketing</td><td>Spot Award</td><td>₹10,000</td><td>₹3,000</td><td>₹7,000</td><td><span class="b bg">Approved</span></td></tr>
+            <tr><td>Kiran M.</td><td>Engineering</td><td>Referral</td><td>₹15,000</td><td>₹4,500</td><td>₹10,500</td><td><span class="b ba">Pending</span></td></tr>
+            <tr><td>Anjali R.</td><td>HR</td><td>Retention</td><td>₹20,000</td><td>₹6,000</td><td>₹14,000</td><td><span class="b bg">Approved</span></td></tr>
+          </tbody>
+        </table></div>
+        <div style="padding:14px 17px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border)">
+          <div style="font-size:.75rem;color:var(--text2)">Total Gross: <b style="color:var(--text)">₹2,80,000</b> · Net after TDS: <b style="color:var(--green)">₹1,96,000</b></div>
+          <button class="btn btn-g btn-sm">Merge to March Payroll →</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="fshell" id="bonus-form-shell">
+      <div class="fbar"><h3>Upload New Bonus Batch</h3><div style="flex:1"></div><button class="btn btn-o btn-sm">📥 Template</button></div>
+      <div class="fbody">
+        <div class="frow">
+          <div class="fg"><label>Bonus Type <span class="req">*</span></label><select class="fs"><option>Q1 Performance Bonus</option><option>Festive Bonus</option><option>Spot Award</option><option>Referral Bonus</option><option>Retention Bonus</option></select></div>
+          <div class="fg"><label>Payroll Month <span class="req">*</span></label><select class="fs"><option>March 2026</option><option>April 2026</option></select></div>
+          <div class="fg"><label>Budget Cap</label><input class="fi" value="₹3,00,000"/><div class="fhint">Finance approved pool</div></div>
+        </div>
+        <div class="fg" style="margin-bottom:14px"><label>Upload File <span class="req">*</span></label>
+          <div style="border:2px dashed var(--border);border-radius:11px;padding:26px;text-align:center;cursor:pointer" onclick="this.style.borderColor='var(--accent)'">
+            <div style="font-size:1.8rem;margin-bottom:7px">📊</div>
+            <div style="font-size:.78rem;font-weight:700;margin-bottom:3px">Drop Excel / CSV here</div>
+            <div style="font-size:.66rem;color:var(--text2)">Columns: Employee ID · Name · Amount · Remarks</div>
+            <button class="btn btn-o btn-sm" style="margin-top:10px">Browse</button>
+          </div>
+        </div>
+        <div class="fdiv">Or add individual entry</div>
+        <div class="frow">
+          <div class="fg"><label>Employee</label><input class="fi" placeholder="Search name or ID"/></div>
+          <div class="fg"><label>Amount</label><input class="fi" type="number" placeholder="₹0"/></div>
+          <div class="fg"><label>Remarks</label><input class="fi" placeholder="Q1 target exceeded 142%"/></div>
+        </div>
+        <!-- APPROVAL WORKFLOW -->
+        <div class="send-approval-area active" style="margin-top:12px">
+          <div class="sa-title">📤 Finance Approval Workflow</div>
+          <div class="sa-sub">Batch will be routed to <b>Finance Manager</b> for budget verification, then to <b>CFO</b> for amounts above ₹1L. TDS computation auto-attached.</div>
+          <div style="display:flex;gap:7px;margin-top:8px">
+            <button class="btn btn-o btn-sm">💾 Save Draft</button>
+            <button class="btn btn-p" style="flex:1" onclick="sendBonusApproval()">📤 Submit for Finance Approval →</button>
+          </div>
+          <div class="co-note" style="margin-top:8px"><span>⚙️</span><span>Approval chain in <b>Company Setup → Payroll Workflow → Bonus Approval</b>. Currently: Finance Mgr → CFO (if &gt;₹1L).</span></div>
+        </div>
+        <div id="bonus-status-banner" style="display:none" class="apwf sent">
+          <div class="apwf-ico">📬</div>
+          <div class="apwf-bd">
+            <div class="apwf-title">Submitted for Finance Approval</div>
+            <div class="apwf-meta">Submitted Mar 10, 2026 · Ref: BNS-2026-Q1-0004 · 18 employees · ₹2,80,000</div>
+            <div class="apwf-steps">
+              <div class="apwf-step done">✓ HR Upload</div>
+              <div class="apwf-step now">⏳ Finance Mgr</div>
+              <div class="apwf-step">CFO Review</div>
+              <div class="apwf-step">Merge Payroll</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rview" id="s3-report">
+    <div class="rpt-filters">
+      <select class="fs" style="width:150px"><option>FY 2025-26</option><option>Q1 2026</option><option>Q4 2025</option></select>
+      <select class="fs" style="width:150px"><option>All Bonus Types</option><option>Performance</option><option>Festive</option><option>Referral</option><option>Spot Award</option></select>
+      <button class="btn btn-p btn-sm">🔍 Run</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-o btn-sm">📥 Excel</button>
+      <button class="btn btn-o btn-sm">📄 PDF</button>
+    </div>
+    <div class="rpt-kpi-row">
+      <div class="rpt-kpi"><div class="rpt-kpi-v" style="color:var(--green)">₹12.4L</div><div class="rpt-kpi-l">Total Paid FY</div></div>
+      <div class="rpt-kpi"><div class="rpt-kpi-v" style="color:var(--amber)">₹2.8L</div><div class="rpt-kpi-l">Pending Approval</div></div>
+      <div class="rpt-kpi"><div class="rpt-kpi-v" style="color:var(--violet)">₹1.9L</div><div class="rpt-kpi-l">TDS Deducted</div></div>
+      <div class="rpt-kpi"><div class="rpt-kpi-v" style="color:var(--accent)">89</div><div class="rpt-kpi-l">Employees Covered</div></div>
+    </div>
+    <div class="rpt-card">
+      <div class="rpt-hdr"><span>📊</span><h4>Bonus Distribution by Type — FY 2025-26</h4></div>
+      <div class="rpt-body">
+        <div class="chart-row"><div class="chart-lbl">Performance</div><div class="chart-bar-bg"><div class="chart-bar" style="width:75%;background:var(--green)"><span>₹9.3L</span></div></div><div class="chart-val" style="color:var(--green)">75%</div></div>
+        <div class="chart-row"><div class="chart-lbl">Festive</div><div class="chart-bar-bg"><div class="chart-bar" style="width:15%;background:var(--amber)"><span>₹1.8L</span></div></div><div class="chart-val" style="color:var(--amber)">15%</div></div>
+        <div class="chart-row"><div class="chart-lbl">Referral</div><div class="chart-bar-bg"><div class="chart-bar" style="width:7%;background:var(--cyan)"><span>₹0.9L</span></div></div><div class="chart-val" style="color:var(--cyan)">7%</div></div>
+        <div class="chart-row"><div class="chart-lbl">Spot Award</div><div class="chart-bar-bg"><div class="chart-bar" style="width:3%;background:var(--violet)"><span>₹0.4L</span></div></div><div class="chart-val" style="color:var(--violet)">3%</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S4: LOANS ═══ -->
+<div id="s4" class="sec">
+  <div class="sec-topbar">
+    <div class="sec-title">
+      <div class="sec-icon" style="background:var(--abg)">💳</div>
+      <h2>Loans & Advances</h2>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="rtabs" style="margin-bottom:0">
+        <div class="rtab on" id="s4-tab-form" onclick="switchTab('s4','form')">⚙️ Process</div>
+        <div class="rtab" id="s4-tab-report" onclick="switchTab('s4','report')">📊 Reports</div>
+      </div>
+      <button class="pageinfo-btn" onclick="openDrawer('s4')">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <span class="pi-label">Page Info</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="rview on" id="s4-form">
+    <div class="two" style="margin-bottom:16px">
+      <div class="card">
+        <div class="ch"><div class="cd" style="background:var(--amber)"></div><h3>Active Loans</h3></div>
+        <div class="cb" style="padding:0">
+          <div class="tw"><table>
+            <thead><tr><th>Employee</th><th>Type</th><th>Principal</th><th>EMI</th><th>Balance</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td><div class="ec"><div class="av" style="background:var(--accent)">DR</div><span>Deepika Rao</span></div></td><td>Personal</td><td>₹80,000</td><td>₹8,000</td><td>₹72,000</td><td><span class="b bg">Active</span></td></tr>
+              <tr><td><div class="ec"><div class="av" style="background:var(--green)">VS</div><span>Vijay Singh</span></div></td><td>Medical</td><td>₹1,50,000</td><td>₹12,500</td><td>₹37,500</td><td><span class="b ba">Closing</span></td></tr>
+              <tr><td><div class="ec"><div class="av" style="background:var(--orange)">NK</div><span>Nisha Kumar</span></div></td><td>Education</td><td>₹2,00,000</td><td>₹10,000</td><td>₹1,60,000</td><td><span class="b bg">Active</span></td></tr>
+            </tbody>
+          </table></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><div class="cd" style="background:var(--rose)"></div><h3>New Applications</h3><span class="ctag">3 pending</span><span style="font-size:.62rem;color:var(--text2);margin-left:4px">Click to load</span></div>
+        <div class="cb" style="display:flex;flex-direction:column;gap:8px">
+          <div class="apv-card" style="border-color:var(--amber);background:var(--abg);cursor:pointer" onclick="selectLoanRow('Aditya Kumar','EMP-2022-0034','Personal Loan',120000,12,70000,this)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><b style="font-size:.75rem">Aditya Kumar</b><span class="b ba">Finance Review</span></div>
+            <div style="font-size:.66rem;color:var(--text2);margin-bottom:7px">₹1,20,000 · 12 EMI · Personal loan</div>
+            <div style="display:flex;gap:5px"><button class="btn btn-g btn-xs" onclick="selectLoanRow('Aditya Kumar','EMP-2022-0034','Personal Loan',120000,12,70000,this.closest('.apv-card'))">Process ↓</button></div>
+          </div>
+          <div class="apv-card" style="border-color:var(--border);background:var(--card2);cursor:pointer" onclick="selectLoanRow('Rekha Menon','EMP-2023-0055','Medical Emergency',50000,6,55000,this)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><b style="font-size:.75rem">Rekha Menon</b><span class="b bb">HR Review</span></div>
+            <div style="font-size:.66rem;color:var(--text2)">₹50,000 · Medical emergency · 6 EMI</div>
+          </div>
+          <div class="apv-card" style="border-color:var(--border);background:var(--card2);cursor:pointer" onclick="selectLoanRow('Suresh Iyer','EMP-2021-0088','Travel Advance',30000,1,48000,this)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><b style="font-size:.75rem">Suresh Iyer</b><span class="b bb">HR Review</span></div>
+            <div style="font-size:.66rem;color:var(--text2)">₹30,000 · Travel advance · Lump-sum</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fshell" id="loan-form-shell">
+      <div class="fbar"><h3>Process Loan — <span id="loan-emp-name">Aditya Kumar</span></h3><span class="b ba" id="loan-step-badge">Step 2 of 5 · HR Review</span></div>
+      <div class="stepper">
+        <div class="sdot done">✓</div><div class="slbl">Request</div><div class="sline done"></div>
+        <div class="sdot now">2</div><div class="slbl now">HR Review</div><div class="sline"></div>
+        <div class="sdot todo">3</div><div class="slbl">Finance</div><div class="sline"></div>
+        <div class="sdot todo">4</div><div class="slbl">Disburse</div><div class="sline"></div>
+        <div class="sdot todo">5</div><div class="slbl">EMI Active</div>
+      </div>
+      <div class="fbody">
+        <div class="frow">
+          <div class="fg"><label>Employee</label><input class="fi" id="loan-emp-input" value="Aditya Kumar · EMP-2022-0034 · IT" disabled style="opacity:.7"/></div>
+          <div class="fg"><label>Tenure</label><input class="fi" id="loan-tenure" value="3 years 8 months" disabled style="opacity:.7"/></div>
+          <div class="fg"><label>Monthly CTC</label><input class="fi" id="loan-ctc" value="₹70,000" disabled style="opacity:.7"/></div>
+        </div>
+        <div class="frow">
+          <div class="fg"><label>Loan Type</label><select class="fs" id="loan-type"><option>Personal Loan</option><option>Medical Emergency</option><option>Education</option><option>Travel Advance</option></select></div>
+          <div class="fg"><label>Amount <span class="req">*</span></label><input class="fi" id="loan-amount" value="120000"/><div class="fhint" id="loan-eligible">Max eligible: ₹1,40,000 (2× monthly)</div></div>
+          <div class="fg"><label>Repayment</label><select class="fs" id="loan-repay"><option>12 EMI · ₹10,000/month</option><option>6 EMI · ₹20,000/month</option><option>18 EMI · ₹6,667/month</option></select></div>
+        </div>
+        <div class="impact amber" id="loan-impact"><span>💰</span><div class="impact-body">EMI <b>₹10,000/month</b> from April 2026. Salary after deduction: <b>₹60,000</b> (within 40% cap). Final EMI: Mar 2027.</div></div>
+        <div class="fdiv">EMI Schedule</div>
+        <div class="tw"><table class="emi-table">
+          <thead><tr><th>#</th><th>Month</th><th>EMI</th><th>Cumulative</th><th>Balance</th></tr></thead>
+          <tbody>
+            <tr class="cur"><td>1</td><td>Apr 2026</td><td>₹10,000</td><td>₹10,000</td><td>₹1,10,000</td></tr>
+            <tr><td>2</td><td>May 2026</td><td>₹10,000</td><td>₹20,000</td><td>₹1,00,000</td></tr>
+            <tr><td>3</td><td>Jun 2026</td><td>₹10,000</td><td>₹30,000</td><td>₹90,000</td></tr>
+            <tr><td style="color:var(--text3)">…</td><td style="color:var(--text3)">…</td><td style="color:var(--text3)">…</td><td style="color:var(--text3)">…</td><td style="color:var(--text3)">…</td></tr>
+            <tr><td>12</td><td>Mar 2027</td><td>₹10,000</td><td>₹1,20,000</td><td style="color:var(--green);font-weight:700">₹0</td></tr>
+          </tbody>
+        </table></div>
+
+        <!-- APPROVAL WORKFLOW -->
+        <div class="send-approval-area active" style="margin-top:14px">
+          <div class="sa-title">📤 Approval Workflow</div>
+          <div class="sa-sub">HR review → <b>Finance Manager</b> for fund verification → <b>CFO</b> (amounts &gt; ₹50,000). Disbursement triggered on final approval.</div>
+          <div style="display:flex;gap:7px;margin-top:8px">
+            <button class="btn btn-r btn-sm">❌ Reject</button>
+            <button class="btn btn-o btn-sm">📋 Query Employee</button>
+            <button class="btn btn-g" style="flex:1" onclick="sendLoanApproval()">✓ Approve & Forward to Finance</button>
+          </div>
+          <div class="co-note" style="margin-top:8px"><span>⚙️</span><span>Approval chain in <b>Company Setup → HR Workflow → Loan Processing</b>. Currently: HR → Finance Mgr → CFO (&gt;₹50K).</span></div>
+        </div>
+        <div id="loan-status-banner" style="display:none" class="apwf sent">
+          <div class="apwf-ico">📬</div>
+          <div class="apwf-bd">
+            <div class="apwf-title">Forwarded to Finance</div>
+            <div class="apwf-meta" id="loan-status-meta">HR Approved Mar 10, 2026 · Ref: LOAN-2026-0034 · ₹1,20,000 · 12 EMI</div>
+            <div class="apwf-steps">
+              <div class="apwf-step done">✓ Employee</div>
+              <div class="apwf-step done">✓ HR Review</div>
+              <div class="apwf-step now">⏳ Finance Mgr</div>
+              <div class="apwf-step">CFO</div>
+              <div class="apwf-step">Disburse</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rview" id="s4-report">
+    <div class="rpt-filters">
+      <select class="fs" style="width:150px"><option>FY 2025-26</option><option>FY 2024-25</option></select>
+      <select class="fs" style="width:140px"><option>All Types</option><option>Personal</option><option>Medical</option><option>Education</option><option>Travel</option></select>
+      <select class="fs" style="width:130px"><option>All Status</option><option>Active</option><option>Closed</option><option>Pending</option></select>
+      <button class="btn btn-p btn-sm">🔍 Run</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-o btn-sm">📥 Excel</button>
+    </div>
+    <div class="rpt-kpi-row">
+      <div class="rpt-kpi"><div class="rpt-kpi-v" style="color:var(--amber)">₹8.9L</div><div class="rpt-kpi-l">Outstanding Balance</div></div>
+      <div class="rpt-kpi"><div class="rpt-kpi-v" style="color:var(--green)">₹2.4L</div><div class="rpt-kpi-l">Recovered This FY</div></div>
+      <div class="rpt-kpi"><div class="rpt-kpi-v" style="color:var(--accent)">12</div><div class="rpt-kpi-l">Active Loans</div></div>
+      <div class="rpt-kpi"><div class="rpt-kpi-v" style="color:var(--rose)">3</div><div class="rpt-kpi-l">Pending Approval</div></div>
+    </div>
+    <div class="rpt-card">
+      <div class="rpt-hdr"><span>📊</span><h4>Loan Distribution by Type</h4></div>
+      <div class="rpt-body">
+        <div class="chart-row"><div class="chart-lbl">Personal</div><div class="chart-bar-bg"><div class="chart-bar" style="width:60%;background:var(--amber)"><span>₹5.3L</span></div></div><div class="chart-val" style="color:var(--amber)">₹5.3L</div></div>
+        <div class="chart-row"><div class="chart-lbl">Education</div><div class="chart-bar-bg"><div class="chart-bar" style="width:25%;background:var(--violet)"><span>₹2.2L</span></div></div><div class="chart-val" style="color:var(--violet)">₹2.2L</div></div>
+        <div class="chart-row"><div class="chart-lbl">Medical</div><div class="chart-bar-bg"><div class="chart-bar" style="width:14%;background:var(--rose)"><span>₹1.2L</span></div></div><div class="chart-val" style="color:var(--rose)">₹1.2L</div></div>
+        <div class="chart-row"><div class="chart-lbl">Travel</div><div class="chart-bar-bg"><div class="chart-bar" style="width:3%;background:var(--cyan)"><span>₹0.2L</span></div></div><div class="chart-val" style="color:var(--cyan)">₹0.2L</div></div>
+      </div>
+    </div>
+    <div class="rpt-card">
+      <div class="rpt-hdr"><span>📋</span><h4>Active Loan Register</h4><button class="btn btn-o btn-xs">Export</button></div>
+      <div style="padding:0"><div class="tw"><table>
+        <thead><tr><th>Employee</th><th>Type</th><th>Principal</th><th>EMI</th><th>Remaining</th><th>Remaining EMIs</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Deepika Rao</td><td>Personal</td><td>₹80,000</td><td>₹8,000</td><td>₹72,000</td><td>9</td><td><span class="b bg">Active</span></td></tr>
+          <tr><td>Vijay Singh</td><td>Medical</td><td>₹1,50,000</td><td>₹12,500</td><td>₹37,500</td><td>3</td><td><span class="b ba">Closing</span></td></tr>
+          <tr><td>Nisha Kumar</td><td>Education</td><td>₹2,00,000</td><td>₹10,000</td><td>₹1,60,000</td><td>16</td><td><span class="b bg">Active</span></td></tr>
+        </tbody>
+      </table></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S5: ASSETS ═══ -->
+<div id="s5" class="sec">
+  <div class="sec-topbar">
+    <div class="sec-title">
+      <div class="sec-icon" style="background:var(--vbg)">💻</div>
+      <h2>Asset Management</h2>
+    </div>
+    <button class="pageinfo-btn" onclick="openDrawer('s5')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      Page Info
+    </button>
+  </div>
+
+  <div class="metrics">
+    <div class="met"><div class="met-val" style="color:var(--accent)">87</div><div class="met-lbl">Total Assets</div></div>
+    <div class="met"><div class="met-val" style="color:var(--green)">64</div><div class="met-lbl">Assigned</div></div>
+    <div class="met"><div class="met-val" style="color:var(--amber)">12</div><div class="met-lbl">In Stock</div></div>
+    <div class="met"><div class="met-val" style="color:var(--rose)">3</div><div class="met-lbl">Under Repair</div></div>
+    <div class="met"><div class="met-val" style="color:var(--violet)">8</div><div class="met-lbl">Pending Return</div></div>
+  </div>
+
+  <div class="two" style="margin-bottom:16px">
+    <div class="card">
+      <div class="ch"><div class="cd" style="background:var(--violet)"></div><h3>Recently Issued</h3></div>
+      <div class="cb" style="padding:0">
+        <div class="tw"><table>
+          <thead><tr><th>Asset</th><th>S/N</th><th>Assigned To</th><th>Date</th><th>E-Sign</th></tr></thead>
+          <tbody>
+            <tr><td>MacBook Pro 14"</td><td style="font-family:'JetBrains Mono',monospace;font-size:.62rem">FVFXM2024</td><td>Arjun Mehta</td><td>Mar 10</td><td><span class="b ba">Pending</span></td></tr>
+            <tr><td>iPhone 15 Pro</td><td style="font-family:'JetBrains Mono',monospace;font-size:.62rem">H7KP9X2025</td><td>Ravi Teja</td><td>Mar 08</td><td><span class="b bg">Signed</span></td></tr>
+            <tr><td>Dell Monitor 27"</td><td style="font-family:'JetBrains Mono',monospace;font-size:.62rem">DL274K2024</td><td>Priya Sharma</td><td>Mar 07</td><td><span class="b bg">Signed</span></td></tr>
+            <tr><td>Access Card</td><td style="font-family:'JetBrains Mono',monospace;font-size:.62rem">AC-0847</td><td>Kavya Menon</td><td>Mar 06</td><td><span class="b bg">Signed</span></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><div class="cd" style="background:var(--rose)"></div><h3>Pending Returns — Exits</h3></div>
+      <div class="cb" style="display:flex;flex-direction:column;gap:8px">
+        <div class="apv-card" style="border-color:var(--rose);background:var(--rbg)"><div style="font-size:.76rem;font-weight:700;margin-bottom:3px">Rahul Gupta · Last Day: Mar 15</div><div style="font-size:.65rem;color:var(--text2);margin-bottom:6px">MacBook Pro 16" · iPhone · Access Card · Locker Key</div><div style="display:flex;gap:5px;flex-wrap:wrap"><span class="b bg">MacBook ✓</span><span class="b ba">iPhone ⏳</span><span class="b ba">Card ⏳</span><span class="b br">Locker ✗</span></div></div>
+        <div class="apv-card" style="border-color:var(--amber);background:var(--abg)"><div style="font-size:.76rem;font-weight:700;margin-bottom:3px">Meera Pillai · Last Day: Mar 22</div><div style="font-size:.65rem;color:var(--text2);margin-bottom:6px">Dell Laptop · Access Card</div><div style="display:flex;gap:5px"><span class="b ba">Laptop ⏳</span><span class="b ba">Card ⏳</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fshell">
+    <div class="fbar"><h3>Issue New Asset</h3><div style="flex:1"></div><button class="btn btn-o btn-sm">↩️ Return Asset</button><button class="btn btn-o btn-sm" style="margin-left:6px">📦 Add Inventory</button></div>
+    <div class="fbody">
+      <div class="frow">
+        <div class="fg"><label>Assign To <span class="req">*</span></label><input class="fi" value="Arjun Mehta — EMP-2025-0011"/></div>
+        <div class="fg"><label>Category</label><select class="fs"><option>Laptop / Desktop</option><option>Mobile Phone</option><option>Monitor / Peripherals</option><option>Access Card</option><option>Vehicle</option></select></div>
+        <div class="fg"><label>Asset Name <span class="req">*</span></label><input class="fi" value="MacBook Pro 14&quot; M3"/></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Serial Number <span class="req">*</span></label><input class="fi" value="FVFXM2024"/></div>
+        <div class="fg"><label>Condition</label><select class="fs"><option>New</option><option>Like New</option><option>Good</option><option>Fair</option></select></div>
+        <div class="fg"><label>Issue Date</label><input class="fi" type="date" value="2026-03-10"/></div>
+      </div>
+      <div class="fg" style="margin-bottom:12px"><label>Notes</label><textarea class="fta" style="min-height:55px">Primary work device. Pre-loaded with company software. macOS Sonoma 14.3.</textarea></div>
+      <div style="background:var(--vbg);border:1px solid var(--violet);border-radius:10px;padding:12px 15px;margin-bottom:12px;font-size:.74rem;color:var(--violet)">
+        📱 E-Sign request sent to employee mobile (987654XXXX) and email immediately on save.
+      </div>
+      <div style="display:flex;gap:7px;justify-content:flex-end">
+        <button class="btn btn-o">Cancel</button>
+        <button class="btn btn-p">✓ Issue & Send E-Sign</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S6: LETTERS ═══ -->
+<div id="s6" class="sec">
+  <div class="sec-topbar">
+    <div class="sec-title">
+      <div class="sec-icon" style="background:var(--glow)">📄</div>
+      <h2>HR Letters & Certificates</h2>
+    </div>
+    <button class="pageinfo-btn" onclick="openDrawer('s6')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      Page Info
+    </button>
+  </div>
+  <div class="two">
+    <div class="card">
+      <div class="ch"><div class="cd" style="background:var(--accent)"></div><h3>Generate Letter</h3></div>
+      <div class="cb">
+        <div class="frow">
+          <div class="fg"><label>Employee <span class="req">*</span></label><input class="fi" placeholder="Search name or ID"/></div>
+          <div class="fg"><label>Letter Type <span class="req">*</span></label>
+            <select class="fs">
+              <option>Offer Letter</option><option>Appointment Letter</option><option>Confirmation Letter</option>
+              <option>Experience Certificate</option><option>Relieving Letter</option>
+              <option>Promotion Letter</option><option>Salary Revision Letter</option>
+              <option>Bank / Visa Salary Certificate</option><option>Transfer Letter</option>
+            </select>
+          </div>
+        </div>
+        <div class="frow">
+          <div class="fg"><label>Effective Date</label><input class="fi" type="date" value="2026-03-10"/></div>
+          <div class="fg"><label>Delivery</label><select class="fs"><option>Email + PDF Download</option><option>WhatsApp + Email</option><option>PDF Only</option></select></div>
+        </div>
+        <div class="fg" style="margin-bottom:12px"><label>Additional Notes</label><textarea class="fta" style="min-height:55px" placeholder="Any custom text to include in the letter…"></textarea></div>
+        <div style="display:flex;gap:7px;justify-content:flex-end">
+          <button class="btn btn-o btn-sm">👁 Preview</button>
+          <button class="btn btn-p">📄 Generate & Send</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><div class="cd" style="background:var(--green)"></div><h3>Recently Generated</h3></div>
+      <div class="cb">
+        <div class="tl">
+          <div class="tl-row"><div class="tl-ico" style="background:var(--glow)">📋</div><div class="tl-bd"><div class="tl-nm">Offer Letter — Kavya Nair</div><div class="tl-mt">Software Engineer · ₹12 LPA · Joining Apr 1</div></div><div class="tl-t">Mar 10</div></div>
+          <div class="tl-row"><div class="tl-ico" style="background:var(--gbg)">✅</div><div class="tl-bd"><div class="tl-nm">Confirmation — Ravi Kumar</div><div class="tl-mt">Post-probation · Engineering</div></div><div class="tl-t">Mar 08</div></div>
+          <div class="tl-row"><div class="tl-ico" style="background:var(--abg)">💰</div><div class="tl-bd"><div class="tl-nm">Salary Revision — 12 employees</div><div class="tl-mt">Annual increment batch · Avg 14.2% hike</div></div><div class="tl-t">Mar 05</div></div>
+          <div class="tl-row"><div class="tl-ico" style="background:var(--vbg)">🏦</div><div class="tl-bd"><div class="tl-nm">Bank Certificate — Deepika Rao</div><div class="tl-mt">Home loan · HDFC Bank</div></div><div class="tl-t">Mar 03</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S7: DISCIPLINE ═══ -->
+<div id="s7" class="sec">
+  <div class="sec-topbar">
+    <div class="sec-title">
+      <div class="sec-icon" style="background:var(--obg)">⚖️</div>
+      <h2>Discipline & Warning</h2>
+    </div>
+    <button class="pageinfo-btn" onclick="openDrawer('s7')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      Page Info
+    </button>
+  </div>
+  <div class="two">
+    <div class="card">
+      <div class="ch"><div class="cd" style="background:var(--orange)"></div><h3>Active Cases</h3><span class="ctag">2 open</span></div>
+      <div class="cb" style="display:flex;flex-direction:column;gap:10px">
+        <div class="apv-card" style="border-color:var(--amber);background:var(--abg)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px"><div><div style="font-size:.78rem;font-weight:700">Mohan Das · EMP-2021-0056</div><div style="font-size:.64rem;color:var(--text2)">Operations · 4 yrs</div></div><span class="b ba">SCN Issued</span></div>
+          <div style="font-size:.7rem;margin-bottom:7px">Repeated tardiness — 12 instances in 3 months. SCN issued Mar 5. Reply due <b>Mar 12</b>.</div>
+          <div style="display:flex;gap:5px"><button class="btn btn-o btn-xs">View SCN</button><button class="btn btn-a btn-xs">Record Reply</button></div>
+        </div>
+        <div class="apv-card" style="border-color:var(--orange);background:var(--obg)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px"><div><div style="font-size:.78rem;font-weight:700">Seema Roy · EMP-2023-0089</div><div style="font-size:.64rem;color:var(--text2)">Customer Service · 2 yrs</div></div><span class="b bo">PIP Active</span></div>
+          <div style="font-size:.7rem;margin-bottom:7px">PIP: Jan 2026. 90-day window. Review: <b>Mar 31</b>. KPIs: CSAT &gt;4.0, zero escalations.</div>
+          <div style="display:flex;gap:5px"><button class="btn btn-o btn-xs">View PIP</button><button class="btn btn-p btn-xs">Progress Update</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="fshell">
+      <div class="fbar"><h3>Issue New Action</h3></div>
+      <div class="fbody">
+        <div class="fg" style="margin-bottom:11px"><label>Employee <span class="req">*</span></label><input class="fi" placeholder="Search name or ID"/></div>
+        <div class="fg" style="margin-bottom:11px"><label>Action Type <span class="req">*</span></label>
+          <select class="fs"><option>Verbal Warning</option><option>Written Warning</option><option>Show Cause Notice (SCN)</option><option>Performance Improvement Plan (PIP)</option><option>Suspension</option><option>Termination Notice</option></select>
+        </div>
+        <div class="fg" style="margin-bottom:11px"><label>Charge / Reason <span class="req">*</span></label><textarea class="fta" placeholder="Describe the misconduct or performance issue…"></textarea></div>
+        <div class="fg" style="margin-bottom:14px"><label>Reply Due By</label><input class="fi" type="date"/><div class="fhint">Leave blank for written warnings without reply requirement</div></div>
+        <button class="btn btn-p" style="width:100%">Generate & Send Action Letter →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S8: COMPLIANCE ═══ -->
+<div id="s8" class="sec">
+  <div class="sec-topbar">
+    <div class="sec-title">
+      <div class="sec-icon" style="background:var(--card2)">🛡️</div>
+      <h2>Statutory Compliance</h2>
+    </div>
+    <button class="pageinfo-btn" onclick="openDrawer('s8')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      Page Info
+    </button>
+  </div>
+  <div class="metrics">
+    <div class="met"><div class="met-val" style="color:var(--green)">8/10</div><div class="met-lbl">Filed On Time</div><div class="met-sub up">MTD</div></div>
+    <div class="met"><div class="met-val" style="color:var(--amber)">2</div><div class="met-lbl">Due This Week</div><div class="met-sub dn">Action needed</div></div>
+    <div class="met"><div class="met-val" style="color:var(--green)">₹0</div><div class="met-lbl">Penalties</div><div class="met-sub up">Clean record</div></div>
+    <div class="met"><div class="met-val" style="color:var(--accent)">15</div><div class="met-lbl">Registered States</div></div>
+  </div>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Compliance</th><th>Applicability</th><th>Due Date</th><th>Status</th><th>Amount</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td><b>PF — ECR Upload</b></td><td>All employees</td><td style="color:var(--amber);font-weight:700">Mar 15, 2026</td><td><span class="b ba">Due in 5 days</span></td><td>₹4,82,400</td><td><button class="btn btn-p btn-xs">Upload ECR</button></td></tr>
+        <tr><td><b>ESI — Challan</b></td><td>CTC &lt; ₹21,000</td><td style="color:var(--amber);font-weight:700">Mar 15, 2026</td><td><span class="b ba">Due in 5 days</span></td><td>₹38,200</td><td><button class="btn btn-p btn-xs">Pay Now</button></td></tr>
+        <tr><td><b>PT — Karnataka</b></td><td>KA employees</td><td>Mar 20, 2026</td><td><span class="b bb">Upcoming</span></td><td>₹8,400</td><td><button class="btn btn-o btn-xs">Preview</button></td></tr>
+        <tr><td><b>TDS — Form 24Q</b></td><td>All employees</td><td>Apr 07, 2026</td><td><span class="b bb">Q4 Filing</span></td><td>₹12,40,000</td><td><button class="btn btn-o btn-xs">Prepare</button></td></tr>
+        <tr><td><b>LWF Contribution</b></td><td>Applicable states</td><td>Mar 31, 2026</td><td><span class="b bb">Upcoming</span></td><td>₹2,900</td><td><button class="btn btn-o btn-xs">Review</button></td></tr>
+        <tr><td><b>Gratuity Provision</b></td><td>Tenure ≥ 5 yrs</td><td>Mar 31, 2026</td><td><span class="b bg">Provisioned</span></td><td>₹34,20,000</td><td><button class="btn btn-g btn-xs">View Report</button></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══ S9: AUDIT TRAIL ═══ -->
+<div id="s9" class="sec">
+  <div class="sec-topbar">
+    <div class="sec-title">
+      <div class="sec-icon" style="background:var(--glow)">🔍</div>
+      <h2>Audit Trail</h2>
+    </div>
+    <button class="pageinfo-btn" onclick="openDrawer('s9')">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      Page Info
+    </button>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+    <select class="fs" style="width:160px"><option>All Modules</option><option>Attendance</option><option>Leave</option><option>Loans</option><option>Assets</option><option>Bonus</option></select>
+    <select class="fs" style="width:180px"><option>All Users</option><option>Priya Sharma (HR)</option><option>Kiran M. (Payroll)</option><option>Finance Mgr</option></select>
+    <input class="fi" type="date" style="width:140px" value="2026-03-01"/>
+    <span style="font-size:.7rem;color:var(--text3)">to</span>
+    <input class="fi" type="date" style="width:140px" value="2026-03-10"/>
+    <button class="btn btn-p btn-sm">Filter</button>
+    <div style="flex:1"></div>
+    <button class="btn btn-o btn-sm">📥 PDF</button>
+    <button class="btn btn-o btn-sm">📊 Excel</button>
+  </div>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Timestamp</th><th>Module</th><th>Action</th><th>Employee Affected</th><th>Done By</th><th>Before</th><th>After</th><th>IP Address</th></tr></thead>
+      <tbody>
+        <tr><td style="font-family:'JetBrains Mono',monospace;font-size:.62rem">2026-03-10 10:22</td><td><span class="b ba">Attendance</span></td><td>Punch-out corrected</td><td>Rajesh Kumar</td><td>Priya Sharma</td><td>Missing</td><td>18:30</td><td style="font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--text3)">192.168.1.42</td></tr>
+        <tr><td style="font-family:'JetBrains Mono',monospace;font-size:.62rem">2026-03-10 09:45</td><td><span class="b bc">Leave</span></td><td>CL credited +2</td><td>Sneha Nair</td><td>HR Admin</td><td>0 CL</td><td>2 CL</td><td style="font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--text3)">10.0.0.15</td></tr>
+        <tr><td style="font-family:'JetBrains Mono',monospace;font-size:.62rem">2026-03-10 09:10</td><td><span class="b bv">Asset</span></td><td>MacBook issued</td><td>Arjun Mehta</td><td>Priya Sharma</td><td>In Stock</td><td>Assigned</td><td style="font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--text3)">192.168.1.42</td></tr>
+        <tr><td style="font-family:'JetBrains Mono',monospace;font-size:.62rem">2026-03-09 16:30</td><td><span class="b bg">Loan</span></td><td>Approved</td><td>Deepika Rao</td><td>Finance Mgr</td><td>Pending</td><td>Active</td><td style="font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--text3)">10.0.0.8</td></tr>
+        <tr><td style="font-family:'JetBrains Mono',monospace;font-size:.62rem">2026-03-09 14:15</td><td><span class="b bg">Bonus</span></td><td>Batch submitted</td><td>18 employees</td><td>Kiran M.</td><td>—</td><td>Pending approval</td><td style="font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--text3)">192.168.1.55</td></tr>
+        <tr><td style="font-family:'JetBrains Mono',monospace;font-size:.62rem">2026-03-08 11:00</td><td><span class="b bo">Discipline</span></td><td>SCN issued</td><td>Mohan Das</td><td>Priya Sharma</td><td>—</td><td>SCN sent</td><td style="font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--text3)">192.168.1.42</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div><!-- /main -->
+</div><!-- /layout -->
+
+<!-- ══ MOBILE BOTTOM NAV ══ -->
+<div class="mob-nav" id="mob-nav">
+  <div class="mob-nav-item on" id="mn-s0" onclick="showSec('s0',this);syncMobNav('s0')"><span class="mn-ico">📊</span>Overview</div>
+  <div class="mob-nav-item" id="mn-s1" onclick="showSec('s1',this);syncMobNav('s1')"><span class="mn-ico">📅</span>Attendance</div>
+  <div class="mob-nav-item" id="mn-s2" onclick="showSec('s2',this);syncMobNav('s2')"><span class="mn-ico">🌴</span>Leave</div>
+  <div class="mob-nav-item" id="mn-s4" onclick="showSec('s4',this);syncMobNav('s4')"><span class="mn-ico">💳</span>Loans</div>
+  <div class="mob-nav-item" id="mn-s9" onclick="showSec('s9',this);syncMobNav('s9')"><span class="mn-ico">🔍</span>Audit</div>
+</div>
+
+<script>
+/* ══════════════════════════════════
+   PAGE INFO DATA
+══════════════════════════════════ */
+const pageInfoData = {
+  s0:{title:'Overview — Page Info',html:`<div class="dw-section"><h4>📋 Module Summary</h4><p style="font-size:.75rem;color:var(--text2);line-height:1.7">HR Operations covers all daily transactional HR tasks: attendance corrections, leave overrides, bonus uploads, loan processing, asset lifecycle management, statutory compliance, and disciplinary actions. Every action is auto-audited.</p><div class="dw-tag-row"><span class="dw-tag" style="border-color:var(--rose);color:var(--rose);background:var(--rbg)">TRN-011 to TRN-015</span><span class="dw-tag" style="border-color:var(--green);color:var(--green);background:var(--gbg)">All Industries</span><span class="dw-tag" style="border-color:var(--accent);color:var(--accent);background:var(--glow)">Real-time Payroll Impact</span></div></div><div class="dw-section"><h4>⚡ Smart Features</h4><div class="dw-smart"><div class="dw-smart-item">Dashboard auto-aggregates all pending actions across all HR sub-modules</div><div class="dw-smart-item">Payroll cutoff countdown auto-calculated; alerts trigger 5 days before</div><div class="dw-smart-item">Quick Actions personalized based on user role and frequency of use</div></div></div>`},
+  s1:{title:'Attendance Adjustment — TRN-011',html:`<div class="dw-section"><h4>🔄 Process Flow</h4><div class="dw-pipeline"><div class="dw-step"><div class="dw-box" style="border-color:var(--accent);background:var(--glow)"><span class="dw-n">01</span><span class="dw-ico">🔍</span>Click Row / Fix</div></div><div class="dw-arrow">→</div><div class="dw-step"><div class="dw-box" style="border-color:var(--amber);background:var(--abg)"><span class="dw-n">02</span><span class="dw-ico">📅</span>Calendar Auto-Selects</div></div><div class="dw-arrow">→</div><div class="dw-step"><div class="dw-box" style="border-color:var(--rose);background:var(--rbg)"><span class="dw-n">03</span><span class="dw-ico">✏️</span>Edit Times</div></div><div class="dw-arrow">→</div><div class="dw-step"><div class="dw-box" style="border-color:var(--violet);background:var(--vbg)"><span class="dw-n">04</span><span class="dw-ico">📤</span>Send Approval</div></div><div class="dw-arrow">→</div><div class="dw-step"><div class="dw-box" style="border-color:var(--green);background:var(--gbg)"><span class="dw-n">05</span><span class="dw-ico">✅</span>Payroll Updated</div></div></div></div><div class="dw-section"><h4>⚡ Smart Interactions</h4><div class="dw-smart"><div class="dw-smart-item">Clicking Fix button or any row auto-scrolls to the correction form and pre-fills all data</div><div class="dw-smart-item">Flagged calendar dates (red/amber) can also be clicked directly to load that employee's correction</div><div class="dw-smart-item">Approval chain configured in Company Setup → HR Workflow → Attendance Override</div><div class="dw-smart-item">Live payroll impact shown before save — exact ₹ change to that month's salary</div></div></div>`},
+  s2:{title:'Leave Override — TRN-012',html:`<div class="dw-section"><h4>🔄 Process Flow</h4><div class="dw-pipeline"><div class="dw-step"><div class="dw-box" style="border-color:var(--cyan);background:var(--cbg)"><span class="dw-n">01</span><span class="dw-ico">👆</span>Click Employee Row</div></div><div class="dw-arrow">→</div><div class="dw-step"><div class="dw-box" style="border-color:var(--amber);background:var(--abg)"><span class="dw-n">02</span><span class="dw-ico">🌴</span>Select Type + Days</div></div><div class="dw-arrow">→</div><div class="dw-step"><div class="dw-box" style="border-color:var(--green);background:var(--gbg)"><span class="dw-n">03</span><span class="dw-ico">📤</span>Send Approval</div></div><div class="dw-arrow">→</div><div class="dw-step"><div class="dw-box" style="border-color:var(--accent);background:var(--glow)"><span class="dw-n">04</span><span class="dw-ico">📱</span>ESS Sync</div></div></div></div><div class="dw-section"><h4>⚡ Smart Interactions</h4><div class="dw-smart"><div class="dw-smart-item">Click any employee row in the snapshot table to auto-load them into the override form</div><div class="dw-smart-item">Credit/Debit toggle shows live before/after balance calculation</div><div class="dw-smart-item">Approval chain: Company Setup → HR Workflow → Leave Override</div></div></div>`},
+  s3:{title:'Bonus & Incentive Upload — TRN-013',html:`<div class="dw-section"><h4>🔄 Process Flow</h4><div class="dw-pipeline"><div class="dw-step"><div class="dw-box" style="border-color:var(--accent);background:var(--glow)"><span class="dw-n">01</span><span class="dw-ico">📥</span>Download Template</div></div><div class="dw-arrow">→</div><div class="dw-step"><div class="dw-box" style="border-color:var(--green);background:var(--gbg)"><span class="dw-n">02</span><span class="dw-ico">📤</span>Upload Batch</div></div><div class="dw-arrow">→</div><div class="dw-step"><div class="dw-box" style="border-color:var(--amber);background:var(--abg)"><span class="dw-n">03</span><span class="dw-ico">📤</span>Finance Approval</div></div><div class="dw-arrow">→</div><div class="dw-step"><div class="dw-box" style="border-color:var(--text3);background:var(--card2)"><span class="dw-n">04</span><span class="dw-ico">💰</span>Merge Payroll</div></div></div></div><div class="dw-section"><h4>⚡ Smart Interactions</h4><div class="dw-smart"><div class="dw-smart-item">TDS auto-calculated per applicable slab before submission</div><div class="dw-smart-item">Finance Mgr + CFO approval chain configured in Company Setup → Payroll Workflow → Bonus Approval</div></div></div>`},
+  s4:{title:'Loans & Advances — TRN-014',html:`<div class="dw-section"><h4>🔄 Process Flow</h4><div class="dw-pipeline"><div class="dw-step"><div class="dw-box" style="border-color:var(--accent);background:var(--glow)"><span class="dw-n">01</span><span class="dw-ico">👆</span>Click Application</div></div><div class="dw-arrow">→</div><div class="dw-step"><div class="dw-box" style="border-color:var(--amber);background:var(--abg)"><span class="dw-n">02</span><span class="dw-ico">👁</span>HR Review</div></div><div class="dw-arrow">→</div><div class="dw-step"><div class="dw-box" style="border-color:var(--violet);background:var(--vbg)"><span class="dw-n">03</span><span class="dw-ico">🏦</span>Finance Approves</div></div><div class="dw-arrow">→</div><div class="dw-step"><div class="dw-box" style="border-color:var(--green);background:var(--gbg)"><span class="dw-n">04</span><span class="dw-ico">💸</span>Disburse + EMI</div></div></div></div><div class="dw-section"><h4>⚡ Smart Interactions</h4><div class="dw-smart"><div class="dw-smart-item">Click any application card to auto-scroll to process form with all data pre-filled</div><div class="dw-smart-item">EMI schedule auto-generated based on amount and tenure selected</div><div class="dw-smart-item">Approval chain: Company Setup → HR Workflow → Loan Processing</div></div></div>`},
+  s5:{title:'Asset Management — TRN-015',html:`<div class="dw-section"><h4>🔄 Asset Lifecycle</h4><div class="dw-pipeline"><div class="dw-step"><div class="dw-box" style="border-color:var(--accent);background:var(--glow)"><span class="dw-n">01</span><span class="dw-ico">📦</span>Add Inventory</div></div><div class="dw-arrow">→</div><div class="dw-step"><div class="dw-box" style="border-color:var(--green);background:var(--gbg)"><span class="dw-n">02</span><span class="dw-ico">💻</span>Issue + E-Sign</div></div><div class="dw-arrow">→</div><div class="dw-step"><div class="dw-box" style="border-color:var(--amber);background:var(--abg)"><span class="dw-n">03</span><span class="dw-ico">↩️</span>Return on Exit</div></div></div></div><div class="dw-section"><h4>⚡ Smart Interactions</h4><div class="dw-smart"><div class="dw-smart-item">E-sign acknowledgment sent to employee mobile + email on issue</div><div class="dw-smart-item">Exit auto-link: all assigned assets appear in exit clearance checklist</div></div></div>`},
+  s6:{title:'HR Letters & Certificates',html:`<div class="dw-section"><h4>📄 Letter Types</h4><div class="dw-fi-row"><div class="dw-fi-ico">📋</div><div class="dw-fi-bd"><div class="dw-fi-nm">Offer / Appointment / Confirmation</div><div class="dw-fi-ds">Auto-fills from employee master. PDF + email on generate.</div></div></div><div class="dw-fi-row"><div class="dw-fi-ico">📊</div><div class="dw-fi-bd"><div class="dw-fi-nm">Experience / Relieving</div><div class="dw-fi-ds">No-dues certificate auto-attached to relieving letter</div></div></div><div class="dw-fi-row"><div class="dw-fi-ico">🏦</div><div class="dw-fi-bd"><div class="dw-fi-nm">Bank / Visa Certificate</div><div class="dw-fi-ds">Official letterhead with digital seal for loans and visas</div></div></div></div>`},
+  s7:{title:'Discipline & Warning',html:`<div class="dw-section"><h4>🔄 Due Process Flow</h4><div class="dw-pipeline"><div class="dw-step"><div class="dw-box" style="border-color:var(--amber);background:var(--abg)"><span class="dw-n">01</span><span class="dw-ico">⚠️</span>Issue Notice</div></div><div class="dw-arrow">→</div><div class="dw-step"><div class="dw-box" style="border-color:var(--accent);background:var(--glow)"><span class="dw-n">02</span><span class="dw-ico">📝</span>Employee Reply</div></div><div class="dw-arrow">→</div><div class="dw-step"><div class="dw-box" style="border-color:var(--rose);background:var(--rbg)"><span class="dw-n">03</span><span class="dw-ico">⚖️</span>Decision + Archive</div></div></div></div><div class="dw-section"><h4>⚡ Smart Features</h4><div class="dw-smart"><div class="dw-smart-item">All actions timestamped and legally auditable — immutable once issued</div><div class="dw-smart-item">PIP tracker: weekly check-in prompts for manager with visible progress</div></div></div>`},
+  s8:{title:'Statutory Compliance',html:`<div class="dw-section"><h4>🛡️ Compliance Coverage</h4><div class="dw-fi-row"><div class="dw-fi-ico">🏛️</div><div class="dw-fi-bd"><div class="dw-fi-nm">PF, ESI, PT, TDS, LWF, Gratuity</div><div class="dw-fi-ds">Multi-state, portal-integrated, auto-calculated monthly</div></div></div></div><div class="dw-section"><h4>⚡ Smart Features</h4><div class="dw-smart"><div class="dw-smart-item">Due date alerts sent 7 days before each filing deadline</div><div class="dw-smart-item">Penalty tracker flags late filings with estimated penalty amounts</div></div></div>`},
+  s9:{title:'Audit Trail',html:`<div class="dw-section"><h4>🔍 What is Logged</h4><div class="dw-fi-row"><div class="dw-fi-ico">👤</div><div class="dw-fi-bd"><div class="dw-fi-nm">Full Attribution</div><div class="dw-fi-ds">User ID, name, role, IP, timestamp on every action</div></div></div><div class="dw-fi-row"><div class="dw-fi-ico">🔒</div><div class="dw-fi-bd"><div class="dw-fi-nm">Immutable Records</div><div class="dw-fi-ds">Cannot be edited or deleted even by System Administrators</div></div></div></div><div class="dw-section"><h4>⚡ Smart Features</h4><div class="dw-smart"><div class="dw-smart-item">Anomaly detection: flags unusual patterns — bulk edits, after-hours access</div><div class="dw-smart-item">Retention: 7 years by default (configurable per industry regulation)</div></div></div>`}
+};
+
+/* ══ DRAWER ══ */
+function openDrawer(s){const d=pageInfoData[s];if(!d)return;document.getElementById('drawer-title').textContent=d.title;document.getElementById('drawer-body').innerHTML=d.html;document.getElementById('drawer').classList.add('open');document.getElementById('overlay').classList.add('open');document.body.style.overflow='hidden'}
+function closeDrawer(){document.getElementById('drawer').classList.remove('open');document.getElementById('overlay').classList.remove('open');document.body.style.overflow=''}
+
+/* ══ THEME ══ */
+function toggleTheme(){const h=document.documentElement,b=document.getElementById('tbtn');if(h.getAttribute('data-theme')==='dark'){h.setAttribute('data-theme','light');b.textContent='🌙 Dark'}else{h.setAttribute('data-theme','dark');b.textContent='☀️ Light'}}
+
+/* ══ VIEWPORT ══ */
+function setView(v){const bd=document.getElementById('vd'),bm=document.getElementById('vm');if(v==='m'){document.body.classList.add('mob');bd.classList.remove('on');bm.classList.add('on')}else{document.body.classList.remove('mob');bd.classList.add('on');bm.classList.remove('on')}}
+
+/* ══ TAB SWITCHER (form / report per section) ══ */
+function switchTab(sec, view) {
+  document.getElementById(sec+'-form') && document.getElementById(sec+'-form').classList.remove('on');
+  document.getElementById(sec+'-report') && document.getElementById(sec+'-report').classList.remove('on');
+  const target = document.getElementById(sec+'-'+view);
+  if (target) { target.classList.add('on'); }
+  document.querySelectorAll('#'+sec+'-tab-form, #'+sec+'-tab-report').forEach(t=>t.classList.remove('on'));
+  const activeTab = document.getElementById(sec+'-tab-'+view);
+  if (activeTab) activeTab.classList.add('on');
+}
+
+/* ══ SECTION NAV ══ */
+function syncMobNav(secId){document.querySelectorAll('.mob-nav-item').forEach(i=>i.classList.remove('on'));const el=document.getElementById('mn-'+secId);if(el)el.classList.add('on')}
+function showSec(id,clickedEl){
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  document.querySelectorAll('.snav').forEach(t=>t.classList.remove('on'));
+  document.querySelectorAll('.sb-item').forEach(s=>s.classList.remove('on'));
+  document.querySelectorAll('.snav,.sb-item').forEach(el=>{if(el.getAttribute('onclick')&&el.getAttribute('onclick').includes("'"+id+"'"))el.classList.add('on')});
+  syncMobNav(id);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* ══ SCROLL TO ELEMENT ══ */
+function scrollToEl(id, offset) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+  const top = rect.top + scrollTop - (offset || 100);
+  window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+}
+
+/* ══════════════════════════════════════
+   ATTENDANCE — row select, calendar, approval
+══════════════════════════════════════ */
+const attData = {
+  1:{ name:'Rajesh Kumar · Mar 09', issue:'Missing Punch-Out', date:'Mar 09, 2026',
+      alert:'In 09:05 · Out <b>MISSING</b> → system marked as half-day',
+      inTime:'09:05', outTime:'18:30', impact:'LOP reduced by 0.5 day → <b>+₹3,200</b> added to March payroll',
+      reason:'Biometric scanner offline from 5 PM on 2nd floor. Employee attended full day — confirmed by manager sign-off.' },
+  2:{ name:'Sunita Patel · Mar 05', issue:'Marked Absent', date:'Mar 05, 2026',
+      alert:'Entire day marked Absent — badge log shows entry at 09:20',
+      inTime:'09:20', outTime:'18:15', impact:'LOP removed for full day → <b>+₹4,800</b> added to March payroll',
+      reason:'Badge scan registered at 09:20. Biometric did not capture. Physical register confirms attendance.' },
+  3:{ name:'Arjun Mehta · Mar 07', issue:'Late Arrival', date:'Mar 07, 2026',
+      alert:'In 10:45 — late by 1h 45m. Manager requests grace-period override.',
+      inTime:'10:45', outTime:'19:30', impact:'Late-in warning removed. No salary impact — grace period applied.',
+      reason:'Traffic disruption on ORR — email from manager confirming grace period for this date.' },
+  4:{ name:'Vandana Nair · Mar 02', issue:'No Punch at All', date:'Mar 02, 2026',
+      alert:'No biometric record for full day. Physical register shows presence.',
+      inTime:'09:00', outTime:'18:00', impact:'Full LOP removed → <b>+₹5,600</b> added to March payroll',
+      reason:'Power failure on Floor 2 from 8 AM to 6 PM. Biometric server offline. Physical register verified.' }
+};
+
+// Maps calendar day to row number
+const calDayToRow = { 9:1, 5:2, 7:3, 2:4 };
+
+function selectAttRow(n, evt) {
+  if (evt) evt.stopPropagation();
+  // Highlight table row
+  document.querySelectorAll('[id^=att-row-]').forEach(r => {
+    r.classList.remove('row-selected');
+    r.style.background = '';
+  });
+  const row = document.getElementById('att-row-'+n);
+  if (row) { row.classList.add('row-selected'); }
+
+  // Fill form
+  const d = attData[n];
+  if (!d) return;
+  document.getElementById('att-emp-name').textContent = d.name;
+  document.getElementById('att-issue-badge').textContent = d.issue;
+  document.getElementById('att-date-lbl').textContent = d.date;
+  document.getElementById('att-alert-text').innerHTML = '<b>Current:</b> ' + d.alert;
+  document.getElementById('att-in').value = d.inTime;
+  document.getElementById('att-out').value = d.outTime;
+  document.getElementById('att-reason').value = d.reason;
+  document.getElementById('att-impact').querySelector('.impact-body').innerHTML = d.impact;
+
+  // Highlight matching calendar day
+  document.querySelectorAll('.pending-day').forEach(c => c.classList.remove('sel'));
+  const dayMap = {1:9, 2:5, 3:7, 4:2};
+  const calDay = dayMap[n];
+  if (calDay) {
+    const calEl = document.querySelector(`.pending-day[data-day="${calDay}"]`);
+    if (calEl) calEl.classList.add('sel');
+  }
+
+  // Reset status banner
+  document.getElementById('att-status-banner').style.display = 'none';
+  document.getElementById('att-apwf-area').style.display = 'block';
+
+  // Smooth scroll to form
+  setTimeout(() => scrollToEl('att-form-shell', 110), 80);
+}
+
+function calSelAndLoad(el, day) {
+  // Select calendar cell
+  document.querySelectorAll('.pending-day').forEach(c => c.classList.remove('sel'));
+  el.classList.add('sel');
+  // Load corresponding row
+  const rowNum = calDayToRow[day];
+  if (rowNum) selectAttRow(rowNum, null);
+}
+
+function attAlertClick() {
+  // Auto-fill form from current alert data — already done, just focus first empty field
+  const out = document.getElementById('att-out');
+  if (out) { out.focus(); out.select(); }
+}
+
+function sendAttApproval() {
+  const name = document.getElementById('att-emp-name').textContent;
+  const date = document.getElementById('att-date-lbl').textContent;
+  const apwf = document.getElementById('att-apwf-area');
+  const banner = document.getElementById('att-status-banner');
+  apwf.style.display = 'none';
+  banner.style.display = 'flex';
+  banner.querySelector('.apwf-meta').textContent =
+    `Submitted by HR Admin · ${new Date().toLocaleString('en-IN',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})} · Ref: ATT-ADJ-2026-${Math.floor(Math.random()*900+100)}`;
+  setTimeout(() => scrollToEl('att-status-banner', 110), 100);
+}
+
+/* ══════════════════════════════════════
+   LEAVE — row select, approval
+══════════════════════════════════════ */
+function selectLeaveRow(name, empId, leaveType, balance, rowEl) {
+  // Highlight row
+  document.querySelectorAll('#s2-form table tbody tr').forEach(r => r.style.background='');
+  if (rowEl) rowEl.style.background = 'var(--glow)';
+  // Fill form
+  document.getElementById('lv-emp-name').textContent = name;
+  document.getElementById('lv-emp').value = `${name} — ${empId}`;
+  // Set leave type based on flag
+  const sel = document.getElementById('lv-type');
+  if (leaveType === 'CL') sel.value = 'Casual Leave (CL)';
+  else if (leaveType === 'SL') sel.value = 'Sick Leave (SL)';
+  else if (leaveType === 'EL') sel.value = 'Earned Leave (EL)';
+  // Reset approval
+  document.getElementById('lv-status-banner').style.display = 'none';
+  document.getElementById('lv-apwf-area').style.display = 'block';
+  updateLeaveHint();
+  setTimeout(() => scrollToEl('leave-form-shell', 110), 80);
+}
+
+function sendLeaveApproval() {
+  document.getElementById('lv-apwf-area').style.display = 'none';
+  const banner = document.getElementById('lv-status-banner');
+  banner.style.display = 'flex';
+  setTimeout(() => scrollToEl('lv-status-banner', 110), 100);
+}
+
+/* ══════════════════════════════════════
+   BONUS — approval
+══════════════════════════════════════ */
+function sendBonusApproval() {
+  const banner = document.getElementById('bonus-status-banner');
+  banner.style.display = 'flex';
+  setTimeout(() => scrollToEl('bonus-status-banner', 110), 100);
+}
+
+/* ══════════════════════════════════════
+   LOANS — row select, approval
+══════════════════════════════════════ */
+function selectLoanRow(name, empId, type, amount, emi, ctc, cardEl) {
+  // Highlight card
+  document.querySelectorAll('#s4-form .apv-card').forEach(c => {
+    c.style.background = '';
+    c.style.borderColor = '';
+  });
+  if (cardEl) {
+    cardEl.style.background = 'var(--glow)';
+    cardEl.style.borderColor = 'var(--accent)';
+  }
+  // Fill form
+  document.getElementById('loan-emp-name').textContent = name;
+  document.getElementById('loan-emp-input').value = `${name} · ${empId} · IT`;
+  document.getElementById('loan-ctc').value = `₹${ctc.toLocaleString('en-IN')}`;
+  const maxElig = ctc * 2;
+  document.getElementById('loan-eligible').textContent = `Max eligible: ₹${maxElig.toLocaleString('en-IN')} (2× monthly)`;
+  document.getElementById('loan-amount').value = amount;
+  // Update impact
+  const emiAmt = Math.round(amount / emi);
+  const afterSalary = ctc - emiAmt;
+  document.getElementById('loan-impact').querySelector('.impact-body').innerHTML =
+    `EMI <b>₹${emiAmt.toLocaleString('en-IN')}/month</b> from April 2026. Salary after deduction: <b>₹${afterSalary.toLocaleString('en-IN')}</b>`;
+  // Reset approval
+  document.getElementById('loan-status-banner').style.display = 'none';
+  setTimeout(() => scrollToEl('loan-form-shell', 110), 80);
+}
+
+function sendLoanApproval() {
+  const name = document.getElementById('loan-emp-name').textContent;
+  const amt = document.getElementById('loan-amount').value;
+  document.getElementById('loan-status-banner').style.display = 'flex';
+  document.getElementById('loan-status-meta').textContent =
+    `HR Approved ${new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})} · Ref: LOAN-2026-${Math.floor(Math.random()*900+100)} · ₹${parseInt(amt).toLocaleString('en-IN')}`;
+  setTimeout(() => scrollToEl('loan-status-banner', 110), 100);
+}
+
+/* ══ LEAVE HINT UPDATE ══ */
+function updateLeaveHint() {
+  const action = document.querySelector('input[name="lva"]:checked')?.value || 'credit';
+  const days = parseFloat(document.getElementById('lv-days')?.value) || 0;
+  const hint = document.getElementById('lv-hint');
+  if (!hint) return;
+  const current = 0;
+  const after = action==='credit' ? current+days : current-days;
+  const sign = action==='credit' ? '+' : '-';
+  const color = after<0 ? 'var(--rose)' : 'var(--green)';
+  hint.innerHTML = `Current: <b>${current} days</b> → After: <b style="color:${color}">${sign}${days} = ${after} days</b>`;
+}
+
+/* ══ CALENDAR SELECT ══ */
+function calSel(el) {
+  document.querySelectorAll('.cal-d').forEach(d=>d.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+/* ══ SYNC MOBILE NAV ══ */
+function syncMobNav(secId){document.querySelectorAll('.mob-nav-item').forEach(i=>i.classList.remove('on'));const el=document.getElementById('mn-'+secId);if(el)el.classList.add('on')}
+</script>
+</body>
+</html>

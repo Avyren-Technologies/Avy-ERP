@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>HRMS Config — Smart Setup Redesign</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0b0f1a;
+    --surface: #131929;
+    --card: #1a2235;
+    --border: #243050;
+    --accent: #4f8ef7;
+    --accent2: #34d399;
+    --accent3: #f59e0b;
+    --accent4: #f472b6;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Sora', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* ── Header ── */
+  header {
+    background: linear-gradient(135deg, #0f1e3a 0%, #0b0f1a 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 24px 32px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.3px; }
+  header h1 span { color: var(--accent); }
+  .badge { background: #1e3a5f; color: var(--accent); font-size: 0.72rem; font-weight: 600; padding: 4px 12px; border-radius: 20px; border: 1px solid #2d5080; font-family: 'JetBrains Mono', monospace; }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; gap: 4px; padding: 20px 32px 0; border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .tab { padding: 10px 20px; border-radius: 10px 10px 0 0; font-size: 0.82rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; border-bottom: none; color: var(--muted); transition: all 0.2s; white-space: nowrap; }
+  .tab:hover { color: var(--text); background: var(--surface); }
+  .tab.active { background: var(--card); color: var(--accent); border-color: var(--border); }
+
+  /* ── Main ── */
+  main { padding: 32px; max-width: 1200px; margin: 0 auto; }
+
+  /* ── Page Overview ── */
+  .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 40px; }
+  .ov-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px; cursor: pointer; transition: all 0.25s; position: relative; overflow: hidden;
+  }
+  .ov-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--c, var(--accent)); }
+  .ov-card:hover { transform: translateY(-3px); border-color: var(--c, var(--accent)); box-shadow: 0 8px 32px rgba(79,142,247,0.15); }
+  .ov-card.active { border-color: var(--c, var(--accent)); background: #1e2d45; }
+  .ov-icon { font-size: 1.8rem; margin-bottom: 10px; }
+  .ov-num { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--muted); margin-bottom: 4px; }
+  .ov-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 4px; }
+  .ov-sub { font-size: 0.72rem; color: var(--muted); line-height: 1.5; }
+  .ov-count { position: absolute; top: 14px; right: 14px; background: rgba(255,255,255,0.07); border-radius: 8px; padding: 2px 8px; font-size: 0.68rem; font-family: 'JetBrains Mono', monospace; color: var(--muted); }
+
+  /* ── Page Detail ── */
+  .page-detail { display: none; }
+  .page-detail.visible { display: block; animation: fadeUp 0.3s ease; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+  .page-header { display: flex; align-items: flex-start; gap: 20px; margin-bottom: 28px; padding: 24px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
+  .page-icon-big { font-size: 2.8rem; }
+  .page-header-text h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; }
+  .page-header-text p { font-size: 0.83rem; color: var(--muted); line-height: 1.6; max-width: 600px; }
+  .page-tags { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .tag { font-size: 0.68rem; padding: 3px 10px; border-radius: 20px; font-weight: 600; }
+  .tag-green { background: #0d3326; color: var(--accent2); border: 1px solid #1a5e46; }
+  .tag-blue { background: #0d2040; color: var(--accent); border: 1px solid #1e3a6e; }
+  .tag-amber { background: #2d1f00; color: var(--accent3); border: 1px solid #5a3e00; }
+
+  /* ── Sections grid ── */
+  .sections-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 32px; }
+  .section-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .section-head { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+  .section-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .section-head h3 { font-size: 0.88rem; font-weight: 600; }
+  .section-head .sc-badge { margin-left: auto; font-size: 0.65rem; font-family: 'JetBrains Mono', monospace; color: var(--muted); background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 6px; }
+  .section-body { padding: 16px 20px; }
+  .field-row { display: flex; align-items: flex-start; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .field-row:last-child { border-bottom: none; }
+  .field-icon { font-size: 0.9rem; margin-top: 1px; flex-shrink: 0; }
+  .field-info { flex: 1; }
+  .field-name { font-size: 0.8rem; font-weight: 500; margin-bottom: 2px; }
+  .field-desc { font-size: 0.72rem; color: var(--muted); line-height: 1.5; }
+  .field-type { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--accent); background: rgba(79,142,247,0.1); padding: 1px 7px; border-radius: 5px; flex-shrink: 0; margin-top: 2px; }
+
+  /* ── UX Notes ── */
+  .ux-notes { background: linear-gradient(135deg, #0d2540, #0b1a30); border: 1px solid #1e3a60; border-radius: var(--radius); padding: 20px 24px; margin-bottom: 24px; }
+  .ux-notes h4 { font-size: 0.82rem; font-weight: 600; color: var(--accent); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .ux-list { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+  .ux-list li { font-size: 0.78rem; color: #94b8e8; line-height: 1.5; padding-left: 18px; position: relative; }
+  .ux-list li::before { content: '→'; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+
+  /* ── Flowchart ── */
+  .flow-wrap { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; margin-bottom: 32px; overflow-x: auto; }
+  .flow-wrap h3 { font-size: 0.88rem; font-weight: 600; color: var(--muted); margin-bottom: 24px; text-transform: uppercase; letter-spacing: 1px; }
+  .flow { display: flex; align-items: center; gap: 0; flex-wrap: nowrap; min-width: max-content; }
+  .flow-step { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .flow-box {
+    background: linear-gradient(135deg, #1e3a5f, #152d4a);
+    border: 1.5px solid var(--accent);
+    border-radius: 10px; padding: 12px 18px; text-align: center;
+    font-size: 0.78rem; font-weight: 600; min-width: 120px;
+    position: relative;
+  }
+  .flow-box.done { border-color: var(--accent2); background: linear-gradient(135deg, #0d3326, #0a2520); }
+  .flow-box.optional { border-color: var(--accent3); border-style: dashed; background: linear-gradient(135deg, #2d1f00, #1a1300); }
+  .flow-num { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 0.65rem; font-weight: 700; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; }
+  .flow-num.g { background: var(--accent2); }
+  .flow-num.a { background: var(--accent3); color: #000; }
+  .flow-arrow { font-size: 1.1rem; color: var(--muted); margin: 0 6px; margin-bottom: 22px; }
+  .flow-label { font-size: 0.65rem; color: var(--muted); text-align: center; max-width: 100px; }
+
+  /* ── Progress bar ── */
+  .progress-bar { display: flex; gap: 6px; margin-bottom: 28px; flex-wrap: wrap; }
+  .pb-step { flex: 1; min-width: 80px; height: 6px; border-radius: 3px; background: var(--border); position: relative; }
+  .pb-step.filled { background: var(--accent); }
+  .pb-step.filled-g { background: var(--accent2); }
+
+  /* ── Consolidation table ── */
+  .consolidation { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 32px; }
+  .cons-head { padding: 18px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .cons-head h3 { font-size: 0.88rem; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 12px 20px; font-size: 0.72rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border); }
+  td { padding: 13px 20px; font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 0.68rem; font-weight: 600; }
+  .pill-blue { background: rgba(79,142,247,0.15); color: var(--accent); }
+  .pill-green { background: rgba(52,211,153,0.15); color: var(--accent2); }
+  .pill-amber { background: rgba(245,158,11,0.15); color: var(--accent3); }
+  .old-count { font-family: 'JetBrains Mono', monospace; color: #ef4444; font-size: 0.8rem; }
+  .new-count { font-family: 'JetBrains Mono', monospace; color: var(--accent2); font-size: 0.8rem; }
+
+  /* ── Mobile note ── */
+  .mobile-note { display: flex; gap: 16px; background: linear-gradient(135deg, #1a2a1a, #0f1a0f); border: 1px solid #2d4a2d; border-radius: var(--radius); padding: 20px 24px; margin-bottom: 28px; }
+  .mobile-note .mn-icon { font-size: 2rem; }
+  .mobile-note h4 { font-size: 0.85rem; font-weight: 600; color: var(--accent2); margin-bottom: 6px; }
+  .mobile-note p { font-size: 0.78rem; color: #7ab87a; line-height: 1.6; }
+
+  @media (max-width: 640px) {
+    header { padding: 16px; }
+    main { padding: 16px; }
+    .tabs { padding: 12px 16px 0; }
+    .overview-grid { grid-template-columns: 1fr 1fr; }
+    .sections-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>HRMS <span>Smart Config</span> — Redesign</h1>
+  <div class="badge">32 screens → 6 smart pages</div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab(this,'overview')">📐 Overview</div>
+  <div class="tab" onclick="switchTab(this,'p1')">Page 1 · Company</div>
+  <div class="tab" onclick="switchTab(this,'p2')">Page 2 · People</div>
+  <div class="tab" onclick="switchTab(this,'p3')">Page 3 · Payroll</div>
+  <div class="tab" onclick="switchTab(this,'p4')">Page 4 · Attendance</div>
+  <div class="tab" onclick="switchTab(this,'p5')">Page 5 · Roles & Access</div>
+  <div class="tab" onclick="switchTab(this,'p6')">Page 6 · Integrations</div>
+</div>
+
+<main>
+
+<!-- ══════════ OVERVIEW TAB ══════════ -->
+<div id="tab-overview" class="page-detail visible">
+
+  <div class="mobile-note">
+    <div class="mn-icon">📱</div>
+    <div>
+      <h4>Mobile-First + Single-Page Smart Sections Philosophy</h4>
+      <p>Every configuration page is a single scrollable page with collapsible smart sections. Fields are context-aware — they appear only when relevant. Tooltips, inline help text, and smart defaults eliminate the need for a manual. Setup can be completed end-to-end from any mobile device in under 20 minutes.</p>
+    </div>
+  </div>
+
+  <div class="consolidation">
+    <div class="cons-head">
+      <h3>🗜️ Consolidation Map — 32 Screens → 6 Smart Pages</h3>
+    </div>
+    <table>
+      <thead><tr><th>Smart Page</th><th>Original Screens Merged</th><th>Old Count</th><th>New Count</th><th>Saving</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Page 1 · Company & Organisation</strong></td>
+          <td>CFG-001 Company Master, CFG-002 Branch/Location, CFG-003 Department, CFG-004 Designation, CFG-005 Grade/Band, CFG-031 Notifications</td>
+          <td><span class="old-count">6</span></td><td><span class="new-count">1</span></td><td><span class="pill pill-green">−5</span></td>
+        </tr>
+        <tr>
+          <td><strong>Page 2 · People & Policies</strong></td>
+          <td>CFG-006 Employee Type, CFG-013 Leave Policy, CFG-021 Probation Rules, CFG-022 Appraisal Config, CFG-023 Training Master, CFG-024 Document Types, CFG-025 Asset Categories, CFG-026 Grievance Setup</td>
+          <td><span class="old-count">8</span></td><td><span class="new-count">1</span></td><td><span class="pill pill-green">−7</span></td>
+        </tr>
+        <tr>
+          <td><strong>Page 3 · Payroll & Compliance</strong></td>
+          <td>CFG-010 Pay Components, CFG-011 Tax Slabs, CFG-012 PF/ESI/PT Rules, CFG-014 Bank Master, CFG-020 Loan Policy, CFG-028 Salary Structure Templates</td>
+          <td><span class="old-count">6</span></td><td><span class="new-count">1</span></td><td><span class="pill pill-green">−5</span></td>
+        </tr>
+        <tr>
+          <td><strong>Page 4 · Attendance & Time</strong></td>
+          <td>CFG-007 Shift Master, CFG-008 Holiday Calendar, CFG-009 Work Week/Roster, CFG-027 Biometric/Device, CFG-029 Geo-fence Zones, CFG-030 Overtime Rules</td>
+          <td><span class="old-count">6</span></td><td><span class="new-count">1</span></td><td><span class="pill pill-green">−5</span></td>
+        </tr>
+        <tr>
+          <td><strong>Page 5 · Roles, Access & Workflows</strong></td>
+          <td>CFG-015 RBAC/User Roles, CFG-016 Field-Level Permissions, CFG-017 Workflow Designer, CFG-018 Approval Chains, CFG-019 Notification Rules, CFG-032 Data Retention</td>
+          <td><span class="old-count">6</span></td><td><span class="new-count">1</span></td><td><span class="pill pill-green">−5</span></td>
+        </tr>
+        <tr>
+          <td><strong>Page 6 · Integrations & Advanced</strong></td>
+          <td>CFG-027 API Connectors, CFG-030 AI Chatbot Config, E-Sign Setup, ERP Connectors, Banking Config, EPFO/ESIC portal links</td>
+          <td><span class="old-count">6</span></td><td><span class="new-count">1</span></td><td><span class="pill pill-green">−5</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="flow-wrap">
+    <h3>⚡ First-Time Setup Flow (Wizard Mode)</h3>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-num">1</div>
+        <div class="flow-box done">🏢 Company<br/>& Org</div>
+        <div class="flow-label">~3 min</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-num">2</div>
+        <div class="flow-box done">👥 People<br/>Policies</div>
+        <div class="flow-label">~4 min</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-num">3</div>
+        <div class="flow-box">💰 Payroll<br/>Rules</div>
+        <div class="flow-label">~5 min</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-num g">4</div>
+        <div class="flow-box">⏱️ Attendance<br/>& Time</div>
+        <div class="flow-label">~3 min</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-num g">5</div>
+        <div class="flow-box">🔐 Roles &<br/>Workflows</div>
+        <div class="flow-label">~4 min</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-num a">6</div>
+        <div class="flow-box optional">🔗 Integrations<br/>(Optional)</div>
+        <div class="flow-label">~5 min</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-num g">✓</div>
+        <div class="flow-box done">🚀 Go Live!</div>
+        <div class="flow-label">Done</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overview-grid">
+    <div class="ov-card" style="--c:#4f8ef7" onclick="switchTabByPage('p1')">
+      <div class="ov-count">6 → 1</div>
+      <div class="ov-icon">🏢</div>
+      <div class="ov-num">PAGE 01</div>
+      <div class="ov-title">Company & Organisation</div>
+      <div class="ov-sub">Name, logo, branches, departments, designations, grades — all in one accordion page</div>
+    </div>
+    <div class="ov-card" style="--c:#34d399" onclick="switchTabByPage('p2')">
+      <div class="ov-count">8 → 1</div>
+      <div class="ov-icon">👥</div>
+      <div class="ov-num">PAGE 02</div>
+      <div class="ov-title">People & Policies</div>
+      <div class="ov-sub">Employee types, leave rules, probation, appraisal, training, assets, grievances</div>
+    </div>
+    <div class="ov-card" style="--c:#f59e0b" onclick="switchTabByPage('p3')">
+      <div class="ov-count">6 → 1</div>
+      <div class="ov-icon">💰</div>
+      <div class="ov-num">PAGE 03</div>
+      <div class="ov-title">Payroll & Compliance</div>
+      <div class="ov-sub">Pay components, tax slabs, PF/ESI/PT, bank, loans, salary structures</div>
+    </div>
+    <div class="ov-card" style="--c:#f472b6" onclick="switchTabByPage('p4')">
+      <div class="ov-count">6 → 1</div>
+      <div class="ov-icon">⏱️</div>
+      <div class="ov-num">PAGE 04</div>
+      <div class="ov-title">Attendance & Time</div>
+      <div class="ov-sub">Shifts, holidays, work week, biometric devices, geo-fence, overtime rules</div>
+    </div>
+    <div class="ov-card" style="--c:#a78bfa" onclick="switchTabByPage('p5')">
+      <div class="ov-count">6 → 1</div>
+      <div class="ov-icon">🔐</div>
+      <div class="ov-num">PAGE 05</div>
+      <div class="ov-title">Roles & Workflows</div>
+      <div class="ov-sub">RBAC roles, field permissions, approval chains, notifications, data retention</div>
+    </div>
+    <div class="ov-card" style="--c:#fb923c" onclick="switchTabByPage('p6')">
+      <div class="ov-count">6 → 1</div>
+      <div class="ov-icon">🔗</div>
+      <div class="ov-num">PAGE 06</div>
+      <div class="ov-title">Integrations & Advanced</div>
+      <div class="ov-sub">ERP connectors, banking, e-sign, AI chatbot, EPFO/ESIC portals</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PAGE 1 ══════════ -->
+<div id="tab-p1" class="page-detail">
+  <div class="page-header">
+    <div class="page-icon-big">🏢</div>
+    <div class="page-header-text">
+      <h2>Page 1 — Company & Organisation Setup</h2>
+      <p>Single scrollable page. Accordion sections expand as needed. Smart defaults pre-fill common values. Admin sets up the entire company structure here — from logo to org hierarchy — without jumping between screens.</p>
+      <div class="page-tags">
+        <span class="tag tag-blue">Replaces 6 screens</span>
+        <span class="tag tag-green">~3 min setup</span>
+        <span class="tag tag-amber">Admin only</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ux-notes">
+    <h4>💡 UX Smart Features on This Page</h4>
+    <ul class="ux-list">
+      <li>Logo drag-and-drop with instant preview</li>
+      <li>GST number auto-validates state code</li>
+      <li>Departments/Designations added inline via "+ Add" chip — no separate screen</li>
+      <li>Grade bands show salary range preview as you type</li>
+      <li>Bulk import via Excel for large orgs (50+ departments)</li>
+      <li>Tree-view org hierarchy builds live as you add departments</li>
+      <li>Notification templates editable inline with variable tokens like {employee_name}</li>
+    </ul>
+  </div>
+
+  <div class="sections-grid">
+    <div class="section-card">
+      <div class="section-head">
+        <div class="section-dot" style="background:#4f8ef7"></div>
+        <h3>Section A · Company Identity</h3>
+        <span class="sc-badge">Always visible</span>
+      </div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">🏷️</div><div class="field-info"><div class="field-name">Company Name & Short Name</div><div class="field-desc">Legal entity name + display abbreviation used in reports</div></div><div class="field-type">Text</div></div>
+        <div class="field-row"><div class="field-icon">🖼️</div><div class="field-info"><div class="field-name">Logo Upload</div><div class="field-desc">Drag & drop or browse; auto-resized for web + mobile + payslip</div></div><div class="field-type">File</div></div>
+        <div class="field-row"><div class="field-icon">🏭</div><div class="field-info"><div class="field-name">Industry & Company Type</div><div class="field-desc">Dropdown with 20+ industries; applies relevant statutory defaults automatically</div></div><div class="field-type">Dropdown</div></div>
+        <div class="field-row"><div class="field-icon">📅</div><div class="field-info"><div class="field-name">Incorporation Date & Financial Year</div><div class="field-desc">FY setting auto-configures payroll cycle, tax year, and leave accrual</div></div><div class="field-type">Date</div></div>
+        <div class="field-row"><div class="field-icon">🌐</div><div class="field-info"><div class="field-name">Website, Email, Phone</div><div class="field-desc">Used in offer letters, payslips, and system notifications</div></div><div class="field-type">Text</div></div>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-head">
+        <div class="section-dot" style="background:#34d399"></div>
+        <h3>Section B · Statutory & Tax IDs</h3>
+        <span class="sc-badge">Expandable</span>
+      </div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">📋</div><div class="field-info"><div class="field-name">GST Number</div><div class="field-desc">Auto-validates format; extracts state code for PT applicability</div></div><div class="field-type">Text + Validate</div></div>
+        <div class="field-row"><div class="field-icon">🏦</div><div class="field-info"><div class="field-name">PF Registration No.</div><div class="field-desc">Linked to EPFO portal for ECR auto-filing</div></div><div class="field-type">Text</div></div>
+        <div class="field-row"><div class="field-icon">🏥</div><div class="field-info"><div class="field-name">ESI Registration No.</div><div class="field-desc">Used in monthly ESI return auto-generation</div></div><div class="field-type">Text</div></div>
+        <div class="field-row"><div class="field-icon">📝</div><div class="field-info"><div class="field-name">TAN / PAN</div><div class="field-desc">TAN for TDS filing (Form 24Q); PAN for Form 16 generation</div></div><div class="field-type">Text</div></div>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-head">
+        <div class="section-dot" style="background:#f59e0b"></div>
+        <h3>Section C · Branches & Locations</h3>
+        <span class="sc-badge">Inline add / bulk import</span>
+      </div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">📍</div><div class="field-info"><div class="field-name">Location Name & Code</div><div class="field-desc">City, state auto-filled from pincode; determines PT slab and holiday calendar</div></div><div class="field-type">Text + Pincode</div></div>
+        <div class="field-row"><div class="field-icon">📬</div><div class="field-info"><div class="field-name">Full Address</div><div class="field-desc">Appears on offer letters, appointment letters, and statutory filings</div></div><div class="field-type">Textarea</div></div>
+        <div class="field-row"><div class="field-icon">🗓️</div><div class="field-info"><div class="field-name">Holiday Calendar Assignment</div><div class="field-desc">Assign national + regional calendar to this location; cloned from Page 4</div></div><div class="field-type">Dropdown</div></div>
+        <div class="field-row"><div class="field-icon">➕</div><div class="field-info"><div class="field-name">Add More Locations</div><div class="field-desc">Click "+ Add Location" chip or upload Excel for bulk import</div></div><div class="field-type">Inline / Bulk</div></div>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-head">
+        <div class="section-dot" style="background:#f472b6"></div>
+        <h3>Section D · Departments, Designations & Grades</h3>
+        <span class="sc-badge">Tree builder</span>
+      </div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">🗂️</div><div class="field-info"><div class="field-name">Departments</div><div class="field-desc">Inline chip-add; drag to reorder; assign parent department for hierarchy; live tree preview on right</div></div><div class="field-type">Chip + Tree</div></div>
+        <div class="field-row"><div class="field-icon">🎖️</div><div class="field-info"><div class="field-name">Designations</div><div class="field-desc">Link designation to department; set reporting level (L1–L6)</div></div><div class="field-type">Chip + Dropdown</div></div>
+        <div class="field-row"><div class="field-icon">📊</div><div class="field-info"><div class="field-name">Grade / Band</div><div class="field-desc">Grade code + salary range (min–max CTC); auto-warns if salary revision exceeds band</div></div><div class="field-type">Text + Range</div></div>
+        <div class="field-row"><div class="field-icon">💼</div><div class="field-info"><div class="field-name">Cost Centre</div><div class="field-desc">Map departments to finance cost centres for payroll journal entries</div></div><div class="field-type">Text</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PAGE 2 ══════════ -->
+<div id="tab-p2" class="page-detail">
+  <div class="page-header">
+    <div class="page-icon-big">👥</div>
+    <div class="page-header-text">
+      <h2>Page 2 — People & Policies</h2>
+      <p>All employee-type definitions, leave rules, appraisal cycles, training categories, document types, asset types, and grievance setup — consolidated into one smart page with tabbed sub-sections. Policies apply globally but can be overridden per location or grade.</p>
+      <div class="page-tags">
+        <span class="tag tag-blue">Replaces 8 screens</span>
+        <span class="tag tag-green">~4 min setup</span>
+        <span class="tag tag-amber">HR Admin</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ux-notes">
+    <h4>💡 UX Smart Features on This Page</h4>
+    <ul class="ux-list">
+      <li>Leave policy has a "Quick Template" button — choose industry and it pre-fills standard leave types</li>
+      <li>Statutory leave types (PL, SL, CL) are pre-configured; admin only edits quotas</li>
+      <li>Appraisal cycle shows a visual timeline as dates are selected</li>
+      <li>Document types have an "e-sign required" toggle — one click, no sub-screen</li>
+      <li>Asset categories have depreciation rate auto-suggestions based on category type</li>
+      <li>Grievance SLA shows estimated workload based on employee count</li>
+    </ul>
+  </div>
+
+  <div class="sections-grid">
+    <div class="section-card">
+      <div class="section-head"><div class="section-dot" style="background:#4f8ef7"></div><h3>Section A · Employee Types</h3><span class="sc-badge">Statutory flags</span></div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">🏷️</div><div class="field-info"><div class="field-name">Type Name</div><div class="field-desc">Permanent, Contractual, Intern, Consultant — add custom types too</div></div><div class="field-type">Chip</div></div>
+        <div class="field-row"><div class="field-icon">⚖️</div><div class="field-info"><div class="field-name">Statutory Applicability Toggles</div><div class="field-desc">Per type: PF applicable? ESI applicable? Gratuity eligible? Bonus eligible? — single row of toggles</div></div><div class="field-type">Toggle row</div></div>
+        <div class="field-row"><div class="field-icon">📄</div><div class="field-info"><div class="field-name">Default Contract Template</div><div class="field-desc">Assign offer letter / appointment letter template to this employee type</div></div><div class="field-type">Dropdown</div></div>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-head"><div class="section-dot" style="background:#34d399"></div><h3>Section B · Leave Policy</h3><span class="sc-badge">Quick templates</span></div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">🌴</div><div class="field-info"><div class="field-name">Leave Types & Annual Quota</div><div class="field-desc">PL/EL/SL/CL/ML/PL — enter quota per year; statutory minimum auto-enforced</div></div><div class="field-type">Table row</div></div>
+        <div class="field-row"><div class="field-icon">📈</div><div class="field-info"><div class="field-name">Accrual Rule</div><div class="field-desc">Monthly / quarterly / upfront; carry-forward limit; encashment on/off toggle</div></div><div class="field-type">Dropdown + Toggle</div></div>
+        <div class="field-row"><div class="field-icon">⏳</div><div class="field-info"><div class="field-name">Probation Restrictions</div><div class="field-desc">Which leave types are blocked during probation — checkbox per type</div></div><div class="field-type">Checkbox</div></div>
+        <div class="field-row"><div class="field-icon">🔗</div><div class="field-info"><div class="field-name">Applicable Employee Types</div><div class="field-desc">Which policy applies to which employee type — multi-select chips</div></div><div class="field-type">Multi-select</div></div>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-head"><div class="section-dot" style="background:#f59e0b"></div><h3>Section C · Probation & Confirmation</h3><span class="sc-badge">Auto-trigger</span></div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">📅</div><div class="field-info"><div class="field-name">Probation Period</div><div class="field-desc">Duration in months per employee type; extension rules (1x or 2x allowed)</div></div><div class="field-type">Number</div></div>
+        <div class="field-row"><div class="field-icon">🔔</div><div class="field-info"><div class="field-name">Auto-Confirmation Trigger</div><div class="field-desc">Send confirmation workflow X days before probation end; default 30 days</div></div><div class="field-type">Number + Toggle</div></div>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-head"><div class="section-dot" style="background:#f472b6"></div><h3>Section D · Appraisal, Training & Assets</h3><span class="sc-badge">Collapsible</span></div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">⭐</div><div class="field-info"><div class="field-name">Rating Scale & Cycle Dates</div><div class="field-desc">1–5 or 1–10 scale; appraisal period start/end; bell-curve target % per band</div></div><div class="field-type">Select + Date</div></div>
+        <div class="field-row"><div class="field-icon">🎓</div><div class="field-info"><div class="field-name">Training Categories</div><div class="field-desc">Technical / Soft Skills / Compliance; mandatory toggle; online or classroom mode</div></div><div class="field-type">Chip + Toggle</div></div>
+        <div class="field-row"><div class="field-icon">💻</div><div class="field-info"><div class="field-name">Asset Categories</div><div class="field-desc">Laptop, Mobile, Vehicle etc.; depreciation %; return checklist items inline</div></div><div class="field-type">Chip + %</div></div>
+        <div class="field-row"><div class="field-icon">🆘</div><div class="field-info"><div class="field-name">Grievance Categories & SLA</div><div class="field-desc">Category name + SLA hours + auto-escalate to (role) if SLA breached</div></div><div class="field-type">Table row</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PAGE 3 ══════════ -->
+<div id="tab-p3" class="page-detail">
+  <div class="page-header">
+    <div class="page-icon-big">💰</div>
+    <div class="page-header-text">
+      <h2>Page 3 — Payroll & Compliance Setup</h2>
+      <p>The most complex config simplified. Pay components, tax slabs, PF/ESI/PT rules, and salary structure templates all on one page. Smart formula builder replaces spreadsheet-level complexity with human-readable rules.</p>
+      <div class="page-tags">
+        <span class="tag tag-blue">Replaces 6 screens</span>
+        <span class="tag tag-green">~5 min setup</span>
+        <span class="tag tag-amber">Payroll Admin</span>
+      </div>
+    </div>
+  </div>
+  <div class="ux-notes">
+    <h4>💡 UX Smart Features on This Page</h4>
+    <ul class="ux-list">
+      <li>Pay component formula uses plain English — "50% of Basic" not complex syntax</li>
+      <li>Tax slab is pre-loaded for current FY; admin only confirms or edits</li>
+      <li>PF/ESI toggles show real-time impact on sample CTC of ₹50,000</li>
+      <li>Salary structure templates use a visual pie chart showing earnings vs deductions split</li>
+      <li>Loan policy has an EMI calculator preview — enter amount, see monthly deduction</li>
+      <li>Bank master has IFSC auto-lookup — enter code, bank name/branch auto-fills</li>
+    </ul>
+  </div>
+  <div class="sections-grid">
+    <div class="section-card">
+      <div class="section-head"><div class="section-dot" style="background:#f59e0b"></div><h3>Section A · Pay Components</h3><span class="sc-badge">Formula builder</span></div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">➕</div><div class="field-info"><div class="field-name">Earnings Components</div><div class="field-desc">Basic, HRA, LTA, Medical, Special Allowance — add custom; set formula (% of Basic or flat)</div></div><div class="field-type">Table + Formula</div></div>
+        <div class="field-row"><div class="field-icon">➖</div><div class="field-info"><div class="field-name">Deduction Components</div><div class="field-desc">PF, ESI, PT, Loan EMI — statutory ones auto-configured; toggle on/off per employee type</div></div><div class="field-type">Toggle + Rules</div></div>
+        <div class="field-row"><div class="field-icon">👁️</div><div class="field-info"><div class="field-name">Payslip Visibility</div><div class="field-desc">Show/hide each component on employee payslip — one toggle per row</div></div><div class="field-type">Toggle</div></div>
+      </div>
+    </div>
+    <div class="section-card">
+      <div class="section-head"><div class="section-dot" style="background:#4f8ef7"></div><h3>Section B · Tax & Statutory Rules</h3><span class="sc-badge">Pre-loaded FY data</span></div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">📊</div><div class="field-info"><div class="field-name">Income Tax Slabs</div><div class="field-desc">Old & New regime pre-loaded for current FY; admin confirms; auto-updates on budget changes</div></div><div class="field-type">Read + Edit</div></div>
+        <div class="field-row"><div class="field-icon">🏦</div><div class="field-info"><div class="field-name">PF Contribution Rules</div><div class="field-desc">Wage ceiling, employee %, employer %; VPF option toggle; EPFO portal link</div></div><div class="field-type">Number + Toggle</div></div>
+        <div class="field-row"><div class="field-icon">🏥</div><div class="field-info"><div class="field-name">ESI & PT Rules</div><div class="field-desc">ESI wage threshold (auto-enforced); PT state selector shows slab automatically</div></div><div class="field-type">Dropdown + Auto</div></div>
+        <div class="field-row"><div class="field-icon">💳</div><div class="field-info"><div class="field-name">Loan Policy</div><div class="field-desc">Loan types, max amount, interest rate, max EMI months; EMI preview calculator inline</div></div><div class="field-type">Number + Calc</div></div>
+      </div>
+    </div>
+    <div class="section-card">
+      <div class="section-head"><div class="section-dot" style="background:#34d399"></div><h3>Section C · Salary Structures & Banks</h3><span class="sc-badge">Templates</span></div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">📐</div><div class="field-info"><div class="field-name">Salary Structure Templates</div><div class="field-desc">Create templates per grade (e.g. "Junior", "Senior", "Manager"); assign pay components with %split; visual pie chart preview</div></div><div class="field-type">Template + Chart</div></div>
+        <div class="field-row"><div class="field-icon">🏛️</div><div class="field-info"><div class="field-name">Bank Master</div><div class="field-desc">IFSC auto-lookup populates bank name, branch, city; store NEFT/RTGS format per bank</div></div><div class="field-type">IFSC Lookup</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PAGE 4 ══════════ -->
+<div id="tab-p4" class="page-detail">
+  <div class="page-header">
+    <div class="page-icon-big">⏱️</div>
+    <div class="page-header-text">
+      <h2>Page 4 — Attendance & Time Setup</h2>
+      <p>Shifts, holidays, work week, biometric devices, geo-fence zones and overtime — all on one page. The shift builder uses a visual timeline. Holiday calendar supports multi-location with year cloning in one click.</p>
+      <div class="page-tags">
+        <span class="tag tag-blue">Replaces 6 screens</span>
+        <span class="tag tag-green">~3 min setup</span>
+        <span class="tag tag-amber">HR Admin</span>
+      </div>
+    </div>
+  </div>
+  <div class="ux-notes">
+    <h4>💡 UX Smart Features on This Page</h4>
+    <ul class="ux-list">
+      <li>Shift builder shows a 24-hr visual bar — drag start/end times instead of typing</li>
+      <li>Holiday calendar has "Import Public Holidays" for any state with one click</li>
+      <li>Geo-fence zone uses a map — draw a circle around office location</li>
+      <li>Biometric device: enter IP, test connection button shows green/red status live</li>
+      <li>Overtime rules show monthly cost estimate based on current headcount</li>
+      <li>"Clone last year's calendar" — one button to copy and adjust for new FY</li>
+    </ul>
+  </div>
+  <div class="sections-grid">
+    <div class="section-card">
+      <div class="section-head"><div class="section-dot" style="background:#f472b6"></div><h3>Section A · Shifts</h3><span class="sc-badge">Visual timeline</span></div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">🌅</div><div class="field-info"><div class="field-name">Shift Name & Timings</div><div class="field-desc">Start/end time via drag on 24hr bar; grace period slider; break duration; night-shift auto-flag</div></div><div class="field-type">Time + Slider</div></div>
+        <div class="field-row"><div class="field-icon">🔄</div><div class="field-info"><div class="field-name">Rotational Rules</div><div class="field-desc">Define rotation pattern (weekly/fortnightly); assign to departments or employees</div></div><div class="field-type">Select + Assign</div></div>
+      </div>
+    </div>
+    <div class="section-card">
+      <div class="section-head"><div class="section-dot" style="background:#4f8ef7"></div><h3>Section B · Work Week & Holidays</h3><span class="sc-badge">1-click import</span></div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">📅</div><div class="field-info"><div class="field-name">Work Week Pattern</div><div class="field-desc">Mon–Fri / Mon–Sat / Alternate Saturday — radio buttons; week-off day selector</div></div><div class="field-type">Radio + Select</div></div>
+        <div class="field-row"><div class="field-icon">🎉</div><div class="field-info"><div class="field-name">Holiday Calendar</div><div class="field-desc">Import public holidays by state; add restricted holidays; assign calendar to locations; clone for next year</div></div><div class="field-type">Import + Calendar</div></div>
+      </div>
+    </div>
+    <div class="section-card">
+      <div class="section-head"><div class="section-dot" style="background:#34d399"></div><h3>Section C · Biometric & Geo-fence</h3><span class="sc-badge">Live test button</span></div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">👆</div><div class="field-info"><div class="field-name">Biometric Device Config</div><div class="field-desc">Vendor (ZKTeco/Essl/Realtime), IP address, port; "Test Connection" button; sync schedule (every X min)</div></div><div class="field-type">Form + Test</div></div>
+        <div class="field-row"><div class="field-icon">📍</div><div class="field-info"><div class="field-name">Geo-fence Zone</div><div class="field-desc">Map-based circle drawer around office; set radius (50–500m); assign to location; selfie capture toggle</div></div><div class="field-type">Map + Radius</div></div>
+        <div class="field-row"><div class="field-icon">⏰</div><div class="field-info"><div class="field-name">Overtime Rules</div><div class="field-desc">Eligible employee types; rate multiplier (1.5x/2x); monthly cap hours; payroll auto-include toggle</div></div><div class="field-type">Number + Toggle</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PAGE 5 ══════════ -->
+<div id="tab-p5" class="page-detail">
+  <div class="page-header">
+    <div class="page-icon-big">🔐</div>
+    <div class="page-header-text">
+      <h2>Page 5 — Roles, Access & Workflows</h2>
+      <p>RBAC, field-level permissions, approval chains, and notification rules — all in one page. Role builder uses a visual permission matrix. Workflow designer uses drag-and-drop approval steps, not complex flowchart tools.</p>
+      <div class="page-tags">
+        <span class="tag tag-blue">Replaces 6 screens</span>
+        <span class="tag tag-green">~4 min setup</span>
+        <span class="tag tag-amber">Super Admin</span>
+      </div>
+    </div>
+  </div>
+  <div class="ux-notes">
+    <h4>💡 UX Smart Features on This Page</h4>
+    <ul class="ux-list">
+      <li>6 system roles pre-configured (Super Admin, HR Admin, Payroll, Manager, Employee, CHRO)</li>
+      <li>Permission matrix is a visual grid — click cells to toggle; bulk column/row toggle</li>
+      <li>Workflow builder: drag approver roles into a sequence — no coding needed</li>
+      <li>Approval chains have an "Auto-approve after X days" safety valve option</li>
+      <li>Notification rules use simple "When [event] → Send [message] to [role]" builder</li>
+      <li>Data retention shows a visual timeline of what gets archived when</li>
+    </ul>
+  </div>
+  <div class="sections-grid">
+    <div class="section-card">
+      <div class="section-head"><div class="section-dot" style="background:#a78bfa"></div><h3>Section A · User Roles & Permissions</h3><span class="sc-badge">Pre-built roles</span></div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">👤</div><div class="field-info"><div class="field-name">System Roles</div><div class="field-desc">6 pre-built roles; clone any to create custom roles; role name + description editable</div></div><div class="field-type">Clone + Edit</div></div>
+        <div class="field-row"><div class="field-icon">🔲</div><div class="field-info"><div class="field-name">Module-Level Permissions</div><div class="field-desc">Permission matrix grid: rows = modules, columns = roles; click to toggle View/Create/Edit/Delete per cell</div></div><div class="field-type">Matrix Grid</div></div>
+        <div class="field-row"><div class="field-icon">🙈</div><div class="field-info"><div class="field-name">Field-Level Masking</div><div class="field-desc">Mark sensitive fields (Salary, Bank Account) as hidden for specific roles — toggle per field</div></div><div class="field-type">Toggle</div></div>
+      </div>
+    </div>
+    <div class="section-card">
+      <div class="section-head"><div class="section-dot" style="background:#fb923c"></div><h3>Section B · Approval Workflows</h3><span class="sc-badge">Drag & drop</span></div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">🔗</div><div class="field-info"><div class="field-name">Workflow per Process</div><div class="field-desc">Leave, Expense, Payroll, Recruitment, Resignation, Loan — select process, drag approver roles into sequence</div></div><div class="field-type">Drag + Drop</div></div>
+        <div class="field-row"><div class="field-icon">⏱️</div><div class="field-info"><div class="field-name">SLA & Auto-Escalate</div><div class="field-desc">Set days for each step; auto-escalate to next approver if exceeded; auto-approve fallback toggle</div></div><div class="field-type">Number + Toggle</div></div>
+      </div>
+    </div>
+    <div class="section-card">
+      <div class="section-head"><div class="section-dot" style="background:#4f8ef7"></div><h3>Section C · Notifications & Data Retention</h3><span class="sc-badge">Event builder</span></div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">🔔</div><div class="field-info"><div class="field-name">Notification Rules</div><div class="field-desc">"When [Event] → Send [Template] to [Role] via [Email/SMS/Push]" — pick-list builder, no coding</div></div><div class="field-type">Rule Builder</div></div>
+        <div class="field-row"><div class="field-icon">🗑️</div><div class="field-info"><div class="field-name">Data Retention Policy</div><div class="field-desc">Set retention period per data type (Employee, Payroll, Documents); auto-archive or delete after period</div></div><div class="field-type">Number + Select</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PAGE 6 ══════════ -->
+<div id="tab-p6" class="page-detail">
+  <div class="page-header">
+    <div class="page-icon-big">🔗</div>
+    <div class="page-header-text">
+      <h2>Page 6 — Integrations & Advanced</h2>
+      <p>Optional page for connecting HRMS to external systems. Card-based connector UI — each integration is a card with a toggle. Click to expand and enter credentials. No technical knowledge required.</p>
+      <div class="page-tags">
+        <span class="tag tag-blue">Replaces 6 screens</span>
+        <span class="tag tag-amber">Optional · Skip for now</span>
+        <span class="tag tag-green">Connect anytime</span>
+      </div>
+    </div>
+  </div>
+  <div class="ux-notes">
+    <h4>💡 UX Smart Features on This Page</h4>
+    <ul class="ux-list">
+      <li>Each connector is a card with a status badge (Connected / Not Connected / Error)</li>
+      <li>"Test Connection" button on every integration with visual pass/fail feedback</li>
+      <li>Tally / SAP / QuickBooks — just enter API key and URL, system handles the rest</li>
+      <li>EPFO/ESIC: enter credentials once; system handles monthly auto-submission</li>
+      <li>E-sign: choose provider (Aadhaar / DigiSign / SignDesk) and paste API key</li>
+      <li>AI Chatbot: toggle on/off; select which intents to enable (leave, payslip, policy FAQ)</li>
+    </ul>
+  </div>
+  <div class="sections-grid">
+    <div class="section-card">
+      <div class="section-head"><div class="section-dot" style="background:#fb923c"></div><h3>Section A · Accounting ERPs</h3><span class="sc-badge">Card connectors</span></div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">📒</div><div class="field-info"><div class="field-name">Tally ERP 9 / Prime</div><div class="field-desc">Enter Tally server URL + API key; bi-directional payroll journal sync on payroll run</div></div><div class="field-type">Toggle + Keys</div></div>
+        <div class="field-row"><div class="field-icon">🏢</div><div class="field-info"><div class="field-name">SAP / QuickBooks / Oracle</div><div class="field-desc">OAuth-based connection; map HRMS cost centres to ERP GL codes</div></div><div class="field-type">OAuth</div></div>
+      </div>
+    </div>
+    <div class="section-card">
+      <div class="section-head"><div class="section-dot" style="background:#34d399"></div><h3>Section B · Government Portals</h3><span class="sc-badge">Auto-submit</span></div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">🏛️</div><div class="field-info"><div class="field-name">EPFO Portal</div><div class="field-desc">UAN credentials; auto-submit PF ECR on payroll close; track challan status</div></div><div class="field-type">Credentials</div></div>
+        <div class="field-row"><div class="field-icon">🏥</div><div class="field-info"><div class="field-name">ESIC & NSDL / TRACES</div><div class="field-desc">ESI return auto-filing; TDS Form 24Q auto-generation; Form 16 bulk download</div></div><div class="field-type">Credentials</div></div>
+      </div>
+    </div>
+    <div class="section-card">
+      <div class="section-head"><div class="section-dot" style="background:#f472b6"></div><h3>Section C · E-Sign & AI Chatbot</h3><span class="sc-badge">One-click enable</span></div>
+      <div class="section-body">
+        <div class="field-row"><div class="field-icon">✍️</div><div class="field-info"><div class="field-name">E-Sign Provider</div><div class="field-desc">Choose Aadhaar eSign / DigiSign / SignDesk; paste API key; set which documents require e-sign</div></div><div class="field-type">Select + Key</div></div>
+        <div class="field-row"><div class="field-icon">🤖</div><div class="field-info"><div class="field-name">AI Chatbot</div><div class="field-desc">Toggle on; select intents to enable (Leave Balance, Payslip, Policy FAQ, Attendance); deploy to Web / Mobile / Slack / Teams</div></div><div class="field-type">Toggle + Multi-select</div></div>
+        <div class="field-row"><div class="field-icon">🏦</div><div class="field-info"><div class="field-name">Banking Integration</div><div class="field-desc">Select bank (HDFC / ICICI / SBI / Axis); upload salary file format; auto-push on payroll approval</div></div><div class="field-type">Select + Config</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<script>
+function switchTab(el, id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.page-detail').forEach(p => p.classList.remove('visible'));
+  document.getElementById('tab-' + id).classList.add('visible');
+}
+function switchTabByPage(id) {
+  const tabs = document.querySelectorAll('.tab');
+  const pages = ['overview','p1','p2','p3','p4','p5','p6'];
+  const idx = pages.indexOf(id);
+  if (idx >= 0) {
+    tabs.forEach(t => t.classList.remove('active'));
+    tabs[idx].classList.add('active');
+    document.querySelectorAll('.page-detail').forEach(p => p.classList.remove('visible'));
+    document.getElementById('tab-' + id).classList.add('visible');
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+}
+</script>
+</body>
+</html>

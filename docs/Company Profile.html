@@ -1,0 +1,2194 @@
+<!DOCTYPE html>
+<html lang="en" id="appRoot">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CFG-001 — Company & Organisation Setup | Avyren Technologies HRMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --navy:#0d1f35;--navy-dark:#0a1929;--navy-mid:#112236;--navy-card:#152b45;
+  --teal:#00b4d8;--teal-dim:rgba(0,180,216,.10);--teal-hover:rgba(0,180,216,.18);
+  --green:#2ec4b6;--amber:#f4a261;--red:#ef4444;--success:#22c55e;--purple:#a855f7;
+  --txt:#e8f0fe;--txt-sec:#8da9c4;--txt-muted:#4a6882;
+  --border:rgba(0,180,216,.12);--border-md:rgba(0,180,216,.24);
+  --input-bg:rgba(255,255,255,.04);--input-focus:rgba(0,180,216,.10);
+}
+[data-theme="light"]{
+  --navy:#f0f4f8;--navy-dark:#e4eaf2;--navy-mid:#dde5ef;--navy-card:#fff;
+  --teal:#0284c7;--teal-dim:rgba(2,132,199,.08);--teal-hover:rgba(2,132,199,.14);
+  --green:#059669;--amber:#d97706;--red:#dc2626;--success:#16a34a;--purple:#7c3aed;
+  --txt:#0f172a;--txt-sec:#334155;--txt-muted:#64748b;
+  --border:rgba(2,132,199,.15);--border-md:rgba(2,132,199,.3);
+  --input-bg:rgba(0,0,0,.03);--input-focus:rgba(2,132,199,.07);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--navy);color:var(--txt);display:flex;flex-direction:column;height:100vh;width:100vw;overflow:hidden;font-size:13px;transition:background .25s,color .25s;}
+
+/* ── TOPBAR ── */
+.topbar{height:54px;background:var(--navy-mid);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 16px;flex-shrink:0;z-index:200;}
+/* Animated hamburger */
+.hbg{width:34px;height:34px;border-radius:9px;background:var(--input-bg);border:1px solid var(--border);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;flex-shrink:0;transition:all .22s;}
+.hbg:hover{border-color:var(--teal);background:var(--teal-dim);}
+.hbg span{display:block;height:1.5px;border-radius:2px;background:var(--txt-sec);transition:all .28s;}
+.hbg span:nth-child(1){width:14px;}.hbg span:nth-child(2){width:10px;}.hbg span:nth-child(3){width:14px;}
+.hbg.open span:nth-child(1){transform:translateY(5.5px) rotate(45deg);width:14px;}
+.hbg.open span:nth-child(2){opacity:0;transform:scaleX(0);}
+.hbg.open span:nth-child(3){transform:translateY(-5.5px) rotate(-45deg);width:14px;}
+.hbg.open{border-color:var(--teal);background:var(--teal-dim);}
+.hbg.open span{background:var(--teal);}
+.logo-mark{width:30px;height:30px;background:linear-gradient(135deg,var(--teal),var(--green));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#0a1929;}
+.logo-name{font-size:13px;font-weight:800;color:var(--txt);}
+.logo-sub{font-size:8px;color:var(--teal);letter-spacing:2px;text-transform:uppercase;}
+.vdiv{width:1px;height:20px;background:var(--border);flex-shrink:0;}
+.search-bar{display:flex;align-items:center;gap:7px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:6px 11px;flex:1;max-width:340px;}
+.search-bar input{background:none;border:none;outline:none;color:var(--txt);font-size:12px;font-family:inherit;width:100%;}
+.search-bar input::placeholder{color:var(--txt-muted);}
+.kbd{font-size:9.5px;color:var(--txt-muted);background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px;}
+.tb-right{display:flex;align-items:center;gap:8px;margin-left:auto;}
+.breadcrumb{font-size:11px;color:var(--txt-muted);white-space:nowrap;}
+.breadcrumb b{color:var(--teal);}
+.tb-clock{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--txt-sec);white-space:nowrap;}
+.tb-icon{width:30px;height:30px;border-radius:7px;background:var(--input-bg);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--txt-sec);transition:all .18s;flex-shrink:0;}
+.tb-icon:hover{border-color:var(--teal);color:var(--teal);}
+.tb-av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;cursor:pointer;flex-shrink:0;}
+
+/* ── GLOBAL DRAWER ── */
+.drawer-mask{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;opacity:0;pointer-events:none;transition:opacity .28s;}
+.drawer-mask.open{opacity:1;pointer-events:all;}
+.drawer{position:fixed;top:0;left:0;width:260px;height:100vh;background:linear-gradient(180deg,#091728,#0d2137);border-right:1px solid var(--border-md);z-index:310;transform:translateX(-100%);transition:transform .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow:hidden;}
+[data-theme="light"] .drawer{background:linear-gradient(180deg,#dce6f0,#e8f0f9);}
+.drawer.open{transform:translateX(0);}
+.d-hdr{padding:13px 15px 11px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.d-logo{display:flex;align-items:center;gap:8px;}
+.d-logo-mark{width:30px;height:30px;background:linear-gradient(135deg,var(--teal),var(--green));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#0a1929;}
+.d-close{width:26px;height:26px;border-radius:7px;background:var(--input-bg);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--txt-muted);font-size:13px;transition:all .18s;}
+.d-close:hover{border-color:var(--red);color:var(--red);}
+.d-user{display:flex;align-items:center;gap:9px;padding:10px 15px;background:rgba(0,180,216,.05);border-bottom:1px solid var(--border);}
+.d-av{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;flex-shrink:0;}
+.d-uname{font-size:12px;font-weight:700;color:var(--txt);}
+.d-urole{display:inline-flex;align-items:center;padding:1px 7px;border-radius:8px;font-size:9px;font-weight:700;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.28);color:#c084fc;margin-top:2px;}
+.d-nav{flex:1;overflow-y:auto;padding:6px 9px;}
+.d-nav::-webkit-scrollbar{width:3px;}
+.d-nav::-webkit-scrollbar-thumb{background:var(--teal-dim);border-radius:3px;}
+.d-sec-lbl{font-size:8.5px;letter-spacing:2px;text-transform:uppercase;color:var(--txt-muted);padding:10px 8px 4px;}
+.d-item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;font-size:12px;font-weight:500;color:var(--txt-sec);cursor:pointer;transition:all .18s;margin-bottom:1px;border-left:2px solid transparent;}
+.d-item:hover{background:var(--teal-dim);color:var(--txt);}
+.d-item.active{background:var(--teal-hover);color:var(--teal);border-left-color:var(--teal);font-weight:600;}
+.d-icon{font-size:13px;width:18px;text-align:center;flex-shrink:0;}
+.d-badge{margin-left:auto;font-size:9px;font-weight:700;background:rgba(0,180,216,.15);color:var(--teal);padding:1px 6px;border-radius:10px;flex-shrink:0;}
+.d-sub{padding:5px 9px 5px 34px;font-size:11.5px;border-radius:7px;cursor:pointer;color:var(--txt-muted);transition:all .18s;margin-bottom:1px;border-left:2px solid transparent;}
+.d-sub:hover{background:var(--teal-dim);color:var(--txt-sec);}
+.d-sub.active{color:var(--teal);background:rgba(0,180,216,.07);border-left-color:var(--teal);}
+/* SA card bottom of drawer */
+.d-footer{padding:11px;border-top:1px solid var(--border);flex-shrink:0;}
+.sa-card{background:rgba(0,0,0,.2);border:1px solid var(--border-md);border-radius:10px;padding:10px 12px;}
+.sa-title{font-size:8.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--txt-muted);margin-bottom:7px;}
+.sa-row{display:flex;align-items:center;gap:8px;}
+.sa-av{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0;box-shadow:0 0 0 2px rgba(99,102,241,.3);}
+.sa-name{font-size:12px;font-weight:700;color:var(--txt);}
+.sa-email{font-size:10px;color:var(--txt-muted);}
+.sa-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px;}
+.sa-chip{padding:2px 7px;border-radius:8px;font-size:9px;font-weight:700;}
+.sa-chip.pu{background:rgba(168,85,247,.14);border:1px solid rgba(168,85,247,.25);color:#c084fc;}
+.sa-chip.te{background:var(--teal-dim);border:1px solid var(--border-md);color:var(--teal);}
+.sa-chip.gr{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.22);color:var(--success);}
+.sa-stats{display:flex;justify-content:space-around;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
+.sa-stat-val{font-size:13px;font-weight:800;color:var(--txt);text-align:center;}
+.sa-stat-lbl{font-size:8.5px;color:var(--txt-muted);text-align:center;}
+.sa-btns{display:flex;gap:5px;margin-top:8px;}
+.sa-btn{flex:1;padding:5px 6px;border-radius:7px;font-size:10px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:3px;}
+.sa-btn.o{background:transparent;border:1px solid var(--border-md);color:var(--txt-sec);}
+.sa-btn.o:hover{border-color:var(--teal);color:var(--teal);}
+.sa-btn.r{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:var(--red);}
+.sa-btn.r:hover{background:rgba(239,68,68,.18);}
+
+/* ── LAYOUT ── */
+.layout{display:flex;flex:1;overflow:hidden;}
+
+/* ── LEFT PANEL ── */
+.left-panel{width:272px;min-width:272px;background:var(--navy-dark);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;transition:width .28s,min-width .28s;}
+/* left-panel always visible */
+
+/* Section A: Company Profile (top) — with its OWN hamburger */
+.lp-co-section{display:flex;flex-direction:column;border-bottom:2px solid var(--border-md);flex-shrink:0;}
+.lp-co-hdr{display:flex;align-items:center;height:44px;border-bottom:1px solid var(--border);flex-shrink:0;}
+/* The company-list hamburger */
+.co-hbg{width:44px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3.5px;cursor:pointer;border-right:1px solid var(--border);transition:background .18s;flex-shrink:0;}
+.co-hbg:hover{background:var(--teal-dim);}
+.co-hbg span{display:block;height:1.5px;border-radius:2px;background:var(--txt-sec);transition:all .25s;}
+.co-hbg span:nth-child(1){width:14px;}.co-hbg span:nth-child(2){width:10px;}.co-hbg span:nth-child(3){width:14px;}
+.co-hbg.open span:nth-child(1){transform:translateY(5px) rotate(45deg);background:var(--teal);}
+.co-hbg.open span:nth-child(2){opacity:0;}
+.co-hbg.open span:nth-child(3){transform:translateY(-5px) rotate(-45deg);background:var(--teal);}
+.co-hbg.open{background:var(--teal-dim);}
+.lp-co-title{flex:1;padding:0 10px;font-size:12px;font-weight:700;color:var(--txt);white-space:nowrap;}
+.lp-co-count{font-size:9.5px;font-weight:700;background:var(--teal-dim);color:var(--teal);border:1px solid var(--border-md);padding:2px 7px;border-radius:10px;margin-right:10px;flex-shrink:0;}
+.lp-co-search{display:flex;align-items:center;gap:6px;padding:7px 10px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.lp-co-search input{background:none;border:none;outline:none;color:var(--txt);font-size:11.5px;font-family:inherit;width:100%;}
+.lp-co-search input::placeholder{color:var(--txt-muted);}
+.lp-co-body{overflow-y:auto;max-height:230px;transition:max-height .28s,opacity .22s;}
+.lp-co-body.collapsed{max-height:0;opacity:0;overflow:hidden;}
+.nav-items.collapsed{display:none;}
+.lp-co-body::-webkit-scrollbar{width:3px;}
+.lp-co-body::-webkit-scrollbar-thumb{background:var(--teal-dim);border-radius:3px;}
+.co-list{padding:7px;}
+.co-item{display:flex;align-items:center;gap:9px;padding:9px 9px;border-radius:8px;cursor:pointer;transition:background .15s;border:1px solid transparent;margin-bottom:2px;}
+.co-item:hover{background:var(--teal-dim);}
+.co-item.selected{background:var(--teal-hover);border-color:var(--border-md);}
+.co-logo{width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0;}
+.co-info{flex:1;min-width:0;}
+.co-name{font-size:11.5px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.co-code{font-size:9.5px;color:var(--txt-muted);font-family:'JetBrains Mono',monospace;}
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;}
+.b-act{background:rgba(34,197,94,.12);color:var(--success);}
+.b-dft{background:rgba(244,162,97,.1);color:var(--amber);}
+.dot{width:5px;height:5px;border-radius:50%;display:inline-block;}
+.dot-g{background:var(--success);}.dot-a{background:var(--amber);}
+.lp-add-btn{display:flex;align-items:center;justify-content:center;gap:5px;margin:7px;padding:7px;border-radius:7px;background:linear-gradient(135deg,var(--teal),var(--green));color:#0a1929;font-size:11.5px;font-weight:700;font-family:inherit;border:none;cursor:pointer;transition:opacity .18s;flex-shrink:0;}
+.lp-add-btn:hover{opacity:.88;}
+
+/* Section B: Master Nav (below company list) */
+.lp-nav-section{flex:1;overflow-y:auto;display:flex;flex-direction:column;}
+.lp-nav-section::-webkit-scrollbar{width:3px;}
+.lp-nav-section::-webkit-scrollbar-thumb{background:var(--teal-dim);border-radius:3px;}
+.lp-nav-hdr{display:flex;align-items:center;height:36px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.lp-nav-label{flex:1;padding:0 12px;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt-muted);font-weight:700;}
+.nav-items{padding:6px 8px;flex:1;}
+.nav-item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;font-size:12px;font-weight:500;color:var(--txt-sec);cursor:pointer;transition:all .18s;margin-bottom:1px;border-left:2px solid transparent;white-space:nowrap;}
+.nav-item:hover{background:var(--teal-dim);color:var(--txt);}
+.nav-item.active{background:var(--teal-hover);color:var(--teal);border-left-color:var(--teal);font-weight:600;}
+.nav-ic{font-size:13px;width:18px;text-align:center;flex-shrink:0;}
+.nav-badge{margin-left:auto;font-size:9px;font-weight:700;background:rgba(0,180,216,.15);color:var(--teal);padding:1px 6px;border-radius:10px;flex-shrink:0;}
+.nav-sec-lbl{font-size:8.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt-muted);padding:10px 9px 3px;font-weight:700;}
+
+/* Super Admin card (bottom of left panel) */
+.lp-sa{flex-shrink:0;border-top:1px solid var(--border);background:rgba(0,0,0,.15);}
+.lp-sa-toggle{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;transition:background .18s;user-select:none;}
+.lp-sa-toggle:hover{background:var(--teal-dim);}
+.lp-sa-av{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:800;color:#fff;flex-shrink:0;}
+.lp-sa-name{flex:1;font-size:11.5px;font-weight:700;color:var(--txt);}
+.lp-sa-chip{display:inline-flex;padding:2px 7px;border-radius:7px;font-size:8.5px;font-weight:700;background:rgba(168,85,247,.14);border:1px solid rgba(168,85,247,.25);color:#c084fc;}
+.lp-sa-arr{font-size:10px;color:var(--txt-muted);transition:transform .22s;}
+.lp-sa-arr.open{transform:rotate(180deg);}
+.lp-sa-body{padding:0 12px 10px;display:none;}
+.lp-sa-body.open{display:block;}
+.lp-sa-row{display:flex;align-items:center;gap:5px;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;}
+.lp-sa-row:last-child{border:none;}
+.lp-sd-lbl{font-size:9px;font-weight:700;color:var(--txt-muted);min-width:55px;text-transform:uppercase;letter-spacing:.3px;}
+.lp-sd-val{color:var(--txt-sec);font-size:11px;}
+.lp-perms{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px;}
+.perm-chip{padding:2px 6px;border-radius:6px;font-size:8.5px;font-weight:700;background:var(--teal-dim);border:1px solid var(--border-md);color:var(--teal);}
+.lp-sa-btns{display:flex;gap:5px;margin-top:8px;}
+.lp-sa-btn{flex:1;padding:5px;border-radius:7px;font-size:10px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:3px;}
+.lp-sa-btn.o{background:transparent;border:1px solid var(--border-md);color:var(--txt-sec);}
+.lp-sa-btn.o:hover{border-color:var(--teal);color:var(--teal);}
+.lp-sa-btn.r{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:var(--red);}
+.lp-sa-btn.r:hover{background:rgba(239,68,68,.18);}
+
+/* ── DETAIL PANE ── */
+.detail-pane{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+.det-topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid var(--border);background:var(--navy-mid);flex-shrink:0;gap:10px;}
+.det-co{display:flex;align-items:center;gap:10px;}
+.det-logo{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;flex-shrink:0;}
+.det-name{font-size:14px;font-weight:800;color:var(--txt);}
+.det-meta{font-size:10px;color:var(--txt-muted);}
+.action-bar{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:8px;font-size:11.5px;font-weight:600;font-family:inherit;cursor:pointer;border:none;transition:all .18s;white-space:nowrap;}
+.btn-primary{background:linear-gradient(135deg,var(--teal),var(--green));color:#0a1929;}
+.btn-primary:hover{opacity:.88;transform:translateY(-1px);}
+.btn-outline{background:transparent;border:1px solid var(--border-md);color:var(--txt-sec);}
+.btn-outline:hover{border-color:var(--teal);color:var(--teal);}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--txt-muted);}
+.btn-ghost:hover{border-color:var(--teal);color:var(--teal);}
+.btn-danger{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:var(--red);}
+.btn-danger:hover{background:rgba(239,68,68,.2);}
+
+/* STATUS BAR */
+.status-bar{display:flex;align-items:center;gap:8px;padding:7px 18px;background:rgba(0,0,0,.1);border-bottom:1px solid var(--border);flex-shrink:0;}
+.status-bar label{font-size:9px;font-weight:700;color:var(--txt-muted);letter-spacing:.8px;text-transform:uppercase;margin-right:2px;}
+.sp{padding:4px 10px;border-radius:20px;border:1px solid var(--border);font-size:10px;font-weight:600;cursor:pointer;transition:all .18s;color:var(--txt-muted);display:inline-flex;align-items:center;gap:4px;user-select:none;}
+.sp:hover{border-color:var(--border-md);color:var(--txt-sec);}
+.sp.sel.green{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.35);color:var(--success);}
+.sp.sel.blue{background:rgba(0,180,216,.1);border-color:rgba(0,180,216,.3);color:var(--teal);}
+.sp.sel.amber{background:rgba(244,162,97,.1);border-color:rgba(244,162,97,.3);color:var(--amber);}
+.sb-div{width:1px;height:14px;background:var(--border);}
+
+/* PROGRESS STRIP */
+.prog-strip{display:flex;align-items:center;padding:9px 18px;background:var(--navy-dark);border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;gap:0;}
+.prog-strip::-webkit-scrollbar{height:0;}
+.ps-step{display:flex;align-items:center;gap:5px;flex-shrink:0;}
+.ps-dot{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:1.5px solid var(--border);color:var(--txt-muted);background:var(--input-bg);flex-shrink:0;}
+.ps-dot.done{background:var(--success);border-color:var(--success);color:#fff;}
+.ps-dot.active{background:var(--teal);border-color:var(--teal);color:#0a1929;box-shadow:0 0 0 3px rgba(0,180,216,.18);}
+.ps-lbl{font-size:10px;font-weight:600;color:var(--txt-muted);white-space:nowrap;}
+.ps-dot.active+.ps-lbl{color:var(--teal);}
+.ps-dot.done+.ps-lbl{color:var(--success);}
+.ps-line{width:20px;height:1.5px;background:var(--border);flex-shrink:0;margin:0 2px;}
+.ps-line.done{background:var(--success);}
+.ps-count{margin-left:auto;font-size:10px;color:var(--txt-muted);font-family:'JetBrains Mono',monospace;white-space:nowrap;flex-shrink:0;}
+.ps-count b{color:var(--teal);}
+
+/* TABS */
+.tabs-bar{display:flex;padding:0 18px;border-bottom:1px solid var(--border);background:var(--navy-mid);flex-shrink:0;overflow-x:auto;}
+.tabs-bar::-webkit-scrollbar{height:0;}
+.tab{padding:9px 14px;font-size:12px;font-weight:500;color:var(--txt-muted);border-bottom:2px solid transparent;cursor:pointer;transition:all .18s;white-space:nowrap;margin-bottom:-1px;}
+.tab:hover:not(.active){color:var(--txt-sec);}
+.tab.active{color:var(--teal);border-bottom-color:var(--teal);font-weight:600;}
+.tab.locked{opacity:.35;pointer-events:none;}
+
+/* SCREEN VIEWER */
+.form-scroll{flex:1;overflow-y:auto;padding:14px 18px 50px;}
+.form-scroll::-webkit-scrollbar{width:4px;}
+.form-scroll::-webkit-scrollbar-thumb{background:var(--teal-dim);border-radius:4px;}
+
+/* Form sections */
+.fs{background:var(--navy-card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:11px;}
+.fs-hdr{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .18s;user-select:none;}
+.fs-hdr:hover{background:rgba(0,180,216,.04);}
+.fs-title{font-size:12.5px;font-weight:700;color:var(--txt);display:flex;align-items:center;gap:7px;}
+.fs-ic{color:var(--teal);}
+.fs-tog{color:var(--teal);font-size:11px;transition:transform .22s;}
+.fs-tog.closed{transform:rotate(-90deg);}
+.fs-body{padding:14px;}
+.fs-body.hidden{display:none;}
+.fg{display:grid;gap:11px;}
+.g2{grid-template-columns:1fr 1fr;}
+.g3{grid-template-columns:1fr 1fr 1fr;}
+.g4{grid-template-columns:1fr 1fr 1fr 1fr;}
+.field{display:flex;flex-direction:column;gap:5px;}
+.field label{font-size:9.5px;font-weight:700;color:var(--txt-muted);letter-spacing:.6px;text-transform:uppercase;}
+.req{color:var(--red);}
+.inp{background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:8px 11px;color:var(--txt);font-size:12.5px;font-family:inherit;outline:none;transition:border-color .18s,background .18s,box-shadow .18s;width:100%;}
+.inp:focus{border-color:var(--teal);background:var(--input-focus);box-shadow:0 0 0 3px rgba(0,180,216,.1);}
+.inp:hover:not(:focus){border-color:var(--border-md);}
+.inp::placeholder{color:var(--txt-muted);}
+select.inp{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%234a6882' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center;padding-right:28px;}
+.inp-wrap{display:flex;}
+.inp-wrap .inp{border-radius:8px 0 0 8px;flex:1;}
+.inp-btn{background:rgba(0,180,216,.15);border:1px solid var(--border-md);border-left:none;border-radius:0 8px 8px 0;padding:0 11px;cursor:pointer;font-size:11px;color:var(--teal);font-weight:600;font-family:inherit;transition:all .18s;white-space:nowrap;}
+.inp-btn:hover{background:rgba(0,180,216,.3);}
+.fhint{font-size:10px;color:var(--txt-muted);}
+.mono{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.4px;}
+/* Logo upload */
+.logo-zone{display:flex;align-items:center;gap:13px;}
+.logo-box{width:74px;height:74px;border-radius:10px;background:var(--input-bg);border:1.5px dashed var(--border-md);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;transition:all .2s;flex-shrink:0;}
+.logo-box:hover{border-color:var(--teal);background:var(--teal-dim);}
+/* Compliance cells */
+.comp-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+.comp-cell{background:rgba(0,0,0,.12);border:1px solid var(--border);border-radius:8px;padding:10px 12px;transition:border-color .18s;}
+.comp-cell:hover{border-color:var(--border-md);}
+.comp-cell label{font-size:9px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--txt-muted);display:block;margin-bottom:5px;}
+.comp-cell input{background:transparent;border:none;outline:none;color:var(--txt);font-size:12.5px;font-family:'JetBrains Mono',monospace;width:100%;letter-spacing:.4px;}
+.comp-cell input::placeholder{color:var(--txt-muted);font-family:'Plus Jakarta Sans',sans-serif;font-size:11.5px;letter-spacing:0;}
+/* Address tabs */
+.addr-tabs{display:flex;gap:4px;margin-bottom:12px;background:rgba(0,0,0,.1);padding:3px;border-radius:7px;width:fit-content;}
+.at{padding:5px 12px;border-radius:5px;font-size:11.5px;font-weight:600;cursor:pointer;color:var(--txt-muted);transition:all .18s;}
+.at.active{background:var(--teal);color:#0a1929;}
+.copy-row{display:flex;align-items:center;gap:8px;padding:8px 11px;background:rgba(0,180,216,.06);border:1px solid rgba(0,180,216,.15);border-radius:8px;cursor:pointer;margin-bottom:11px;transition:all .18s;}
+.copy-row:hover{background:var(--teal-hover);}
+.copy-row span{font-size:12px;font-weight:600;color:var(--teal);}
+.copy-row small{font-size:10px;color:var(--txt-muted);margin-left:auto;}
+.chkbox{width:15px;height:15px;border-radius:4px;border:1.5px solid var(--border-md);display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;transition:all .18s;background:var(--input-bg);flex-shrink:0;}
+.chkbox.on{background:var(--teal);border-color:var(--teal);color:#0a1929;}
+/* FY pills */
+.fy-pills{display:flex;gap:7px;flex-wrap:wrap;}
+.fyp{padding:6px 12px;border-radius:8px;border:1px solid var(--border);font-size:11.5px;font-weight:500;color:var(--txt-muted);cursor:pointer;transition:all .18s;background:var(--input-bg);}
+.fyp:hover{border-color:var(--border-md);color:var(--txt-sec);}
+.fyp.active{border-color:var(--teal);color:var(--teal);background:var(--teal-dim);}
+/* Weekdays */
+.wdays{display:flex;gap:6px;flex-wrap:wrap;}
+.wday{padding:5px 11px;border-radius:7px;border:1px solid var(--border);font-size:11.5px;font-weight:600;cursor:pointer;color:var(--txt-muted);background:var(--input-bg);transition:all .18s;user-select:none;}
+.wday:hover{border-color:var(--border-md);}
+.wday.on{background:var(--teal-hover);border-color:var(--teal);color:var(--teal);}
+/* Toggles */
+.tog-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:rgba(0,0,0,.1);border:1px solid var(--border);border-radius:9px;margin-bottom:7px;transition:border-color .18s;}
+.tog-row:hover{border-color:var(--border-md);}
+.tog-row:last-child{margin-bottom:0;}
+.tog-info strong{font-size:12px;font-weight:700;color:var(--txt);display:block;}
+.tog-info span{font-size:10.5px;color:var(--txt-muted);}
+.toggle{position:relative;width:40px;height:22px;cursor:pointer;flex-shrink:0;}
+.toggle input{display:none;}
+.tog-track{width:100%;height:100%;border-radius:11px;background:rgba(255,255,255,.1);transition:background .2s;position:relative;}
+.tog-track::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#4a6882;transition:all .22s;}
+.toggle input:checked~.tog-track{background:var(--teal);}
+.toggle input:checked~.tog-track::after{left:calc(100% - 19px);background:#0a1929;}
+/* Sub label */
+.sub-lbl{font-size:9.5px;font-weight:700;color:var(--txt-muted);letter-spacing:.6px;text-transform:uppercase;margin-bottom:9px;display:flex;align-items:center;gap:7px;}
+.sub-lbl::after{content:'';flex:1;height:1px;background:var(--border);}
+/* Warn box */
+.warn-box{display:flex;align-items:flex-start;gap:7px;padding:9px 12px;background:rgba(244,162,97,.06);border:1px solid rgba(244,162,97,.2);border-radius:8px;margin-bottom:12px;}
+.warn-box p{font-size:11px;color:var(--txt-sec);line-height:1.6;}
+/* Mock screen placeholder */
+.mock-screen{padding:32px 24px;text-align:center;}
+.mock-icon{font-size:48px;margin-bottom:12px;}
+.mock-title{font-size:18px;font-weight:800;color:var(--txt);margin-bottom:6px;}
+.mock-sub{font-size:13px;color:var(--txt-sec);margin-bottom:20px;line-height:1.6;}
+.mock-tag{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:11px;font-weight:700;background:var(--teal-dim);border:1px solid var(--border-md);color:var(--teal);margin-bottom:24px;}
+.mock-fields{background:var(--navy-card);border:1px solid var(--border);border-radius:12px;padding:20px;text-align:left;max-width:600px;margin:0 auto;}
+/* Footer */
+.form-footer{padding:10px 18px;border-top:1px solid var(--border);background:var(--navy-mid);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.autosave{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--success);background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);padding:4px 9px;border-radius:6px;}
+.as-dot{width:5px;height:5px;border-radius:50%;background:var(--success);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+/* Toast */
+#toast{position:fixed;top:62px;right:16px;padding:9px 16px;border-radius:9px;font-size:12px;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;display:flex;align-items:center;gap:7px;}
+#toast.success{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.4);color:var(--success);}
+#toast.error{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:var(--red);}
+#toast.info{background:rgba(0,180,216,.12);border:1px solid rgba(0,180,216,.3);color:var(--teal);}
+#toast.show{opacity:1;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-thumb{background:rgba(0,180,216,.18);border-radius:4px;}
+
+/* ── SECTION GROUP ACCORDION ── */
+.sec-group { border-bottom: 1px solid var(--border); }
+.sec-grp-hdr { display:flex; align-items:center; gap:7px; padding:9px 12px; cursor:pointer; user-select:none; transition:background .18s; }
+.sec-grp-hdr:hover { background:var(--teal-dim); }
+.sec-grp-hdr.active-grp { background:var(--teal-hover); }
+.sec-grp-ic { font-size:14px; flex-shrink:0; }
+.sec-grp-lbl { flex:1; font-size:12px; font-weight:700; color:var(--txt); }
+.sec-grp-count { font-size:9px; font-weight:700; background:var(--teal-dim); color:var(--teal); border:1px solid var(--border-md); padding:1px 6px; border-radius:8px; }
+.sec-grp-arr { font-size:10px; color:var(--txt-muted); transition:transform .22s; margin-left:2px; }
+.sec-grp-arr.open { transform:rotate(-90deg); }
+.sec-grp-body { overflow:hidden; transition:max-height .28s ease, opacity .22s; max-height:400px; opacity:1; }
+.sec-grp-body.collapsed { max-height:0 !important; opacity:0; }
+.sec-grp-body .nav-item { padding-left:28px; font-size:11.5px; }
+/* Company hover expand */
+#coListBody { transition: max-height .3s ease, opacity .25s; }
+</style>
+</head>
+<body>
+<div id="toast"></div>
+
+<!-- ═══ DRAWER MASK ═══ -->
+<div class="drawer-mask" id="drawerMask" onclick="closeDrawer()"></div>
+
+<!-- ═══ GLOBAL DRAWER ═══ -->
+<div class="drawer" id="drawer">
+  <div class="d-hdr">
+    <div class="d-logo">
+      <div class="d-logo-mark">A</div>
+      <div><div style="font-size:13px;font-weight:800;color:var(--txt);">Avyren</div><div style="font-size:8px;color:var(--teal);letter-spacing:2px;text-transform:uppercase;">HRMS Platform</div></div>
+    </div>
+    <div class="d-close" onclick="closeDrawer()">✕</div>
+  </div>
+  <div class="d-user">
+    <div class="d-av">SA</div>
+    <div><div class="d-uname">Super Admin</div><div class="d-urole">🔒 System Administrator</div></div>
+  </div>
+  <div class="d-nav">
+    <div class="d-sec-lbl">Organisation</div>
+    <div class="d-item active" onclick="navigate('CFG-001','Company Profile','🏢')"><span class="d-icon">🏢</span>Company Profile<span class="d-badge">CFG-001</span></div>
+    <div class="d-sub active">› Company Master</div>
+    <div class="d-item" onclick="navigate('CFG-002','Branch / Location','📍')"><span class="d-icon">📍</span>Branch / Location<span class="d-badge">CFG-002</span></div>
+    <div class="d-item" onclick="navigate('CFG-003','Department Master','🗂️')"><span class="d-icon">🗂️</span>Department Master<span class="d-badge">CFG-003</span></div>
+    <div class="d-item" onclick="navigate('CFG-004','Designation Master','🏅')"><span class="d-icon">🏅</span>Designation Master<span class="d-badge">CFG-004</span></div>
+    <div class="d-item" onclick="navigate('CFG-005','Grade & Level','⭐')"><span class="d-icon">⭐</span>Grade & Level<span class="d-badge">CFG-005</span></div>
+    <div class="d-item" onclick="navigate('CFG-006','Employee Types','👤')"><span class="d-icon">👤</span>Employee Types<span class="d-badge">CFG-006</span></div>
+    <div class="d-sec-lbl">Attendance & Time</div>
+    <div class="d-item" onclick="navigate('CFG-007','Shift Master','🕐')"><span class="d-icon">🕐</span>Shift Master<span class="d-badge">CFG-007</span></div>
+    <div class="d-item" onclick="navigate('CFG-008','Holiday Calendar','📅')"><span class="d-icon">📅</span>Holiday Calendar<span class="d-badge">CFG-008</span></div>
+    <div class="d-item" onclick="navigate('CFG-009','Work Week / Roster','📆')"><span class="d-icon">📆</span>Work Week / Roster<span class="d-badge">CFG-009</span></div>
+    <div class="d-sec-lbl">Payroll & Compliance</div>
+    <div class="d-item" onclick="navigate('CFG-010','Pay Components','💰')"><span class="d-icon">💰</span>Pay Components<span class="d-badge">CFG-010</span></div>
+    <div class="d-item" onclick="navigate('CFG-011','Tax Slab Setup','🧾')"><span class="d-icon">🧾</span>Tax Slab Setup<span class="d-badge">CFG-011</span></div>
+    <div class="d-item" onclick="navigate('CFG-012','PF / ESI / PT','⚖️')"><span class="d-icon">⚖️</span>PF / ESI / PT<span class="d-badge">CFG-012</span></div>
+    <div class="d-sec-lbl">Access & Security</div>
+    <div class="d-item" onclick="navigate('CFG-017','RBAC Config','🔐')"><span class="d-icon">🔐</span>RBAC Config<span class="d-badge">CFG-017</span></div>
+    <div class="d-item" onclick="navigate('CFG-031','Notification Engine','🔔')"><span class="d-icon">🔔</span>Notification Engine<span class="d-badge">CFG-031</span></div>
+    <div class="d-item" onclick="navigate('CFG-032','Data Retention','🗃️')"><span class="d-icon">🗃️</span>Data Retention<span class="d-badge">CFG-032</span></div>
+  </div>
+  <div class="d-footer">
+    <div class="sa-card">
+      <div class="sa-title">Logged In As — Super Admin</div>
+      <div class="sa-row"><div class="sa-av">SA</div><div><div class="sa-name">Avinash Rena</div><div class="sa-email">avinash@avyrentechnologies.com</div></div></div>
+      <div class="sa-chips"><span class="sa-chip pu">🔒 Super Admin</span><span class="sa-chip te">All 32 Screens</span><span class="sa-chip gr">● Active</span></div>
+      <div class="sa-stats">
+        <div><div class="sa-stat-val">32</div><div class="sa-stat-lbl">Screens</div></div>
+        <div><div class="sa-stat-val">100%</div><div class="sa-stat-lbl">Access</div></div>
+        <div><div class="sa-stat-val" style="color:var(--success)">Active</div><div class="sa-stat-lbl">Status</div></div>
+        <div><div class="sa-stat-val" id="dSessionTime" style="font-size:11px;">00:00</div><div class="sa-stat-lbl">Session</div></div>
+      </div>
+      <div class="sa-btns">
+        <button class="sa-btn o" onclick="showToast('Profile settings','info');closeDrawer()">👤 Profile</button>
+        <button class="sa-btn o" onclick="showToast('Settings opened','info');closeDrawer()">⚙️ Settings</button>
+        <button class="sa-btn r" onclick="showToast('Logging out...','error');closeDrawer()">⏻ Logout</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TOPBAR ═══ -->
+<div class="topbar">
+  <div class="hbg" id="mainHbg" onclick="toggleDrawer()">
+    <span></span><span></span><span></span>
+  </div>
+  <div style="display:flex;align-items:center;gap:7px;">
+    <div class="logo-mark">A</div>
+    <div><div class="logo-name">Avyren</div><div class="logo-sub">HRMS</div></div>
+  </div>
+  <div class="vdiv"></div>
+  <div class="search-bar">
+    <span style="color:var(--txt-muted);font-size:13px;">🔍</span>
+    <input type="text" placeholder="Search Avyren Technologies HRMS..." id="globalSearch"/>
+    <span class="kbd">⌘K</span>
+  </div>
+  <div class="tb-right">
+    <div class="breadcrumb">Config › Org Setup › <b id="breadcrumbLabel">Company Profile</b></div>
+    <div class="vdiv"></div>
+    <div class="tb-clock" id="clock">--:--:--</div>
+    <div class="tb-icon" onclick="showToast('No new notifications','info')">🔔</div>
+    <div class="tb-icon" id="themeBtn" onclick="toggleTheme()">🌙</div>
+    <div class="tb-av" onclick="toggleDrawer()">SA</div>
+  </div>
+</div>
+
+<!-- ═══ LAYOUT ═══ -->
+<div class="layout">
+
+  <!-- ═══ LEFT PANEL ═══ -->
+  <div class="left-panel" id="leftPanel">
+
+    <!-- ── COMPANY LIST: hover to expand ── -->
+    <div class="lp-co-section" id="coSection" onmouseenter="expandCoList()" onmouseleave="collapseCoList()">
+      <div class="lp-co-hdr" style="cursor:pointer;" onclick="navigate('CFG-001','Company Profile','🏢')">
+        <div style="width:44px;height:100%;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--border);flex-shrink:0;font-size:16px;">🏢</div>
+        <div class="lp-co-title">Company Profile</div>
+        <div class="lp-co-count" id="coCount">3</div>
+        <span id="coArr" style="font-size:10px;color:var(--txt-muted);margin-right:8px;transition:transform .22s;">▾</span>
+      </div>
+      <!-- Hover-expanded content -->
+      <div id="coListBody" style="max-height:0;overflow:hidden;transition:max-height .3s ease,opacity .25s;opacity:0;">
+        <div style="padding:6px 8px 3px;">
+          <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--input-bg);border:1px solid var(--border);border-radius:7px;margin-bottom:4px;">
+            <span style="color:var(--txt-muted);font-size:11px;">🔍</span>
+            <input type="text" placeholder="Search companies..." id="coSearch" oninput="filterCo(this.value)" style="background:none;border:none;outline:none;color:var(--txt);font-size:11px;font-family:inherit;width:100%;"/>
+          </div>
+        </div>
+        <div class="co-list" id="coList">
+          <div class="co-item selected" onclick="selectCo(this,'AR','linear-gradient(135deg,#4f46e5,#7c3aed)','Avyren Technologies Pvt. Ltd.','AVR-IN-001','IT · India')">
+            <div class="co-logo" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);font-size:10px;">AR</div>
+            <div class="co-info"><div class="co-name">Avyren Technologies Pvt. Ltd.</div><div class="co-code">AVR-IN-001</div></div>
+            <span class="badge b-act"><span class="dot dot-g"></span>Active</span>
+          </div>
+          <div class="co-item" onclick="selectCo(this,'N','linear-gradient(135deg,#0891b2,#2ec4b6)','NexaCorp India Ltd.','NEX-IN-002','BFSI · India')">
+            <div class="co-logo" style="background:linear-gradient(135deg,#0891b2,#2ec4b6);">N</div>
+            <div class="co-info"><div class="co-name">NexaCorp India Ltd.</div><div class="co-code">NEX-IN-002</div></div>
+            <span class="badge b-dft"><span class="dot dot-a"></span>Draft</span>
+          </div>
+          <div class="co-item" onclick="selectCo(this,'P','linear-gradient(135deg,#059669,#10b981)','Pinnacle Mfg. Pvt. Ltd.','PIN-IN-003','Manufacturing · India')">
+            <div class="co-logo" style="background:linear-gradient(135deg,#059669,#10b981);">P</div>
+            <div class="co-info"><div class="co-name">Pinnacle Mfg. Pvt. Ltd.</div><div class="co-code">PIN-IN-003</div></div>
+            <span class="badge b-act"><span class="dot dot-g"></span>Active</span>
+          </div>
+        </div>
+        <button class="lp-add-btn" style="margin:4px 7px 7px;" onclick="addNewCo()">+ Add New Company</button>
+      </div>
+    </div>
+
+    <!-- ── MASTER SECTIONS: 4 accordion groups ── -->
+    <div class="lp-nav-section">
+      <div style="padding:5px 0;overflow-y:auto;flex:1;" id="masterNavBody">
+
+        <!-- Organisation -->
+        <div class="sec-group" id="grp-org">
+          <div class="sec-grp-hdr" onclick="toggleSecGroup('org')" id="grphdr-org">
+            <span class="sec-grp-ic">🏗️</span>
+            <span class="sec-grp-lbl">Organisation</span>
+            <span class="sec-grp-count">6</span>
+            <span class="sec-grp-arr" id="grparr-org">▾</span>
+          </div>
+          <div class="sec-grp-body" id="grpbody-org">
+            <div class="nav-item" id="nav-CFG-001" onclick="navigate('CFG-001','Company Profile','🏢')"><span class="nav-ic">🏢</span>Company Profile<span class="nav-badge">CFG-001</span></div>
+            <div class="nav-item" id="nav-CFG-002" onclick="navigate('CFG-002','Branch / Location','📍')"><span class="nav-ic">📍</span>Branch / Location<span class="nav-badge">CFG-002</span></div>
+            <div class="nav-item" id="nav-CFG-003" onclick="navigate('CFG-003','Department Master','🗂️')"><span class="nav-ic">🗂️</span>Department Master<span class="nav-badge">CFG-003</span></div>
+            <div class="nav-item" id="nav-CFG-004" onclick="navigate('CFG-004','Designation Master','🏅')"><span class="nav-ic">🏅</span>Designation Master<span class="nav-badge">CFG-004</span></div>
+            <div class="nav-item" id="nav-CFG-005" onclick="navigate('CFG-005','Grade & Level','⭐')"><span class="nav-ic">⭐</span>Grade & Level<span class="nav-badge">CFG-005</span></div>
+            <div class="nav-item" id="nav-CFG-006" onclick="navigate('CFG-006','Employee Types','👤')"><span class="nav-ic">👤</span>Employee Types<span class="nav-badge">CFG-006</span></div>
+          </div>
+        </div>
+
+        <!-- Attendance & Time -->
+        <div class="sec-group" id="grp-att">
+          <div class="sec-grp-hdr" onclick="toggleSecGroup('att')" id="grphdr-att">
+            <span class="sec-grp-ic">🕐</span>
+            <span class="sec-grp-lbl">Attendance & Time</span>
+            <span class="sec-grp-count">4</span>
+            <span class="sec-grp-arr" id="grparr-att">▾</span>
+          </div>
+          <div class="sec-grp-body collapsed" id="grpbody-att">
+            <div class="nav-item" id="nav-CFG-007" onclick="navigate('CFG-007','Shift Master','🕐')"><span class="nav-ic">🕐</span>Shift Master<span class="nav-badge">CFG-007</span></div>
+            <div class="nav-item" id="nav-CFG-008" onclick="navigate('CFG-008','Holiday Calendar','📅')"><span class="nav-ic">📅</span>Holiday Calendar<span class="nav-badge">CFG-008</span></div>
+            <div class="nav-item" id="nav-CFG-009" onclick="navigate('CFG-009','Work Week / Roster','📆')"><span class="nav-ic">📆</span>Work Week / Roster<span class="nav-badge">CFG-009</span></div>
+          </div>
+        </div>
+
+        <!-- Payroll & Compliance -->
+        <div class="sec-group" id="grp-pay">
+          <div class="sec-grp-hdr" onclick="toggleSecGroup('pay')" id="grphdr-pay">
+            <span class="sec-grp-ic">💰</span>
+            <span class="sec-grp-lbl">Payroll & Compliance</span>
+            <span class="sec-grp-count">3</span>
+            <span class="sec-grp-arr" id="grparr-pay">▾</span>
+          </div>
+          <div class="sec-grp-body collapsed" id="grpbody-pay">
+            <div class="nav-item" id="nav-CFG-010" onclick="navigate('CFG-010','Pay Components','💰')"><span class="nav-ic">💰</span>Pay Components<span class="nav-badge">CFG-010</span></div>
+            <div class="nav-item" id="nav-CFG-011" onclick="navigate('CFG-011','Tax Slab Setup','🧾')"><span class="nav-ic">🧾</span>Tax Slab Setup<span class="nav-badge">CFG-011</span></div>
+            <div class="nav-item" id="nav-CFG-012" onclick="navigate('CFG-012','PF / ESI / PT','⚖️')"><span class="nav-ic">⚖️</span>PF / ESI / PT<span class="nav-badge">CFG-012</span></div>
+            <div class="nav-item" id="nav-CFG-015" onclick="navigate('CFG-015','Production Incentive','⚙️')"><span class="nav-ic">⚙️</span>Production Incentive<span class="nav-badge">CFG-015</span></div>
+          </div>
+        </div>
+
+        <!-- Access & Security -->
+        <div class="sec-group" id="grp-sec">
+          <div class="sec-grp-hdr" onclick="toggleSecGroup('sec')" id="grphdr-sec">
+            <span class="sec-grp-ic">🔐</span>
+            <span class="sec-grp-lbl">Access & Security</span>
+            <span class="sec-grp-count">3</span>
+            <span class="sec-grp-arr" id="grparr-sec">▾</span>
+          </div>
+          <div class="sec-grp-body collapsed" id="grpbody-sec">
+            <div class="nav-item" id="nav-CFG-017" onclick="navigate('CFG-017','RBAC Config','🔐')"><span class="nav-ic">🔐</span>RBAC Config<span class="nav-badge">CFG-017</span></div>
+            <div class="nav-item" id="nav-CFG-031" onclick="navigate('CFG-031','Notification Engine','🔔')"><span class="nav-ic">🔔</span>Notification Engine<span class="nav-badge">CFG-031</span></div>
+            <div class="nav-item" id="nav-CFG-032" onclick="navigate('CFG-032','Data Retention','🗃️')"><span class="nav-ic">🗃️</span>Data Retention<span class="nav-badge">CFG-032</span></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Super Admin card -->
+      <div class="lp-sa">
+        <div class="lp-sa-toggle" onclick="toggleSA()">
+          <div class="lp-sa-av">SA</div>
+          <div class="lp-sa-name">Avinash Rena</div>
+          <div class="lp-sa-chip">SA</div>
+          <span class="lp-sa-arr" id="saArr">▾</span>
+        </div>
+        <div class="lp-sa-body" id="saBody">
+          <div class="lp-sa-row"><span class="lp-sd-lbl">Name</span><span class="lp-sd-val">Avinash Rena</span></div>
+          <div class="lp-sa-row"><span class="lp-sd-lbl">Email</span><span class="lp-sd-val">avinash@avyrentechnologies.com</span></div>
+          <div class="lp-sa-row"><span class="lp-sd-lbl">Role</span><span class="lp-sd-val" style="color:var(--teal);">Super Administrator</span></div>
+          <div class="lp-sa-row"><span class="lp-sd-lbl">Access</span><span class="lp-sd-val">All 32 Screens</span></div>
+          <div class="lp-sa-row"><span class="lp-sd-lbl">Session</span><span class="lp-sd-val" id="saSessionTime" style="color:var(--success);font-family:monospace;">00:00</span></div>
+          <div class="lp-perms"><span class="perm-chip">Create</span><span class="perm-chip">Edit</span><span class="perm-chip">Delete</span><span class="perm-chip">Publish</span><span class="perm-chip">RBAC</span><span class="perm-chip">API</span></div>
+          <div class="lp-sa-btns">
+            <button class="lp-sa-btn o" onclick="showToast('Profile opened','info')">Profile</button>
+            <button class="lp-sa-btn r" onclick="showToast('Logging out...','error')">Logout</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ DETAIL PANE ═══ -->
+  <div class="detail-pane">
+
+    <!-- Company strip -->
+    <div class="det-topbar">
+      <div class="det-co">
+        <div class="det-logo" id="detLogo" style="background:linear-gradient(135deg,#4f46e5,#7c3aed);">AR</div>
+        <div>
+          <div class="det-name" id="detName">Avyren Technologies Pvt. Ltd.</div>
+          <div class="det-meta" id="detMeta">AVR-IN-001 · Information Technology · 🇮🇳 India</div>
+        </div>
+      </div>
+      <div class="action-bar" id="detActions">
+        <button class="btn btn-ghost" onclick="showToast('Audit log opened','info')">📋 Audit Log</button>
+        <button class="btn btn-outline" onclick="showToast('Duplicated as draft','info')">⎘ Duplicate</button>
+        <button class="btn btn-danger" onclick="if(confirm('Delete this record?'))showToast('Deleted','error')">🗑 Delete</button>
+        <button class="btn btn-primary" onclick="saveRecord()">💾 Save Changes</button>
+      </div>
+    </div>
+
+    <!-- Status bar -->
+    <div class="status-bar" id="statusBar">
+      <label>STATUS</label>
+      <span class="sp sel green" data-val="Active" onclick="selStatus(this,'green')"><span class="dot dot-g"></span>Active</span>
+      <span class="sp" data-val="Pilot" onclick="selStatus(this,'blue')"><span class="dot" style="background:var(--teal)"></span>Pilot</span>
+      <span class="sp" data-val="Inactive" onclick="selStatus(this,'amber')"><span class="dot dot-a"></span>Inactive</span>
+      <div class="sb-div"></div>
+      <span style="font-size:10.5px;color:var(--txt-muted);">Last saved: <span style="color:var(--txt-sec);font-weight:600;" id="lastSaved">Today, 09:41 AM</span></span>
+      <span style="font-size:10.5px;color:var(--txt-muted);margin-left:auto;">By: <span style="color:var(--txt-sec);font-weight:600;">Super Admin</span></span>
+    </div>
+
+    <!-- Progress strip — rebuilt dynamically per section -->
+    <div class="prog-strip" id="progStrip">
+      <div id="psInner" style="display:flex;align-items:center;gap:0;flex:1;overflow-x:auto;"></div>
+      <div id="psCount" style="flex-shrink:0;margin-left:12px;font-size:10px;color:var(--txt-muted);white-space:nowrap;font-weight:600;">Phase 1 &middot; Screen 1 / 32</div>
+    </div>
+
+    <!-- Tabs (only shown for CFG-001) -->
+    <div class="tabs-bar" id="tabsBar">
+      <div class="tab active" onclick="switchTab(this,'general')">🏢 General Info</div>
+      <div class="tab" onclick="switchTab(this,'compliance')">📋 Statutory & Tax</div>
+      <div class="tab" onclick="switchTab(this,'address')">🗺️ Addresses</div>
+      <div class="tab" onclick="switchTab(this,'fiscal')">📅 Fiscal & Calendar</div>
+      <div class="tab" onclick="switchTab(this,'preferences')">⚙️ Preferences</div>
+      <div class="tab" onclick="switchTab(this,'branches')">📍 Branches</div>
+      <div class="tab" onclick="switchTab(this,'contacts')">👤 Contacts</div>
+    </div>
+
+    <!-- Form content area -->
+    <div class="form-scroll" id="formScroll">
+
+      <!-- CFG-001 tabs -->
+      <div id="screen-CFG-001">
+        <div id="tab-general">
+          <div class="fs">
+            <div class="fs-hdr" onclick="toggleSec(this)"><div class="fs-title"><span class="fs-ic">🏢</span>Legal Entity Information</div><span class="fs-tog">▾</span></div>
+            <div class="fs-body">
+              <div class="fg g2" style="align-items:flex-start;margin-bottom:13px;">
+                <div>
+                  <div style="font-size:9.5px;font-weight:700;color:var(--txt-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">Company Logo</div>
+                  <div class="logo-zone" onclick="triggerLogoUpload()">
+                    <div class="logo-box" id="logoBox"><span style="font-size:20px;color:var(--txt-muted);">🖼️</span><span style="font-size:9px;color:var(--txt-muted);text-align:center;">Click to upload</span></div>
+                    <div><p style="font-size:11.5px;color:var(--txt-sec);margin-bottom:5px;">Upload your official company logo for payslips, offer letters & reports.</p><small style="font-size:10px;color:var(--txt-muted);">PNG, JPG or SVG · Max 2MB · 200×200px</small><br/><br/>
+                    <button class="btn btn-ghost" style="font-size:11px;padding:5px 9px;" onclick="event.stopPropagation();triggerLogoUpload()">📁 Browse</button>
+                    <input type="file" id="logoInput" accept="image/*" style="display:none;" onchange="previewLogo(this)"/></div>
+                  </div>
+                </div>
+                <div class="field"><label>Display Name <span class="req">*</span></label><input class="inp" type="text" id="fDisplayName" value="Avyren Technologies Pvt. Ltd."/><span class="fhint">Shown on all employee-facing screens</span></div>
+              </div>
+              <div class="fg g3">
+                <div class="field"><label>Legal / Registered Name <span class="req">*</span></label><input class="inp" type="text" value="Avyren Technologies Private Limited"/></div>
+                <div class="field"><label>Business Type <span class="req">*</span></label><select class="inp"><option selected>Private Limited (Pvt. Ltd.)</option><option>Public Limited</option><option>LLP</option><option>Partnership</option><option>Proprietorship</option></select></div>
+                <div class="field"><label>Nature of Industry <span class="req">*</span></label><select class="inp"><option>— Select —</option><option selected>Information Technology</option><option>Manufacturing</option><option>BFSI</option><option>Healthcare</option><option>Retail</option></select></div>
+              </div>
+              <div class="fg g4" style="margin-top:11px;">
+                <div class="field"><label>Company Code <span class="req">*</span></label><input class="inp mono" type="text" id="fCode" value="AVR-IN-001"/></div>
+                <div class="field"><label>Short Name</label><input class="inp" type="text" id="fShortName" value="Avyren"/></div>
+                <div class="field"><label>Date of Incorporation <span class="req">*</span></label><input class="inp" type="date" value="2018-04-01"/></div>
+                <div class="field"><label>No. of Employees</label><input class="inp" type="number" id="fEmpCount" value="1250"/></div>
+              </div>
+              <div class="fg g3" style="margin-top:11px;">
+                <div class="field"><label>CIN No.</label><input class="inp mono" type="text" value="U72900KA2019PTC312847"/></div>
+                <div class="field"><label>Official Website</label><div class="inp-wrap"><input class="inp" type="url" id="fWebsite" value="https://www.avyrentechnologies.com"/><button class="inp-btn" onclick="openWebsite()">↗ Visit</button></div></div>
+                <div class="field"><label>Corporate Email Domain <span class="req">*</span></label><div class="inp-wrap"><input class="inp" type="text" id="fEmailDomain" value="avyrentechnologies.com"/><button class="inp-btn" onclick="verifyDomain()">✓ Verify</button></div><span class="fhint">Auto-provisioning employee emails</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="tab-compliance" style="display:none;">
+          <div class="fs"><div class="fs-hdr" onclick="toggleSec(this)"><div class="fs-title"><span class="fs-ic">📋</span>Statutory & Tax Identifiers</div><span class="fs-tog">▾</span></div>
+          <div class="fs-body"><div class="warn-box"><span style="color:var(--amber);flex-shrink:0;">⚠️</span><p>These identifiers drive payroll, TDS, statutory filings and Form 16 generation. Ensure <strong>100% accuracy</strong> before saving.</p></div>
+          <div class="comp-grid">
+            <div class="comp-cell"><label>🏷 PAN (Income Tax) *</label><input class="mono" type="text" value="AARCA5678F" maxlength="10"/></div>
+            <div class="comp-cell"><label>🔖 TAN (TDS Deduction) *</label><input class="mono" type="text" value="BLRA98765T" maxlength="10"/></div>
+            <div class="comp-cell"><label>📦 GSTIN</label><input class="mono" type="text" value="29AARCA5678F1Z3" maxlength="15"/></div>
+            <div class="comp-cell"><label>🏦 PF Registration No. *</label><input class="mono" type="text" value="KA/BLR/0112345/000/0001"/></div>
+            <div class="comp-cell"><label>🏥 ESI Employer Code</label><input class="mono" type="text" value="53-00-123456-000-0001"/></div>
+            <div class="comp-cell"><label>📝 PT Registration</label><input class="mono" type="text" placeholder="27AABCE1234C1Z5"/></div>
+            <div class="comp-cell"><label>🔒 LWFR Number</label><input type="text" placeholder="Optional"/></div>
+            <div class="comp-cell"><label>🧩 ROC Filing State *</label><input type="text" value="RoC Bengaluru, Karnataka"/></div>
+          </div></div></div>
+        </div>
+        <div id="tab-address" style="display:none;">
+          <div class="fs"><div class="fs-hdr" onclick="toggleSec(this)"><div class="fs-title"><span class="fs-ic">🗺️</span>Registered & Correspondence Address</div><span class="fs-tog">▾</span></div>
+          <div class="fs-body">
+            <div class="addr-tabs"><div class="at active" onclick="switchAddrTab(this,'reg')">📍 Registered</div><div class="at" onclick="switchAddrTab(this,'corp')">🏙 Corporate / HQ</div></div>
+            <div id="addr-reg">
+              <div class="fg" style="grid-template-columns:1fr;"><div class="field"><label>Address Line 1 *</label><input class="inp" type="text" value="4th Floor, Prestige Tech Park, Marathahalli"/></div></div>
+              <div class="fg g2" style="margin-top:11px;"><div class="field"><label>Address Line 2</label><input class="inp" type="text" value="Outer Ring Road, Bengaluru East"/></div><div class="field"><label>City *</label><input class="inp" type="text" value="Bengaluru"/></div></div>
+              <div class="fg g4" style="margin-top:11px;">
+                <div class="field"><label>State *</label><select class="inp"><option>Maharashtra</option><option selected>Karnataka</option><option>Tamil Nadu</option><option>Delhi</option></select></div>
+                <div class="field"><label>Country *</label><select class="inp"><option selected>India</option><option>USA</option><option>UK</option><option>UAE</option></select></div>
+                <div class="field"><label>PIN Code *</label><div class="inp-wrap"><input class="inp mono" type="text" value="560103" maxlength="6"/><button class="inp-btn" onclick="showToast('PIN 560103 → Bengaluru ✓','success')">🔍</button></div></div>
+                <div class="field"><label>STD Code</label><input class="inp mono" type="text" value="080"/></div>
+              </div>
+            </div>
+            <div id="addr-corp" style="display:none;">
+              <div class="copy-row" onclick="toggleCopyAddr()"><div class="chkbox" id="cpChk"></div><span>Same as Registered Address</span><small>Click to copy</small></div>
+              <div class="fg" style="grid-template-columns:1fr;"><div class="field"><label>Address Line 1</label><input class="inp" type="text" id="ca1" placeholder="Corporate office address"/></div></div>
+              <div class="fg g3" style="margin-top:11px;"><div class="field"><label>City</label><input class="inp" type="text" id="cc" placeholder="City"/></div><div class="field"><label>State</label><select class="inp" id="cs"><option value="">— State —</option><option>Maharashtra</option><option>Karnataka</option></select></div><div class="field"><label>PIN Code</label><input class="inp mono" type="text" id="cp" placeholder="400001"/></div></div>
+            </div>
+          </div></div>
+        </div>
+        <div id="tab-fiscal" style="display:none;">
+          <div class="fs"><div class="fs-hdr" onclick="toggleSec(this)"><div class="fs-title"><span class="fs-ic">📅</span>Fiscal Year & Calendar Settings</div><span class="fs-tog">▾</span></div>
+          <div class="fs-body">
+            <div class="sub-lbl">Financial Year Start</div>
+            <div class="fy-pills"><div class="fyp active" onclick="selFY(this)">April – March <span style="font-size:9px;opacity:.6;">(India)</span></div><div class="fyp" onclick="selFY(this)">January – December</div><div class="fyp" onclick="selFY(this)">July – June</div><div class="fyp" onclick="selFY(this)">October – September</div><div class="fyp" onclick="selFY(this)">Custom Range</div></div>
+            <div class="sub-lbl" style="margin-top:16px;">Payroll Cycle</div>
+            <div class="fg g3"><div class="field"><label>Frequency *</label><select class="inp"><option selected>Monthly</option><option>Bi-Monthly</option><option>Weekly</option></select></div><div class="field"><label>Cut-off Day *</label><select class="inp"><option selected>Last Working Day</option><option>25th</option><option>1st Next Month</option></select></div><div class="field"><label>Disbursement Day</label><select class="inp"><option selected>1st of Next Month</option><option>Last Day</option><option>28th</option></select></div></div>
+            <div class="sub-lbl" style="margin-top:16px;">Week & Timezone</div>
+            <div class="fg g3"><div class="field"><label>Week Start *</label><select class="inp"><option selected>Monday</option><option>Sunday</option></select></div><div class="field"><label>Working Days</label><select class="inp"><option>Mon – Fri (5)</option><option selected>Mon – Sat (6)</option><option>Alternate Sat Off</option></select></div><div class="field"><label>Timezone *</label><select class="inp"><option selected>IST — UTC+5:30</option><option>UTC+0</option><option>EST — UTC−5</option></select></div></div>
+            <div class="sub-lbl" style="margin-top:16px;">Working Days</div>
+            <div class="wdays"><div class="wday on" onclick="togDay(this)">Mon</div><div class="wday on" onclick="togDay(this)">Tue</div><div class="wday on" onclick="togDay(this)">Wed</div><div class="wday on" onclick="togDay(this)">Thu</div><div class="wday on" onclick="togDay(this)">Fri</div><div class="wday on" onclick="togDay(this)">Sat</div><div class="wday" onclick="togDay(this)">Sun</div></div>
+          </div></div>
+        </div>
+        <div id="tab-preferences" style="display:none;">
+          <div class="fs"><div class="fs-hdr" onclick="toggleSec(this)"><div class="fs-title"><span class="fs-ic">⚙️</span>System Preferences & Feature Flags</div><span class="fs-tog">▾</span></div>
+          <div class="fs-body">
+            <div class="fg g3" style="margin-bottom:14px;"><div class="field"><label>Currency *</label><select class="inp"><option selected>INR — ₹</option><option>USD — $</option><option>GBP — £</option><option>EUR — €</option></select></div><div class="field"><label>Language</label><select class="inp"><option selected>English</option><option>Hindi</option><option>Tamil</option><option>Kannada</option></select></div><div class="field"><label>Date Format</label><select class="inp"><option selected>DD/MM/YYYY</option><option>MM/DD/YYYY</option><option>YYYY-MM-DD</option></select></div></div>
+            <div class="sub-lbl">Feature Toggles</div>
+            <div class="tog-row"><div class="tog-info"><strong>🇮🇳 India Statutory Compliance Mode</strong><span>PF, ESI, PT, TDS, Form 16, Gratuity, Bonus Act</span></div><label class="toggle"><input type="checkbox" checked onchange="togFB(this,'India Compliance')"/><div class="tog-track"></div></label></div>
+            <div class="tog-row"><div class="tog-info"><strong>📱 Employee Self-Service (ESS)</strong><span>Employee login, leaves, payslip, IT declarations</span></div><label class="toggle"><input type="checkbox" checked onchange="togFB(this,'ESS Portal')"/><div class="tog-track"></div></label></div>
+            <div class="tog-row"><div class="tog-info"><strong>📲 Mobile App (iOS & Android)</strong><span>AvyERP mobile app access for all employees</span></div><label class="toggle"><input type="checkbox" checked onchange="togFB(this,'Mobile App')"/><div class="tog-track"></div></label></div>
+            <div class="tog-row"><div class="tog-info"><strong>🤖 AI HR Assistant Chatbot</strong><span>NLP chatbot for leave balance, policy FAQs</span></div><label class="toggle"><input type="checkbox" onchange="togFB(this,'AI Chatbot')"/><div class="tog-track"></div></label></div>
+            <div class="tog-row"><div class="tog-info"><strong>✍️ e-Sign Integration</strong><span>Digital signatures for offer letters, F&F</span></div><label class="toggle"><input type="checkbox" onchange="togFB(this,'e-Sign')"/><div class="tog-track"></div></label></div>
+            <div class="tog-row"><div class="tog-info"><strong>🌍 Multi-Currency Payroll</strong><span>Multiple currencies for international employees</span></div><label class="toggle"><input type="checkbox" onchange="togFB(this,'Multi-Currency')"/><div class="tog-track"></div></label></div>
+            <div class="tog-row"><div class="tog-info"><strong>🔔 Biometric / Device Sync</strong><span>Auto-sync attendance from ZKTeco, ESSL devices</span></div><label class="toggle"><input type="checkbox" onchange="togFB(this,'Biometric Sync')"/><div class="tog-track"></div></label></div>
+          </div></div>
+        </div>
+
+        <div id="tab-branches" style="display:none;">
+          <div class="fs"><div class="fs-hdr" onclick="toggleSec(this)"><div class="fs-title"><span class="fs-ic">📍</span>Branch / Location Setup</div><span class="fs-tog">▾</span></div>
+          <div class="fs-body">
+            <div class="fg g3" style="margin-bottom:11px;">
+              <div class="field"><label>Branch Name <span class="req">*</span></label><input class="inp" type="text" value="Bengaluru HQ"/></div>
+              <div class="field"><label>Branch Code <span class="req">*</span></label><input class="inp mono" type="text" value="BLR-HQ-001"/></div>
+              <div class="field"><label>Branch Type</label><select class="inp"><option selected>Head Office</option><option>Regional</option><option>Satellite</option></select></div>
+            </div>
+            <div class="fg g3" style="margin-bottom:11px;">
+              <div class="field"><label>Address</label><input class="inp" type="text" value="4th Floor, Prestige Tech Park, Marathahalli"/></div>
+              <div class="field"><label>City</label><input class="inp" type="text" value="Bengaluru"/></div>
+              <div class="field"><label>State</label><select class="inp"><option selected>Karnataka</option><option>Maharashtra</option></select></div>
+            </div>
+            <div class="fg g3" style="margin-bottom:11px;">
+              <div class="field"><label>PIN Code</label><input class="inp mono" type="text" value="560103"/></div>
+              <div class="field"><label>Contact Number</label><input class="inp" type="text" value="+91-80-4567-8901"/></div>
+              <div class="field"><label>Geo-Fencing Radius (m)</label><input class="inp" type="number" value="200"/></div>
+            </div>
+            <div style="margin-top:14px;display:flex;gap:8px;">
+              <button class="btn btn-primary" onclick="showToast('Branch saved ✓','success')">💾 Save Branch</button>
+              <button class="btn btn-outline" onclick="showToast('New branch row added','info')">＋ Add Branch</button>
+            </div>
+          </div></div>
+        </div>
+        <div id="tab-contacts" style="display:none;">
+          <div class="fs"><div class="fs-hdr" onclick="toggleSec(this)"><div class="fs-title"><span class="fs-ic">👤</span>Key Contacts</div><span class="fs-tog">▾</span></div>
+          <div class="fs-body">
+            <div class="fg g3" style="margin-bottom:11px;">
+              <div class="field"><label>Contact Name <span class="req">*</span></label><input class="inp" type="text" value="Avinash Rena"/></div>
+              <div class="field"><label>Designation</label><input class="inp" type="text" value="Chief Executive Officer"/></div>
+              <div class="field"><label>Department</label><input class="inp" type="text" value="Executive Management"/></div>
+            </div>
+            <div class="fg g3" style="margin-bottom:11px;">
+              <div class="field"><label>Mobile <span class="req">*</span></label><input class="inp" type="text" value="+91-98765-43210"/></div>
+              <div class="field"><label>Email <span class="req">*</span></label><input class="inp" type="email" value="avinash@avyrentechnologies.com"/></div>
+              <div class="field"><label>Contact Type</label><select class="inp"><option selected>Primary</option><option>HR</option><option>Finance</option><option>IT</option></select></div>
+            </div>
+            <div class="fg g2" style="margin-bottom:11px;">
+              <div class="field"><label>LinkedIn Profile</label><input class="inp" type="url" value="https://linkedin.com/in/avinashrena"/></div>
+              <div class="field"><label>Alternative Email</label><input class="inp" type="email" value="ceo@avyrentechnologies.com"/></div>
+            </div>
+            <div style="margin-top:14px;display:flex;gap:8px;">
+              <button class="btn btn-primary" onclick="showToast('Contact saved ✓','success')">💾 Save Contact</button>
+              <button class="btn btn-outline" onclick="showToast('New contact row added','info')">＋ Add Contact</button>
+            </div>
+          </div></div>
+        </div>
+      </div>
+
+      <!-- Mock screens for other CFGs -->
+      <div id="screen-MOCK" style="display:none;"></div>
+
+    </div><!-- /form-scroll -->
+
+    <!-- Footer -->
+    <div class="form-footer">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="autosave"><div class="as-dot"></div><span id="autosaveTxt">Auto-saved · Just now</span></div>
+        <button class="btn btn-ghost" style="font-size:11.5px;" onclick="if(confirm('Reset changes?'))showToast('Form reset','info')">↩ Reset</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;">
+        <button class="btn btn-ghost" style="font-size:11.5px;" onclick="showToast('Draft saved','info')">💾 Save Draft</button>
+        <button class="btn btn-outline" onclick="prevScreen()">← Previous</button>
+        <button class="btn btn-primary" onclick="nextScreen()">Save & Continue →</button>
+      </div>
+    </div>
+
+  </div><!-- /detail-pane -->
+</div><!-- /layout -->
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+/* CFG-001 v5 — Avyren Technologies HRMS */
+
+var SCREENS = {
+  'CFG-001':{ label:'Company Profile',     icon:'🏢', step:1,  color:'#4f46e5,#7c3aed', desc:'Legal entity details, statutory IDs, addresses & fiscal settings',   hasTabs:true  },
+  'CFG-002':{ label:'Branch / Location',   icon:'📍', step:2,  color:'#0891b2,#2ec4b6', desc:'Multi-branch setup with address & geo-coordinates for geo-fencing',  hasTabs:false },
+  'CFG-003':{ label:'Department Master',   icon:'🗂️', step:3,  color:'#7c3aed,#a855f7', desc:'Department hierarchy, parent-child mapping and cost-center linkage',  hasTabs:false },
+  'CFG-004':{ label:'Designation Master',  icon:'🏅', step:4,  color:'#b45309,#d97706', desc:'Job titles, band mapping, reporting-line rules and managerial flags',  hasTabs:false },
+  'CFG-005':{ label:'Grade & Level',       icon:'⭐', step:5,  color:'#0e7490,#06b6d4', desc:'Pay grades G1-G10, benefit eligibility and PF tier per grade',        hasTabs:false },
+  'CFG-006':{ label:'Employee Types',      icon:'👤', step:6,  color:'#065f46,#059669', desc:'Permanent, Contractual, Intern, Consultant & statutory flags',        hasTabs:false },
+  'CFG-007':{ label:'Shift Master',        icon:'🕐', step:7,  color:'#1e40af,#3b82f6', desc:'Shift start/end times, grace periods, break durations, night-shift',  hasTabs:false },
+  'CFG-008':{ label:'Holiday Calendar',    icon:'📅', step:8,  color:'#166534,#22c55e', desc:'National, regional, restricted holidays per location; year cloning',  hasTabs:false },
+  'CFG-009':{ label:'Work Week / Roster',  icon:'📆', step:9,  color:'#155e75,#0891b2', desc:'Working days per week, week-off assignment rules per department',     hasTabs:false },
+  'CFG-010':{ label:'Pay Components',      icon:'💰', step:10, color:'#92400e,#f59e0b', desc:'Earnings (Basic, HRA, LTA) and Deductions (PF, ESI, PT, Loan EMI)',  hasTabs:false },
+  'CFG-011':{ label:'Tax Slab Setup',      icon:'🧾', step:11, color:'#7f1d1d,#ef4444', desc:'FY-wise Old & New Regime slabs, surcharge %, rebate u/s 87A',         hasTabs:false },
+  'CFG-012':{ label:'PF / ESI / PT',       icon:'⚖️', step:12, color:'#312e81,#6366f1', desc:'PF wage ceiling, ESI thresholds, state-wise PT slabs (12 states)',   hasTabs:false },
+  'CFG-017':{ label:'RBAC Config',         icon:'🔐', step:17, color:'#4c1d95,#7c3aed', desc:'Role-Based Access Control, screen and field-level permission matrix', hasTabs:false },
+  'CFG-031':{ label:'Notification Engine', icon:'🔔', step:31, color:'#0c4a6e,#0284c7', desc:'Event-driven triggers for birthday, document expiry, approvals',      hasTabs:false },
+  'CFG-032':{ label:'Data Retention',      icon:'🗃️', step:32, color:'#1c1917,#44403c', desc:'GDPR data lifecycle, soft/hard delete rules, anonymisation',          hasTabs:false },
+  'CFG-015':{ label:'Production Incentive', icon:'⚙️', step:13, color:'#92400e,#f59e0b', desc:'Machine-wise incentive: Component, Model, Finish Part and slab-based payout', hasTabs:false }
+};
+
+var CODE_SEC = {
+  'CFG-001':'org','CFG-002':'org','CFG-003':'org','CFG-004':'org','CFG-005':'org','CFG-006':'org',
+  'CFG-007':'att','CFG-008':'att','CFG-009':'att',
+  'CFG-010':'pay','CFG-011':'pay','CFG-012':'pay','CFG-015':'pay',
+  'CFG-017':'sec','CFG-031':'sec','CFG-032':'sec'
+};
+var SEC_STEPS = {
+  org:[['CFG-001','🏢','Company'],['CFG-002','📍','Branches'],['CFG-003','🗂','Depts'],['CFG-004','🏅','Desig.'],['CFG-005','⭐','Grades'],['CFG-006','👤','Emp Types']],
+  att:[['CFG-007','🕐','Shifts'],['CFG-008','📅','Holidays'],['CFG-009','📆','Rosters']],
+  pay:[['CFG-010','💰','Pay Comp.'],['CFG-011','🧾','Tax Slabs'],['CFG-012','⚖️','PF/ESI/PT'],['CFG-015','⚙️','Prod.Inc.']],
+  sec:[['CFG-017','🔐','RBAC'],['CFG-031','🔔','Notif.'],['CFG-032','🗃️','Retention']]
+};
+var SEC_LABELS = { org:'Org Setup', att:'Attendance & Time', pay:'Payroll & Compliance', sec:'Access & Security' };
+
+/* ── MASTER TABLE DATA ── */
+var MASTER_DATA = {
+  'CFG-002':{ cols:['Branch Name','Code','City','State','Type','Contact','Status'], rows:[
+    ['Bengaluru HQ','BLR-HQ-001','Bengaluru','Karnataka','Head Office','Avinash Rena +91-98765-43210','Active'],
+    ['Mumbai Office','MUM-OFF-002','Mumbai','Maharashtra','Regional','Priya Shah +91-98200-11234','Active'],
+    ['Hyderabad Dev Centre','HYD-DEV-003','Hyderabad','Telangana','Satellite','Ravi Kumar +91-94400-55678','Active'],
+    ['Chennai Support','CHN-SUP-004','Chennai','Tamil Nadu','Satellite','Meena Pillai +91-99400-22345','Inactive'],
+    ['Delhi NCR','DEL-NCR-005','Gurugram','Haryana','Regional','Amit Saxena +91-98100-88901','Active']
+  ]},
+  'CFG-003':{ cols:['Department','Code','Parent Dept','Cost Center','Head','Positions','Status'], rows:[
+    ['Engineering','ENG-001','Technology','CC-ENG-001','Rajesh Kumar','45','Active'],
+    ['Human Resources','HR-001','Corporate','CC-HR-001','Sunita Rao','12','Active'],
+    ['Finance & Accounts','FIN-001','Corporate','CC-FIN-001','Vijay Menon','18','Active'],
+    ['Sales & Marketing','SAL-001','Business','CC-SAL-001','Deepa Nair','32','Active'],
+    ['IT Infrastructure','IT-001','Technology','CC-IT-001','Suresh Babu','20','Active']
+  ]},
+  'CFG-004':{ cols:['Designation','Code','Grade Band','Managerial','Reports To','Probation','Status'], rows:[
+    ['Software Engineer','SE-L3','G3-G4','No','Tech Lead L4','90 days','Active'],
+    ['Senior Software Engineer','SSE-L4','G4-G5','No','Engg. Manager L5','60 days','Active'],
+    ['Engineering Manager','EM-L5','G5-G6','Yes','VP Engineering L7','90 days','Active'],
+    ['Product Manager','PM-L5','G5-G6','Yes','VP Product L7','90 days','Active'],
+    ['HR Business Partner','HRBP-L4','G4-G5','No','HR Manager L5','60 days','Active']
+  ]},
+  'CFG-005':{ cols:['Grade Code','Grade Name','Pay Min','Pay Max','PF','HRA Slab','Status'], rows:[
+    ['G1','Associate','18,000','28,000','Applicable','40%','Active'],
+    ['G2','Junior','28,001','45,000','Applicable','40%','Active'],
+    ['G3','Senior','45,001','80,000','Applicable','40%','Active'],
+    ['G4','Lead','80,001','1,50,000','Applicable','50%','Active'],
+    ['G5','Manager','1,50,001','3,00,000','Applicable','50%','Active']
+  ]},
+  'CFG-006':{ cols:['Employee Type','Code','PF','ESI','PT','Bonus','Status'], rows:[
+    ['Full-Time Permanent','FTP-001','Yes','Yes','Yes','Yes','Active'],
+    ['Contractual / Fixed Term','CTR-002','Yes','Yes','Yes','No','Active'],
+    ['Intern / Trainee','INT-003','No','No','No','No','Active'],
+    ['Consultant / Freelancer','CON-004','No','No','No','No','Active'],
+    ['Part-Time','PRT-005','No','Yes','No','No','Active']
+  ]},
+  'CFG-007':{ cols:['Shift Name','Code','Start','End','Grace (min)','Break (min)','Status'], rows:[
+    ['General Shift','GS-001','09:00 AM','06:00 PM','15','60','Active'],
+    ['Morning Shift','MS-002','06:00 AM','02:00 PM','10','30','Active'],
+    ['Afternoon Shift','AS-003','02:00 PM','10:00 PM','10','30','Active'],
+    ['Night Shift','NS-004','10:00 PM','06:00 AM','15','45','Active'],
+    ['Flexible Shift','FS-005','10:00 AM','07:00 PM','30','60','Active']
+  ]},
+  'CFG-008':{ cols:['Holiday Name','Date','Type','Day','Applicable Branches','Year','Status'], rows:[
+    ['Republic Day','26 Jan 2025','National','Sunday','All Branches','2025','Active'],
+    ['Holi','14 Mar 2025','National','Friday','All Branches','2025','Active'],
+    ['Independence Day','15 Aug 2025','National','Friday','All Branches','2025','Active'],
+    ['Gandhi Jayanti','02 Oct 2025','National','Thursday','All Branches','2025','Active'],
+    ['Diwali','20 Oct 2025','National','Monday','All Branches','2025','Active']
+  ]},
+  'CFG-009':{ cols:['Roster Name','Pattern','Week-Off 1','Week-Off 2','Emp Types','Eff. From','Status'], rows:[
+    ['Standard 5-Day','Mon-Fri','Saturday','Sunday','FTP, CTR','01 Apr 2025','Active'],
+    ['Alternate Saturday','Mon-Sat Alt','Alt Saturday','Sunday','FTP','01 Apr 2025','Active'],
+    ['6-Day Week','Mon-Sat','Sunday','-','CTR, PRT','01 Apr 2025','Active'],
+    ['Night Roster','Mon-Fri Night','Saturday','Sunday','FTP','01 Apr 2025','Active'],
+    ['Flexible Work','Custom','Saturday','Sunday','CON, INT','01 Apr 2025','Active']
+  ]},
+  'CFG-010':{ cols:['Component','Type','Formula','Taxable','PF Incl.','ESI Incl.','Status'], rows:[
+    ['Basic Salary','Earning','40% of CTC','Yes','Yes','Yes','Active'],
+    ['HRA','Earning','50% of Basic','Partial','No','No','Active'],
+    ['LTA','Earning','8.33% of Basic','No','No','No','Active'],
+    ['Provident Fund','Deduction','12% of Basic cap 15k','No','-','-','Active'],
+    ['Professional Tax','Deduction','State slab 200/mo','No','-','-','Active']
+  ]},
+  'CFG-011':{ cols:['FY','Regime','Slab From','Slab To','Tax Rate','Surcharge','Status'], rows:[
+    ['2025-26','New Regime','0','3,00,000','0%','0%','Active'],
+    ['2025-26','New Regime','3,00,001','7,00,000','5%','0%','Active'],
+    ['2025-26','New Regime','7,00,001','10,00,000','10%','0%','Active'],
+    ['2025-26','New Regime','10,00,001','12,00,000','15%','0%','Active'],
+    ['2025-26','New Regime','12,00,001','Above','30%','10% if above 50L','Active']
+  ]},
+  'CFG-012':{ cols:['Component','Emp Rate','Employer Rate','Wage Ceiling','Applicability','State','Status'], rows:[
+    ['Provident Fund','12%','12%','15,000/mo','FTP and CTR','Central','Active'],
+    ['ESI Employee','0.75%','-','21,000/mo','FTP, CTR, PRT','Central','Active'],
+    ['ESI Employer','-','3.25%','21,000/mo','FTP, CTR, PRT','Central','Active'],
+    ['Prof. Tax KA','-','200/mo','No ceiling','All Employees','Karnataka','Active'],
+    ['Prof. Tax MH','-','200/mo','No ceiling','All Employees','Maharashtra','Active']
+  ]},
+  'CFG-017':{ cols:['Role Name','Code','Parent Role','Access Level','Screens','Field Masking','Status'], rows:[
+    ['Super Administrator','SA-001','-','Full System','All 32','None','Active'],
+    ['HR Manager','HR-MGR','HR Director','Department','CFG-001 to 015','Salary Masked','Active'],
+    ['Finance Manager','FIN-MGR','CFO','Department','CFG-010 to 012','PAN/TAN Masked','Active'],
+    ['Department Head','DEPT-HD','HR Manager','Team','ESS + Reports','-','Active'],
+    ['Employee Self-Service','EMP-001','Dept Head','Self Only','ESS Only','All Sensitive','Active']
+  ]},
+  'CFG-031':{ cols:['Event Trigger','Channel','Recipient','Notice','Template','Auto-Send','Status'], rows:[
+    ['Payroll Run Complete','Email + SMS','HR Team','Same Day','TMPL-PAY-001','Yes','Active'],
+    ['Employee Birthday','Email','Manager + HR','1 Day','TMPL-BDAY-001','Yes','Active'],
+    ['Document Expiry','Email','Employee + HR','30 Days','TMPL-DOC-001','Yes','Active'],
+    ['Leave Pending Approval','Push + Email','Manager','Same Day','TMPL-LVE-001','Yes','Active'],
+    ['Probation End Alert','Email','HR Manager','15 Days','TMPL-PRB-001','Yes','Active']
+  ]},
+  'CFG-032':{ cols:['Data Category','Retention','Deletion Type','Archive','GDPR','Auto-Execute','Status'], rows:[
+    ['Employee Records','7 Years','Soft Delete','AWS S3 IN','Yes','No','Active'],
+    ['Payroll & Salary','10 Years','Soft Delete','AWS S3 IN','Yes','No','Active'],
+    ['Attendance Logs','3 Years','Hard Delete','Local Archive','No','Yes','Active'],
+    ['Audit Trail Logs','5 Years','Soft Delete','AWS S3 IN','Yes','No','Active'],
+    ['IT Declaration Forms','7 Years','Soft Delete','AWS S3 IN','Yes','No','Active']
+  ]},
+  'CFG-015':{ cols:['Machine','Component','Model','Finish Part','Part Code','Target Qty','Max Incentive','Status'], rows:[
+    ['VMC-001','Bracket','Model A','Powder Coated Bracket','FP-BRK-PC-001','500/Day','₹2,000','Active'],
+    ['LATHE-003','Drive Shaft','Series 7','Turned & Polished Shaft','FP-DSH-TP-002','200/Shift','₹3,000','Active'],
+    ['CNC-007','Housing Cover','Gen-2','Machined Housing Cover','FP-HSG-MC-003','350/Day','₹2,500','Active'],
+    ['PRESS-002','Body Panel','Type-B','Stamped Body Panel','FP-BPN-ST-004','800/Shift','₹4,000','Active'],
+    ['WELD-005','Frame Joint','MIG-X','Welded Frame Joint','FP-FRM-WD-005','150/Day','₹5,000','Active']
+  ]}
+};
+
+/* ── SMART FORM CONFIG — type:'text'|'select'|'time'|'date'|'number'|'workdays'|'shiftdays' ── */
+/* addNew:true  → shows inline "+ Add New" link after dropdown */
+var FORM_CONFIG = {
+  'CFG-002':[
+    {label:'Branch Name',type:'text',placeholder:'e.g. Bengaluru HQ'},
+    {label:'Branch Code',type:'text',placeholder:'e.g. BLR-HQ-001'},
+    {label:'City',type:'text',placeholder:'e.g. Bengaluru'},
+    {label:'State',type:'select',options:['Karnataka','Maharashtra','Telangana','Tamil Nadu','Haryana','Delhi','Gujarat','Rajasthan','Uttar Pradesh','West Bengal'],addNew:true},
+    {label:'Branch Type',type:'select',options:['Head Office','Regional','Satellite','Warehouse','Support Centre'],addNew:true},
+    {label:'Contact Person',type:'text',placeholder:'Full name'},
+    {label:'Phone',type:'text',placeholder:'+91-'},
+    {label:'Geo-Fencing Radius (m)',type:'number',placeholder:'200'}
+  ],
+  'CFG-003':[
+    {label:'Department Name',type:'text',placeholder:'e.g. Engineering'},
+    {label:'Dept Code',type:'text',placeholder:'e.g. ENG-001'},
+    {label:'Parent Department',type:'select',options:['Technology','Corporate','Business','Operations','Support'],addNew:true},
+    {label:'Cost Center',type:'text',placeholder:'e.g. CC-ENG-001'},
+    {label:'Department Head',type:'text',placeholder:'Full name'},
+    {label:'No. of Positions',type:'number',placeholder:'0'}
+  ],
+  'CFG-004':[
+    {label:'Designation Name',type:'text',placeholder:'e.g. Software Engineer'},
+    {label:'Designation Code',type:'text',placeholder:'e.g. SE-L3'},
+    {label:'Grade Band',type:'select',options:['G1-G2','G2-G3','G3-G4','G4-G5','G5-G6','G6-G7','G7+'],addNew:true},
+    {label:'Is Managerial?',type:'select',options:['No','Yes']},
+    {label:'Reports To Level',type:'select',options:['Tech Lead L4','Engineering Manager L5','VP Engineering L7','HR Manager L5','VP Product L7','CEO L9','CTO L9'],addNew:true},
+    {label:'Probation (Days)',type:'number',placeholder:'90'}
+  ],
+  'CFG-005':[
+    {label:'Grade Code',type:'text',placeholder:'e.g. G3'},
+    {label:'Grade Name',type:'text',placeholder:'e.g. Senior'},
+    {label:'Pay Band Min (INR)',type:'number',placeholder:'45000'},
+    {label:'Pay Band Max (INR)',type:'number',placeholder:'80000'},
+    {label:'PF Applicable',type:'select',options:['Applicable','Not Applicable']},
+    {label:'HRA Slab (%)',type:'select',options:['40%','50%','60%'],addNew:true}
+  ],
+  'CFG-006':[
+    {label:'Employee Type',type:'text',placeholder:'e.g. Full-Time Permanent'},
+    {label:'Type Code',type:'text',placeholder:'e.g. FTP-001'},
+    {label:'PF Applicable?',type:'select',options:['Yes','No']},
+    {label:'ESI Applicable?',type:'select',options:['Yes','No']},
+    {label:'PT Applicable?',type:'select',options:['Yes','No']},
+    {label:'Bonus Applicable?',type:'select',options:['Yes','No']}
+  ],
+  'CFG-007':[
+    {label:'Shift Name',type:'text',placeholder:'e.g. General Shift'},
+    {label:'Shift Code',type:'text',placeholder:'e.g. GS-001'},
+    {label:'Start Time',type:'time',placeholder:'09:00'},
+    {label:'End Time',type:'time',placeholder:'18:00'},
+    {label:'Grace Period (Min)',type:'number',placeholder:'15'},
+    {label:'Break Duration (Min)',type:'number',placeholder:'60'},
+    {label:'Shift Type',type:'select',options:['Day Shift','Night Shift','Rotational','Flexible'],addNew:true},
+    {label:'Applicable To',type:'select',options:['All Employees','Full-Time Permanent','Contractual','Night Shift Staff'],addNew:true},
+    {label:'Working Days',type:'workdays',label2:'Select working days for this shift'}
+  ],
+  'CFG-008':[
+    {label:'Holiday Name',type:'text',placeholder:'e.g. Republic Day'},
+    {label:'Holiday Date',type:'date'},
+    {label:'Holiday Type',type:'select',options:['National','Regional','Restricted / Optional'],addNew:true},
+    {label:'Applicable Branches',type:'select',options:['All Branches','Bengaluru HQ','Mumbai Office','Hyderabad Dev Centre','Chennai Support','Delhi NCR'],addNew:true},
+    {label:'Year',type:'number',placeholder:'2025'},
+    {label:'Remarks',type:'text',placeholder:'Optional note'}
+  ],
+  'CFG-009':[
+    {label:'Roster Name',type:'text',placeholder:'e.g. Standard 5-Day'},
+    {label:'Working Days Pattern',type:'select',options:['Mon-Fri (5 days)','Mon-Sat (6 days)','Mon-Sat Alternate','Custom'],addNew:true},
+    {label:'Applicable Emp Types',type:'select',options:['Full-Time Permanent','Contractual','Intern','Consultant','Part-Time','All'],addNew:true},
+    {label:'Effective From',type:'date'},
+    {label:'Working Days',type:'workdays',label2:'Deselect non-working days'}
+  ],
+  'CFG-010':[
+    {label:'Component Name',type:'text',placeholder:'e.g. Basic Salary'},
+    {label:'Component Type',type:'select',options:['Earning','Deduction','Reimbursement','Bonus'],addNew:true},
+    {label:'Calculation Formula',type:'text',placeholder:'e.g. 40% of CTC'},
+    {label:'Taxable?',type:'select',options:['Yes','No','Partial']},
+    {label:'PF Inclusion',type:'select',options:['Yes','No']},
+    {label:'ESI Inclusion',type:'select',options:['Yes','No']}
+  ],
+  'CFG-011':[
+    {label:'Financial Year',type:'text',placeholder:'e.g. 2025-26'},
+    {label:'Tax Regime',type:'select',options:['New Regime','Old Regime'],addNew:false},
+    {label:'Slab From (INR)',type:'number',placeholder:'0'},
+    {label:'Slab To (INR)',type:'number',placeholder:'300000'},
+    {label:'Tax Rate (%)',type:'number',placeholder:'5'},
+    {label:'Surcharge (%)',type:'number',placeholder:'0'}
+  ],
+  'CFG-012':[
+    {label:'Component Name',type:'text',placeholder:'e.g. Provident Fund'},
+    {label:'Employee Rate (%)',type:'text',placeholder:'e.g. 12%'},
+    {label:'Employer Rate (%)',type:'text',placeholder:'e.g. 12%'},
+    {label:'Wage Ceiling (INR/mo)',type:'number',placeholder:'15000'},
+    {label:'Applicability',type:'select',options:['FTP and CTR','FTP only','All Employees','FTP, CTR, PRT'],addNew:true},
+    {label:'State',type:'select',options:['Central','Karnataka','Maharashtra','Tamil Nadu','Telangana','Delhi','Gujarat','West Bengal','Rajasthan','Uttar Pradesh','Kerala','Punjab'],addNew:true}
+  ],
+  'CFG-017':[
+    {label:'Role Name',type:'text',placeholder:'e.g. HR Manager'},
+    {label:'Role Code',type:'text',placeholder:'e.g. HR-MGR'},
+    {label:'Parent Role',type:'select',options:['Super Administrator','HR Director','CFO','CTO','CEO','Department Head'],addNew:true},
+    {label:'Access Level',type:'select',options:['Full System','Department','Team','Self Only'],addNew:true},
+    {label:'Screen Permissions',type:'text',placeholder:'e.g. CFG-001 to CFG-015'},
+    {label:'Field Masking Rules',type:'select',options:['None','Salary Masked','PAN/TAN Masked','All Sensitive','Custom'],addNew:true}
+  ],
+  'CFG-031':[
+    {label:'Event Trigger',type:'select',options:['Payroll Run Complete','Employee Birthday','Document Expiry','Leave Pending Approval','Probation End Alert','New Joiner','Resignation Filed','FnF Settlement'],addNew:true},
+    {label:'Notification Channel',type:'select',options:['Email','SMS','Push Notification','Email + SMS','Email + Push','All Channels'],addNew:true},
+    {label:'Recipient Type',type:'select',options:['HR Team','Manager','Employee','Manager + HR','All'],addNew:true},
+    {label:'Advance Notice (Days)',type:'number',placeholder:'0'},
+    {label:'Email Template',type:'text',placeholder:'e.g. TMPL-PAY-001'},
+    {label:'Auto-Send',type:'select',options:['Yes','No']}
+  ],
+  'CFG-032':[
+    {label:'Data Category',type:'select',options:['Employee Records','Payroll & Salary','Attendance Logs','Audit Trail Logs','IT Declaration Forms','Leave Records','Document Repository'],addNew:true},
+    {label:'Retention Period (Years)',type:'number',placeholder:'7'},
+    {label:'Deletion Type',type:'select',options:['Soft Delete','Hard Delete','Anonymise']},
+    {label:'Archive Location',type:'select',options:['AWS S3 IN','Local Archive','Azure Blob IN','On-Premise NAS'],addNew:true},
+    {label:'GDPR Flag',type:'select',options:['Yes','No']},
+    {label:'Auto-Execute',type:'select',options:['Yes','No']}
+  ],
+  'CFG-015':[
+    {label:'__pi__',type:'production-incentive'}
+  ]
+};
+
+var currentScreen = 'CFG-001';
+var screenOrder = Object.keys(SCREENS);
+var startTime = Date.now();
+
+/* ══ PROGRESS STRIP ══ */
+function updateProgStrip(code, s) {
+  var sec = CODE_SEC[code] || 'org';
+  var steps = SEC_STEPS[sec];
+  var pi = document.getElementById('psInner');
+  var pc = document.getElementById('psCount');
+  if (!pi) return;
+  pi.innerHTML = '';
+  var ai = -1;
+  for (var i = 0; i < steps.length; i++) { if (steps[i][0] === code) { ai = i; break; } }
+  for (var i = 0; i < steps.length; i++) {
+    var sd = document.createElement('div'); sd.className = 'ps-step';
+    var dot = document.createElement('div');
+    dot.className = 'ps-dot' + (i < ai ? ' done' : i === ai ? ' active' : '');
+    dot.textContent = String(i + 1);
+    var lbl = document.createElement('span'); lbl.className = 'ps-lbl'; lbl.textContent = ' ' + steps[i][2];
+    sd.appendChild(dot); sd.appendChild(lbl); pi.appendChild(sd);
+    if (i < steps.length - 1) {
+      var ln = document.createElement('div');
+      ln.className = 'ps-line' + (i < ai ? ' done' : '');
+      pi.appendChild(ln);
+    }
+  }
+  if (pc) pc.innerHTML = '<b>' + SEC_LABELS[sec] + '</b> &middot; Screen ' + s.step + ' / 32';
+}
+
+/* ══ SECTION GROUPS ══ */
+function openSecGroup(sec) {
+  var all = ['org','att','pay','sec'];
+  for (var i = 0; i < all.length; i++) {
+    var b = document.getElementById('grpbody-' + all[i]);
+    var a = document.getElementById('grparr-' + all[i]);
+    var h = document.getElementById('grphdr-' + all[i]);
+    if (!b) continue;
+    if (all[i] === sec) { b.classList.remove('collapsed'); if (a) a.classList.remove('open'); if (h) h.classList.add('active-grp'); }
+    else { b.classList.add('collapsed'); if (a) a.classList.add('open'); if (h) h.classList.remove('active-grp'); }
+  }
+}
+function toggleSecGroup(sec) {
+  var b = document.getElementById('grpbody-' + sec);
+  var a = document.getElementById('grparr-' + sec);
+  var h = document.getElementById('grphdr-' + sec);
+  if (!b) return;
+  var isOpen = !b.classList.contains('collapsed');
+  b.classList.toggle('collapsed', isOpen);
+  if (a) a.classList.toggle('open', isOpen);
+  if (h) h.classList.toggle('active-grp', !isOpen);
+}
+
+/* ══ COMPANY LIST HOVER ══ */
+var coTimer = null;
+function expandCoList() {
+  clearTimeout(coTimer);
+  var b = document.getElementById('coListBody'); var a = document.getElementById('coArr');
+  if (b) { b.style.maxHeight = '280px'; b.style.opacity = '1'; }
+  if (a) a.style.transform = 'rotate(180deg)';
+}
+function collapseCoList() {
+  coTimer = setTimeout(function() {
+    var b = document.getElementById('coListBody'); var a = document.getElementById('coArr');
+    if (b) { b.style.maxHeight = '0'; b.style.opacity = '0'; }
+    if (a) a.style.transform = 'rotate(0deg)';
+  }, 350);
+}
+
+/* ══ NAVIGATE ══ */
+function navigate(code, label, icon) {
+  currentScreen = code;
+  var s = SCREENS[code];
+  if (!s) return;
+  closeDrawer();
+  document.querySelectorAll('.nav-item').forEach(function(i) { i.classList.remove('active'); });
+  var ne = document.getElementById('nav-' + code);
+  if (ne) { ne.classList.add('active'); ne.scrollIntoView({block:'nearest'}); }
+  document.getElementById('breadcrumbLabel').textContent = label;
+  document.getElementById('detName').textContent = label;
+  document.getElementById('detMeta').textContent = code + ' \u00b7 ' + s.desc.substring(0, 65) + '...';
+  var clr = s.color.split(',');
+  document.getElementById('detLogo').style.background = 'linear-gradient(135deg,' + clr[0].trim() + ',' + clr[1].trim() + ')';
+  document.getElementById('detLogo').textContent = icon;
+  document.querySelectorAll('.sp').forEach(function(sp) { sp.classList.remove('sel','green','blue','amber'); });
+  var asp = document.querySelector('.sp[data-val="Active"]');
+  if (asp) asp.classList.add('sel','green');
+  updateProgStrip(code, s);
+  openSecGroup(CODE_SEC[code] || 'org');
+  document.getElementById('tabsBar').style.display = s.hasTabs ? '' : 'none';
+  document.getElementById('screen-CFG-001').style.display = code === 'CFG-001' ? '' : 'none';
+  document.getElementById('screen-MOCK').style.display = code !== 'CFG-001' ? '' : 'none';
+  var dsb = document.querySelector('#detActions .btn-primary');
+  if (dsb) dsb.onclick = code === 'CFG-001' ? saveRecord : function() { showToast(label + ' saved', 'success'); };
+  if (code !== 'CFG-001') renderMock(code, label, icon, s);
+  document.getElementById('formScroll').scrollTop = 0;
+  showToast('Loaded: ' + label + ' (' + code + ')', 'info');
+}
+
+/* ══ BUILD SMART FIELD ══ */
+function buildField(cfg, idx) {
+  var wrap = document.createElement('div');
+  wrap.className = 'field';
+
+  var lbl = document.createElement('label');
+  lbl.textContent = cfg.label;
+  wrap.appendChild(lbl);
+
+  if (cfg.type === 'select') {
+    var sel = document.createElement('select');
+    sel.className = 'inp';
+    sel.setAttribute('data-field', cfg.label);
+    var defOpt = document.createElement('option');
+    defOpt.value = ''; defOpt.textContent = '-- Select ' + cfg.label + ' --';
+    sel.appendChild(defOpt);
+    (cfg.options || []).forEach(function(opt) {
+      var o = document.createElement('option');
+      o.value = opt; o.textContent = opt; sel.appendChild(o);
+    });
+    wrap.appendChild(sel);
+    if (cfg.addNew) {
+      var addLink = document.createElement('div');
+      addLink.style.cssText = 'margin-top:4px;';
+      var addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.style.cssText = 'font-size:10px;color:var(--teal);background:none;border:none;cursor:pointer;padding:2px 0;font-family:inherit;display:flex;align-items:center;gap:3px;';
+      addBtn.innerHTML = '+ Add New ' + cfg.label;
+      (function(s, lb) {
+        addBtn.onclick = function() {
+          var val = prompt('Add new ' + lb + ':');
+          if (val && val.trim()) {
+            var o = document.createElement('option');
+            o.value = val.trim(); o.textContent = val.trim();
+            s.insertBefore(o, s.lastChild);
+            s.value = val.trim();
+            showToast(lb + ' "' + val.trim() + '" added', 'success');
+          }
+        };
+      })(sel, cfg.label);
+      addLink.appendChild(addBtn);
+      wrap.appendChild(addLink);
+    }
+  } else if (cfg.type === 'time') {
+    var inp = document.createElement('input');
+    inp.className = 'inp'; inp.type = 'time';
+    inp.setAttribute('data-field', cfg.label);
+    wrap.appendChild(inp);
+  } else if (cfg.type === 'date') {
+    var inp = document.createElement('input');
+    inp.className = 'inp'; inp.type = 'date';
+    inp.setAttribute('data-field', cfg.label);
+    wrap.appendChild(inp);
+  } else if (cfg.type === 'number') {
+    var inp = document.createElement('input');
+    inp.className = 'inp'; inp.type = 'number';
+    inp.placeholder = cfg.placeholder || '';
+    inp.setAttribute('data-field', cfg.label);
+    wrap.appendChild(inp);
+  } else {
+    var inp = document.createElement('input');
+    inp.className = 'inp'; inp.type = 'text';
+    inp.placeholder = cfg.placeholder || cfg.label;
+    inp.setAttribute('data-field', cfg.label);
+    wrap.appendChild(inp);
+  }
+  return wrap;
+}
+
+/* ══ BUILD WORKING DAYS SELECTOR ══ */
+function buildWorkdaysField(cfg) {
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'grid-column:1/-1;margin-bottom:11px;';
+  var lbl = document.createElement('label');
+  lbl.style.cssText = 'font-size:9.5px;font-weight:700;color:var(--txt-muted);text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:8px;';
+  lbl.textContent = cfg.label2 || 'Working Days';
+  wrap.appendChild(lbl);
+  var days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  var defaults = ['Mon','Tue','Wed','Thu','Fri'];
+  var dayRow = document.createElement('div');
+  dayRow.className = 'wdays';
+  dayRow.setAttribute('data-field', 'Working Days');
+  days.forEach(function(d) {
+    var btn = document.createElement('div');
+    btn.className = 'wday' + (defaults.indexOf(d) > -1 ? ' on' : '');
+    btn.textContent = d;
+    btn.onclick = function() {
+      btn.classList.toggle('on');
+      var sel = Array.from(dayRow.querySelectorAll('.wday.on')).map(function(x){ return x.textContent; }).join(', ');
+      showToast('Working days: ' + (sel || 'None'), 'info');
+    };
+    dayRow.appendChild(btn);
+  });
+  wrap.appendChild(dayRow);
+  return wrap;
+}
+
+
+/* ══ CFG-015 PRODUCTION INCENTIVE RENDERER ══ */
+var PI_MACHINES = [
+  {val:'VMC-001',   label:'VMC-001 \u2014 Vertical Machining Centre'},
+  {val:'LATHE-003', label:'LATHE-003 \u2014 CNC Lathe'},
+  {val:'CNC-007',   label:'CNC-007 \u2014 CNC Milling'},
+  {val:'PRESS-002', label:'PRESS-002 \u2014 Hydraulic Press'},
+  {val:'WELD-005',  label:'WELD-005 \u2014 MIG Welder'},
+  {val:'GRIND-009', label:'GRIND-009 \u2014 Surface Grinder'}
+];
+var PI_COMPONENTS = {
+  'VMC-001':   [{name:'Bracket',code:'COMP-BRK-001'},{name:'Gear',code:'COMP-GER-006'},{name:'Housing Cover',code:'COMP-HSG-003'}],
+  'LATHE-003': [{name:'Drive Shaft',code:'COMP-DSH-002'},{name:'Spindle',code:'COMP-SPN-007'}],
+  'CNC-007':   [{name:'Housing Cover',code:'COMP-HSG-003'},{name:'Bracket',code:'COMP-BRK-001'}],
+  'PRESS-002': [{name:'Body Panel',code:'COMP-BPN-004'},{name:'Frame',code:'COMP-FRM-005'}],
+  'WELD-005':  [{name:'Frame Joint',code:'COMP-FRM-005'},{name:'Body Panel',code:'COMP-BPN-004'}],
+  'GRIND-009': [{name:'Spindle',code:'COMP-SPN-007'},{name:'Drive Shaft',code:'COMP-DSH-002'}]
+};
+var PI_MODELS = {
+  'Bracket':      [{name:'Model A',code:'MDL-A-001'},{name:'Model B',code:'MDL-B-002'}],
+  'Drive Shaft':  [{name:'Series 7',code:'MDL-S7-003'},{name:'Series 9',code:'MDL-S9-004'}],
+  'Housing Cover':[{name:'Gen-2',code:'MDL-G2-004'},{name:'Gen-3',code:'MDL-G3-005'}],
+  'Body Panel':   [{name:'Type-B',code:'MDL-TB-005'},{name:'Type-C',code:'MDL-TC-006'}],
+  'Frame Joint':  [{name:'MIG-X',code:'MDL-MX-006'},{name:'MIG-Y',code:'MDL-MY-007'}],
+  'Frame':        [{name:'MIG-X',code:'MDL-MX-006'},{name:'MIG-Y',code:'MDL-MY-007'}],
+  'Gear':         [{name:'G-Series 1',code:'MDL-GS1-008'}],
+  'Spindle':      [{name:'SP-100',code:'MDL-SP1-009'}]
+};
+var PI_FINISH = {
+  'MDL-A-001': [{name:'Powder Coated Bracket',code:'FP-BRK-PC-001'},{name:'Raw Bracket',code:'FP-BRK-RW-002'}],
+  'MDL-B-002': [{name:'Anodised Bracket',code:'FP-BRK-AN-003'}],
+  'MDL-S7-003':[{name:'Turned & Polished Shaft',code:'FP-DSH-TP-002'},{name:'Ground Shaft',code:'FP-DSH-GR-003'}],
+  'MDL-S9-004':[{name:'Heavy Duty Shaft',code:'FP-DSH-HD-004'}],
+  'MDL-G2-004':[{name:'Machined Housing Cover',code:'FP-HSG-MC-003'},{name:'Painted Housing',code:'FP-HSG-PT-004'}],
+  'MDL-G3-005':[{name:'Chrome Housing Cover',code:'FP-HSG-CR-005'}],
+  'MDL-TB-005':[{name:'Stamped Body Panel',code:'FP-BPN-ST-004'},{name:'Painted Body Panel',code:'FP-BPN-PT-005'}],
+  'MDL-TC-006':[{name:'Galvanised Body Panel',code:'FP-BPN-GV-006'}],
+  'MDL-MX-006':[{name:'Welded Frame Joint',code:'FP-FRM-WD-005'},{name:'Powder Coated Frame',code:'FP-FRM-PC-006'}],
+  'MDL-MY-007':[{name:'Heavy Frame Joint',code:'FP-FRM-HV-007'}],
+  'MDL-GS1-008':[{name:'Hardened Gear',code:'FP-GER-HD-001'}],
+  'MDL-SP1-009':[{name:'Ground Spindle',code:'FP-SPN-GR-001'}]
+};
+
+/* ── small helpers ────────────────────────────────────────── */
+function piWrap(lbl) {
+  var w = document.createElement('div'); w.style.cssText = 'display:flex;flex-direction:column;gap:5px;';
+  var l = document.createElement('label');
+  l.style.cssText = 'font-size:9.5px;font-weight:700;color:var(--txt-muted);text-transform:uppercase;letter-spacing:.6px;';
+  l.textContent = lbl; w.appendChild(l); return w;
+}
+function piAddBtn(label, fn) {
+  var b = document.createElement('button'); b.type = 'button';
+  b.style.cssText = 'background:none;border:none;color:var(--teal);font-size:10px;font-weight:700;font-family:inherit;cursor:pointer;padding:2px 0;text-align:left;';
+  b.textContent = label; b.onclick = fn; return b;
+}
+function piSecHdr(num, title, sub) {
+  var d = document.createElement('div');
+  d.style.cssText = 'display:flex;align-items:center;gap:9px;padding:10px 12px;background:var(--teal-dim);border-radius:8px;margin-bottom:12px;';
+  d.innerHTML = '<div style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#b45309);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;flex-shrink:0;">'+num+'</div>'
+    + '<div><div style="font-size:12px;font-weight:700;color:var(--txt);">'+title+'</div>'
+    + '<div style="font-size:10px;color:var(--txt-muted);">'+sub+'</div></div>';
+  return d;
+}
+function piPillTxt(s) {
+  var r = s.from+' \u2013 '+(s.to===9999?'\u221e':s.to)+' pcs';
+  var p = s.type==='per-part'?('\u20b9'+(s.amount||0)+'/part')
+        : s.type==='fixed'   ?('\u20b9'+(s.amount||0)+' fixed')
+        : ('\u20b9'+(s.perPart||0)+'/part + \u20b9'+(s.fixed||0)+' fixed');
+  return '\u{1F4E6} '+r+'  \u2192  '+p;
+}
+function piRefPill(slabs, i) {
+  var p = document.getElementById('pi-pill-'+i); if (p) p.textContent = piPillTxt(slabs[i]);
+}
+
+/* ── multi-select tag picker ─────────────────────────────── */
+/* Returns a {el, getSelected, setItems} object              */
+function piTagPicker(idPrefix, placeholder, onChange) {
+  var selected = [];
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
+
+  /* pills row */
+  var pillsRow = document.createElement('div');
+  pillsRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;min-height:28px;';
+
+  /* dropdown row */
+  var drpRow = document.createElement('div');
+  drpRow.style.cssText = 'display:flex;gap:6px;align-items:center;';
+
+  var drp = document.createElement('select');
+  drp.style.cssText = 'flex:1;background:var(--inp);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--txt);font-size:11.5px;font-family:inherit;outline:none;cursor:pointer;';
+  var defOpt = document.createElement('option'); defOpt.value=''; defOpt.textContent=placeholder; drp.appendChild(defOpt);
+
+  var addSelBtn = document.createElement('button'); addSelBtn.type='button';
+  addSelBtn.style.cssText = 'padding:7px 12px;border-radius:7px;border:1px solid var(--border-md);background:var(--teal-dim);color:var(--teal);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;';
+  addSelBtn.textContent = '+ Add';
+  addSelBtn.onclick = function() {
+    var v = drp.value; var txt = drp.options[drp.selectedIndex] ? drp.options[drp.selectedIndex].textContent : '';
+    if (!v || selected.some(function(s){return s.val===v;})) return;
+    selected.push({val:v, label:txt});
+    addPill(v, txt);
+    drp.selectedIndex = 0;
+    if (onChange) onChange(selected);
+  };
+
+  drpRow.appendChild(drp); drpRow.appendChild(addSelBtn);
+  wrap.appendChild(pillsRow); wrap.appendChild(drpRow);
+
+  function addPill(val, label) {
+    var pill = document.createElement('span');
+    pill.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:var(--teal-dim);border:1px solid rgba(0,180,216,.3);color:var(--teal);border-radius:20px;padding:3px 10px 3px 11px;font-size:10.5px;font-weight:700;';
+    pill.textContent = label.split('\u2014')[0].trim();
+    var x = document.createElement('button'); x.type='button';
+    x.style.cssText = 'background:none;border:none;color:var(--teal);cursor:pointer;font-size:13px;padding:0;line-height:1;opacity:.7;';
+    x.textContent = '\u00d7';
+    x.onmouseenter = function(){this.style.opacity='1';}; x.onmouseleave = function(){this.style.opacity='.7';};
+    x.onclick = function() {
+      selected = selected.filter(function(s){return s.val!==val;});
+      pillsRow.removeChild(pill);
+      if (onChange) onChange(selected);
+    };
+    pill.appendChild(x); pillsRow.appendChild(pill);
+  }
+
+  return {
+    el: wrap,
+    getSelected: function() { return selected.slice(); },
+    setItems: function(items, key) {
+      /* repopulate dropdown keeping existing selections */
+      while (drp.options.length > 1) drp.remove(1);
+      items.forEach(function(it) {
+        var o = document.createElement('option'); o.value = it[key]||it.val||it; o.textContent = it.label||it[key]||it;
+        o.dataset.name = it.name||''; o.dataset.code = it.code||''; drp.appendChild(o);
+      });
+    },
+    clearSelected: function() { selected=[]; pillsRow.innerHTML=''; if (onChange) onChange([]); },
+    addCustomItem: function(val, label) {
+      if (selected.some(function(s){return s.val===val;})) return;
+      var o = document.createElement('option'); o.value=val; o.textContent=label; drp.appendChild(o);
+      selected.push({val:val, label:label}); addPill(val, label);
+      if (onChange) onChange(selected);
+    }
+  };
+}
+
+/* ── slab renderer ────────────────────────────────────────── */
+function piRenderSlabs(slabs, container) {
+  container.innerHTML = '';
+  slabs.forEach(function(s,i){ container.appendChild(piMakeSlab(slabs,i,container)); });
+}
+function piMakeSlab(slabs, i, container) {
+  var s = slabs[i];
+  var row = document.createElement('div');
+  row.style.cssText = 'background:var(--navy-mid);border:1px solid var(--border);border-radius:9px;padding:14px;position:relative;margin-top:8px;';
+  var badge = document.createElement('div');
+  badge.style.cssText = 'position:absolute;top:-9px;left:12px;background:var(--navy-card);border:1px solid var(--border-md);border-radius:5px;font-size:9px;font-weight:800;color:var(--txt-muted);padding:1px 7px;text-transform:uppercase;letter-spacing:.5px;';
+  badge.textContent = 'SLAB '+(i+1); row.appendChild(badge);
+  var del = document.createElement('button'); del.type='button';
+  del.style.cssText = 'position:absolute;top:10px;right:10px;background:none;border:none;color:#ef4444;cursor:pointer;font-size:13px;opacity:.55;line-height:1;';
+  del.textContent = '\u00d7'; del.onmouseenter=function(){this.style.opacity='1';}; del.onmouseleave=function(){this.style.opacity='.55';};
+  (function(idx){ del.onclick=function(){ if(slabs.length<=1){showToast('At least one slab required','error');return;} slabs.splice(idx,1); piRenderSlabs(slabs,container); showToast('Slab removed','info'); }; })(i);
+  row.appendChild(del);
+  var rg = document.createElement('div'); rg.style.cssText='display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:11px;margin-top:4px;';
+  var fw=piWrap('Qty From (pcs) *'); var fi=document.createElement('input'); fi.className='inp'; fi.type='number'; fi.min='0'; fi.value=s.from; fi.style.fontFamily='monospace';
+  (function(idx){fi.oninput=function(){slabs[idx].from=parseInt(this.value)||0;piRefPill(slabs,idx);};})(i);
+  fw.appendChild(fi); rg.appendChild(fw);
+  var tw=piWrap('Qty To (pcs) *'); var ti=document.createElement('input'); ti.className='inp'; ti.type='number'; ti.min='0'; ti.value=s.to===9999?'':s.to; ti.placeholder='No limit (\u221e)'; ti.style.fontFamily='monospace';
+  (function(idx){ti.oninput=function(){slabs[idx].to=this.value===''?9999:(parseInt(this.value)||0);piRefPill(slabs,idx);};})(i);
+  tw.appendChild(ti); rg.appendChild(tw);
+  var lw=piWrap('Label (optional)'); var li=document.createElement('input'); li.className='inp'; li.type='text'; li.value=s.label||('Slab '+(i+1)); li.placeholder='e.g. Good Output';
+  (function(idx){li.oninput=function(){slabs[idx].label=this.value;};})(i);
+  lw.appendChild(li); rg.appendChild(lw);
+  row.appendChild(rg);
+  var tl=document.createElement('div'); tl.style.cssText='font-size:9.5px;font-weight:700;color:var(--txt-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;'; tl.textContent='Incentive Type *'; row.appendChild(tl);
+  var tog=document.createElement('div'); tog.style.cssText='display:flex;border:1px solid var(--border-md);border-radius:7px;overflow:hidden;margin-bottom:11px;';
+  [['per-part','\u20b9 Per Part'],['fixed','\u20b9 Fixed Payout'],['both','\u20b9 Per Part + Fixed']].forEach(function(tp){
+    var b=document.createElement('button'); b.type='button'; b.textContent=tp[1];
+    b.style.cssText='flex:1;padding:7px 2px;font-size:10.5px;font-weight:700;border:none;cursor:pointer;font-family:inherit;transition:background .15s,color .15s;';
+    b.style.background=s.type===tp[0]?'var(--teal-dim)':'var(--inp)';
+    b.style.color     =s.type===tp[0]?'var(--teal)':'var(--txt-muted)';
+    (function(key,idx){b.onclick=function(){slabs[idx].type=key;piRenderSlabs(slabs,container);};})(tp[0],i);
+    tog.appendChild(b);
+  }); row.appendChild(tog);
+  var cols=s.type==='both'?'1fr 1fr':'1fr 1fr 1fr';
+  var ag=document.createElement('div'); ag.style.cssText='display:grid;grid-template-columns:'+cols+';gap:10px;';
+  if(s.type==='per-part'||s.type==='both'){
+    var ppw=piWrap(s.type==='both'?'\u20b9 Per Part (above target)':'\u20b9 Per Part Produced');
+    var ppi=document.createElement('input'); ppi.className='inp'; ppi.type='number'; ppi.min='0'; ppi.step='0.5'; ppi.value=s.type==='both'?(s.perPart||0):(s.amount||0); ppi.style.fontFamily='monospace';
+    (function(idx){ppi.oninput=function(){var v=parseFloat(this.value)||0;if(slabs[idx].type==='both')slabs[idx].perPart=v;else slabs[idx].amount=v;piRefPill(slabs,idx);};})(i);
+    ppw.appendChild(ppi); ag.appendChild(ppw);
+  }
+  if(s.type==='fixed'||s.type==='both'){
+    var fxw=piWrap('\u20b9 Fixed Payout (if range hit)');
+    var fxi=document.createElement('input'); fxi.className='inp'; fxi.type='number'; fxi.min='0'; fxi.value=s.type==='both'?(s.fixed||0):(s.amount||0); fxi.style.fontFamily='monospace';
+    (function(idx){fxi.oninput=function(){var v=parseFloat(this.value)||0;if(slabs[idx].type==='both')slabs[idx].fixed=v;else slabs[idx].amount=v;piRefPill(slabs,idx);};})(i);
+    fxw.appendChild(fxi); ag.appendChild(fxw);
+  }
+  if(s.type==='per-part'){
+    var capw=piWrap('Slab Max Cap (\u20b9)'); var capi=document.createElement('input'); capi.className='inp'; capi.type='number'; capi.min='0'; capi.value=s.slabCap||''; capi.placeholder='No cap';
+    (function(idx){capi.oninput=function(){slabs[idx].slabCap=parseFloat(this.value)||0;};})(i);
+    capw.appendChild(capi); ag.appendChild(capw);
+  }
+  row.appendChild(ag);
+  var pill=document.createElement('div'); pill.id='pi-pill-'+i;
+  pill.style.cssText='display:inline-flex;align-items:center;font-size:10.5px;font-family:monospace;background:var(--navy-dark);border:1px solid var(--border);border-radius:6px;padding:4px 10px;color:var(--teal);margin-top:8px;';
+  pill.textContent=piPillTxt(s); row.appendChild(pill);
+  return row;
+}
+
+/* ── pending config card (generated before save) ────────────── */
+function piMakePendingCard(cfg, idx, pendingArr, pendingWrap, data, tbody) {
+  var card = document.createElement('div');
+  card.style.cssText = 'background:var(--navy-mid);border:1px solid var(--border-md);border-radius:10px;padding:13px 14px;position:relative;';
+
+  /* badge */
+  var badge = document.createElement('div');
+  badge.style.cssText = 'font-size:9px;font-weight:800;background:var(--amber-dim);color:var(--amber);border:1px solid rgba(245,158,11,.3);border-radius:5px;padding:2px 8px;display:inline-block;margin-bottom:8px;';
+  badge.textContent = 'PENDING #'+(idx+1)+' \u2014 Not Saved Yet';
+  card.appendChild(badge);
+
+  /* chain */
+  var chain = document.createElement('div');
+  chain.style.cssText = 'font-size:11.5px;font-weight:700;color:var(--txt);margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;';
+  chain.innerHTML = '<span style="background:var(--teal-dim);color:var(--teal);border-radius:5px;padding:2px 8px;font-size:10.5px;">\uD83D\uDD27 '+cfg.machine+'</span>'
+    + '<span style="color:var(--txt-muted);">\u2192</span>'
+    + '<span style="background:var(--amber-dim);color:var(--amber);border-radius:5px;padding:2px 8px;font-size:10.5px;">'+cfg.comp+'</span>'
+    + '<span style="color:var(--txt-muted);">\u2192</span>'
+    + '<span style="background:var(--purple-dim);color:var(--purple);border-radius:5px;padding:2px 8px;font-size:10.5px;">'+cfg.model+'</span>'
+    + '<span style="color:var(--txt-muted);">\u2192</span>'
+    + '<span style="background:var(--green-dim);color:var(--green);border-radius:5px;padding:2px 8px;font-size:10.5px;">'+cfg.finishPart+'</span>';
+  card.appendChild(chain);
+
+  /* meta */
+  var meta = document.createElement('div');
+  meta.style.cssText = 'font-size:10px;color:var(--txt-muted);margin-bottom:8px;';
+  meta.textContent = 'Part Code: '+cfg.partCode+'  \u00b7  Target: '+cfg.targetQty+'/'+cfg.targetPer+'  \u00b7  Slabs: '+cfg.slabs.length+'  \u00b7  Max Cap: '+(cfg.maxCap?'\u20b9'+parseInt(cfg.maxCap).toLocaleString('en-IN'):'None');
+  card.appendChild(meta);
+
+  /* slabs preview */
+  var slabList = document.createElement('div');
+  slabList.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;';
+  cfg.slabs.forEach(function(s) {
+    var sp = document.createElement('span');
+    sp.style.cssText = 'font-size:9.5px;font-family:monospace;background:var(--navy-dark);border:1px solid var(--border);border-radius:5px;padding:3px 8px;color:var(--teal);';
+    sp.textContent = piPillTxt(s); slabList.appendChild(sp);
+  });
+  card.appendChild(slabList);
+
+  /* action buttons */
+  var actRow = document.createElement('div'); actRow.style.cssText = 'display:flex;gap:7px;';
+
+  var saveBtn = document.createElement('button'); saveBtn.type='button'; saveBtn.className='btn btn-primary'; saveBtn.style.fontSize='10.5px'; saveBtn.textContent='\uD83D\uDCBE Save This Config';
+  (function(i2, c2) {
+    saveBtn.onclick = function() {
+      var newRow = [c2.machine, c2.comp, c2.model, c2.finishPart, c2.partCode, c2.targetQty+'/'+c2.targetPer, c2.maxCap?'\u20b9'+parseInt(c2.maxCap).toLocaleString('en-IN'):'\u2014', 'Active'];
+      data.rows.push(newRow);
+      tbody.appendChild(piMakeTableRow(newRow, data.rows.length-1, data));
+      /* remove from pending */
+      pendingArr.splice(pendingArr.indexOf(c2), 1);
+      pendingWrap.removeChild(card);
+      if (pendingArr.length === 0) {
+        var hdr2 = document.getElementById('piPendingHdr'); if (hdr2) hdr2.style.display='none';
+      }
+      showToast(c2.finishPart+' \u2014 saved!', 'success');
+    };
+  })(idx, cfg);
+
+  var discardBtn = document.createElement('button'); discardBtn.type='button'; discardBtn.className='btn btn-ghost'; discardBtn.style.fontSize='10.5px'; discardBtn.textContent='Discard';
+  (function(c2) {
+    discardBtn.onclick = function() {
+      pendingArr.splice(pendingArr.indexOf(c2), 1);
+      pendingWrap.removeChild(card);
+      if (pendingArr.length === 0) {
+        var hdr2 = document.getElementById('piPendingHdr'); if (hdr2) hdr2.style.display='none';
+      }
+      showToast('Discarded', 'info');
+    };
+  })(cfg);
+
+  actRow.appendChild(saveBtn); actRow.appendChild(discardBtn);
+  card.appendChild(actRow);
+  return card;
+}
+
+/* ── saved-table row ─────────────────────────────────────── */
+function piMakeTableRow(row, ri, data) {
+  var tr = document.createElement('tr');
+  tr.onmouseenter=function(){this.style.background='var(--teal-dim)';}; tr.onmouseleave=function(){this.style.background='';};
+  var ntd=document.createElement('td'); ntd.textContent=String(ri+1);
+  ntd.style.cssText='padding:9px 10px;font-size:10px;color:var(--txt-muted);border-bottom:1px solid var(--border);'; tr.appendChild(ntd);
+  row.forEach(function(cell,ci){
+    var td=document.createElement('td'); td.style.cssText='padding:9px 10px;font-size:11.5px;border-bottom:1px solid var(--border);white-space:nowrap;';
+    if(ci===0){td.style.fontWeight='700';td.style.color='var(--txt)';td.textContent=cell;}
+    else if(ci===row.length-1&&cell==='Active'){td.innerHTML='<span style="background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.3);padding:2px 9px;border-radius:10px;font-size:10px;font-weight:700;">\u25cf Active</span>';}
+    else{td.style.color='var(--txt-sec)';td.textContent=cell;}
+    tr.appendChild(td);
+  });
+  var atd=document.createElement('td'); atd.style.cssText='padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap;';
+  var db=document.createElement('button'); db.textContent='Del';
+  db.style.cssText='background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#ef4444;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;';
+  db.onclick=function(){if(!confirm('Delete this configuration?'))return;tr.remove();data.rows.splice(ri,1);showToast('Deleted','error');};
+  atd.appendChild(db); tr.appendChild(atd); return tr;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MAIN RENDERER
+═══════════════════════════════════════════════════════════ */
+function renderProductionIncentive(el, label, icon) {
+  el.innerHTML = '';
+  var data = MASTER_DATA['CFG-015'];
+  var pendingConfigs = [];
+
+  /* ── TOP HEADER ── */
+  var hdr = document.createElement('div');
+  hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;gap:10px;';
+  hdr.innerHTML = '<div style="display:flex;align-items:center;gap:10px;">'
+    + '<span style="font-size:22px;">'+icon+'</span>'
+    + '<div><div style="font-size:14px;font-weight:800;color:var(--txt);">Production Incentive Configuration</div>'
+    + '<div style="font-size:10px;color:var(--txt-muted);">CFG-015 \u00b7 Select multiple machines, components, models & finish parts \u2014 generate configs in bulk, save independently</div></div></div>';
+  var newBtn = document.createElement('button'); newBtn.className='btn btn-primary'; newBtn.style.fontSize='11.5px'; newBtn.textContent='+ New Configuration';
+  newBtn.onclick = function() { formWrap.style.display='block'; formWrap.scrollIntoView({behavior:'smooth',block:'start'}); };
+  hdr.appendChild(newBtn); el.appendChild(hdr);
+
+  /* ── PENDING SECTION (shown above saved table after generate) ── */
+  var pendingHdr = document.createElement('div'); pendingHdr.id='piPendingHdr';
+  pendingHdr.style.cssText = 'display:none;padding:12px 18px 6px;';
+  pendingHdr.innerHTML = '<div style="font-size:10px;font-weight:800;color:var(--amber);text-transform:uppercase;letter-spacing:.6px;display:flex;align-items:center;gap:7px;">'
+    + '<span style="width:8px;height:8px;background:var(--amber);border-radius:50%;display:inline-block;"></span>Pending Configurations \u2014 Review & Save Each Independently</div>';
+  el.appendChild(pendingHdr);
+
+  var pendingWrap = document.createElement('div');
+  pendingWrap.style.cssText = 'padding:0 18px 16px;display:flex;flex-direction:column;gap:10px;';
+  el.appendChild(pendingWrap);
+
+  /* ── SAVED TABLE ── */
+  var tableWrap = document.createElement('div'); tableWrap.style.cssText='padding:6px 18px 12px;overflow-x:auto;';
+  var tbl=document.createElement('table'); tbl.style.cssText='width:100%;border-collapse:collapse;min-width:700px;';
+  var thead=document.createElement('thead');
+  var hr=document.createElement('tr'); hr.style.background='var(--teal-dim)';
+  ['#','Machine','Component','Model','Finish Part','Part Code','Target','Max Cap','Status','Actions'].forEach(function(h){
+    var th=document.createElement('th'); th.textContent=h;
+    th.style.cssText='padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--txt-muted);letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid var(--border-md);white-space:nowrap;';
+    hr.appendChild(th);
+  });
+  thead.appendChild(hr); tbl.appendChild(thead);
+  var tbody=document.createElement('tbody'); tbody.id='piTbody';
+  data.rows.forEach(function(row,ri){ tbody.appendChild(piMakeTableRow(row,ri,data)); });
+  tbl.appendChild(tbody); tableWrap.appendChild(tbl); el.appendChild(tableWrap);
+
+  /* ══════════════════════════════════════════════════
+     ADD / EDIT FORM
+  ══════════════════════════════════════════════════ */
+  var formWrap=document.createElement('div'); formWrap.id='piFormWrap';
+  formWrap.style.cssText='display:none;padding:0 18px 24px;';
+
+  var card=document.createElement('div');
+  card.style.cssText='background:var(--navy-card);border:1px solid var(--border);border-radius:12px;overflow:hidden;';
+
+  /* card header */
+  var cardHdr=document.createElement('div');
+  cardHdr.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--navy-mid);';
+  cardHdr.innerHTML='<div style="display:flex;align-items:center;gap:9px;">'
+    +'<div style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#b45309);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;">\u2699</div>'
+    +'<div><div style="font-size:13px;font-weight:700;">New Production Incentive Configuration</div>'
+    +'<div style="font-size:10px;color:var(--txt-muted);">Select multiple machines, components, models and finish parts \u2014 each combination becomes one config</div></div></div>';
+  var closeBtn=document.createElement('button'); closeBtn.className='btn btn-ghost btn-sm'; closeBtn.textContent='\u00d7 Close';
+  closeBtn.onclick=function(){formWrap.style.display='none';}; cardHdr.appendChild(closeBtn); card.appendChild(cardHdr);
+
+  var body=document.createElement('div'); body.style.cssText='padding:16px;';
+
+  /* ── STEP 1: Machines (multi) ── */
+  body.appendChild(piSecHdr('1','Select Machines','Choose one or more machines for this incentive configuration'));
+  var machPicker = piTagPicker('piMachine','-- Select Machine --', function(sel) {
+    /* when machines change, rebuild component options = union of components for all selected machines */
+    var allComps = {};
+    sel.forEach(function(m) {
+      (PI_COMPONENTS[m.val]||[]).forEach(function(c){ allComps[c.name] = c; });
+    });
+    var compList = Object.keys(allComps).map(function(k){ return {val:allComps[k].name, label:allComps[k].name+' ('+allComps[k].code+')'}; });
+    compPicker.setItems(compList, 'val');
+    compPicker.clearSelected();
+    modelPicker.setItems([],'val'); modelPicker.clearSelected();
+    fpPicker.setItems([],  'val'); fpPicker.clearSelected();
+  });
+  PI_MACHINES.forEach(function(m){ /* pre-populate machine dropdown */
+    machPicker.setItems(PI_MACHINES.map(function(x){return {val:x.val,label:x.label};}), 'val');
+  });
+  machPicker.setItems(PI_MACHINES.map(function(m){return {val:m.val,label:m.label};}), 'val');
+  var mAddBtnRow = piAddBtn('+ Add New Machine', function(){
+    var v=prompt('Machine code (e.g. DRILL-010):'); var l=prompt('Machine label (e.g. DRILL-010 \u2014 Radial Drill):');
+    if(!v||!l)return;
+    PI_MACHINES.push({val:v,label:l}); machPicker.addCustomItem(v,l); showToast('Machine added','success');
+  });
+  body.appendChild(machPicker.el); body.appendChild(mAddBtnRow);
+  body.appendChild(document.createElement('br'));
+
+  /* ── STEP 2: Components (multi) ── */
+  body.appendChild(piSecHdr('2','Select Components','Components load based on selected machines \u2014 pick one or more'));
+  var compPicker = piTagPicker('piComp','-- Select Component --', function(sel){
+    /* build model list = union of models for all selected component names */
+    var allMods = {};
+    sel.forEach(function(c){ (PI_MODELS[c.val]||[]).forEach(function(m){ allMods[m.code]=m; }); });
+    var modList = Object.keys(allMods).map(function(k){ return {val:allMods[k].code, label:allMods[k].name+' ('+allMods[k].code+')'}; });
+    modelPicker.setItems(modList,'val'); modelPicker.clearSelected();
+    fpPicker.setItems([],'val'); fpPicker.clearSelected();
+  });
+  var cAddBtnRow = piAddBtn('+ Add New Component', function(){
+    var n=prompt('Component name:'); var c=prompt('Component code (e.g. COMP-XXX-001):');
+    if(!n||!c)return; compPicker.addCustomItem(n,n+' ('+c+')'); showToast('Component added','success');
+  });
+  body.appendChild(compPicker.el); body.appendChild(cAddBtnRow);
+  body.appendChild(document.createElement('br'));
+
+  /* ── STEP 3: Models (multi) ── */
+  body.appendChild(piSecHdr('3','Select Models','Models load based on selected components \u2014 pick one or more. Name and code are linked'));
+  var modelPicker = piTagPicker('piModel','-- Select Model --', function(sel){
+    /* finish parts = union for all selected model codes */
+    var allFP = {};
+    sel.forEach(function(m){ (PI_FINISH[m.val]||[]).forEach(function(fp){ allFP[fp.code]=fp; }); });
+    var fpList = Object.keys(allFP).map(function(k){ return {val:allFP[k].code, label:allFP[k].name+' ('+allFP[k].code+')'}; });
+    fpPicker.setItems(fpList,'val'); fpPicker.clearSelected();
+  });
+  var mAddBtnRow2 = piAddBtn('+ Add New Model', function(){
+    var n=prompt('Model name:'); var c=prompt('Model code (e.g. MDL-X-001):');
+    if(!n||!c)return; modelPicker.addCustomItem(c,n+' ('+c+')'); showToast('Model added','success');
+  });
+  body.appendChild(modelPicker.el); body.appendChild(mAddBtnRow2);
+  body.appendChild(document.createElement('br'));
+
+  /* ── STEP 4: Finish Parts (multi) ── */
+  body.appendChild(piSecHdr('4','Select Finish Parts','Finish parts load based on selected models \u2014 pick one or more'));
+  var fpPicker = piTagPicker('piFP','-- Select Finish Part --', function(sel){});
+  var fpAddBtnRow = piAddBtn('+ Add New Finish Part', function(){
+    var n=prompt('Finish Part name:'); var c=prompt('Part code (e.g. FP-XXX-001):');
+    if(!n||!c)return; fpPicker.addCustomItem(c,n+' ('+c+')'); showToast('Finish Part added','success');
+  });
+  body.appendChild(fpPicker.el); body.appendChild(fpAddBtnRow);
+  body.appendChild(document.createElement('br'));
+
+  /* ── STEP 5: Target & Settings (shared for all generated configs) ── */
+  body.appendChild(piSecHdr('5','Target & Settings','These settings apply to all generated configurations \u2014 you can edit individually after generation'));
+  var g4c=document.createElement('div'); g4c.style.cssText='display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:10px;';
+  var tqW=piWrap('Target Qty *'); var tqI=document.createElement('input'); tqI.id='piTargetQty'; tqI.className='inp'; tqI.type='number'; tqI.min='1'; tqI.placeholder='e.g. 500';
+  tqI.oninput=function(){piUpdateTargetPreview();}; tqW.appendChild(tqI);
+  var tpW=piWrap('Per'); var tpS=document.createElement('select'); tpS.id='piTargetPer'; tpS.className='inp';
+  ['Day','Shift','Week','Month'].forEach(function(o){var op=document.createElement('option');op.textContent=o;tpS.appendChild(op);}); tpS.onchange=function(){piUpdateTargetPreview();}; tpW.appendChild(tpS);
+  var mqW=piWrap('Min Qty to Qualify'); var mqI=document.createElement('input'); mqI.id='piMinQty'; mqI.className='inp'; mqI.type='number'; mqI.min='0'; mqI.placeholder='e.g. 400'; mqW.appendChild(mqI);
+  var capW=piWrap('Max Incentive Cap (\u20b9)'); var capI=document.createElement('input'); capI.id='piMaxCap'; capI.className='inp'; capI.type='number'; capI.min='0'; capI.placeholder='No limit'; capW.appendChild(capI);
+  g4c.appendChild(tqW); g4c.appendChild(tpW); g4c.appendChild(mqW); g4c.appendChild(capW); body.appendChild(g4c);
+
+  /* target preview */
+  var prevCard=document.createElement('div');
+  prevCard.style.cssText='background:var(--teal-dim);border:1px solid var(--border-md);border-radius:9px;padding:11px 14px;display:flex;align-items:center;gap:12px;margin-bottom:14px;';
+  prevCard.innerHTML='<span style="font-size:24px;">\u{1F3AF}</span>'
+    +'<div><div id="piPrevVal" style="font-size:22px;font-weight:800;font-family:monospace;color:var(--teal);">\u2014 pcs</div>'
+    +'<div id="piPrevLbl" style="font-size:10px;color:var(--txt-muted);margin-top:2px;">Fill target qty above</div></div>';
+  body.appendChild(prevCard);
+
+  /* ── STEP 6: Incentive Slabs (shared) ── */
+  var slabHdrRow=document.createElement('div'); slabHdrRow.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;';
+  var slabSecHdr=piSecHdr('6','Incentive Slabs','Slabs apply to all generated configurations \u2014 add as many as needed');
+  slabSecHdr.style.margin='0'; slabSecHdr.style.flex='1';
+  var slabAddBtn=document.createElement('button'); slabAddBtn.className='btn btn-outline btn-sm';
+  slabAddBtn.style.cssText='font-size:10.5px;padding:4px 11px;margin-left:10px;flex-shrink:0;';
+  slabAddBtn.textContent='+ Add Slab';
+  slabHdrRow.appendChild(slabSecHdr); slabHdrRow.appendChild(slabAddBtn);
+  body.appendChild(slabHdrRow);
+
+  var piSlabs=[{from:1,to:50,type:'per-part',amount:2},{from:51,to:100,type:'per-part',amount:4}];
+  var slabCont=document.createElement('div'); slabCont.id='piSlabCont';
+  slabCont.style.cssText='display:flex;flex-direction:column;margin-bottom:12px;';
+  piRenderSlabs(piSlabs,slabCont); body.appendChild(slabCont);
+  slabAddBtn.onclick=function(){
+    var last=piSlabs.length?piSlabs[piSlabs.length-1]:{to:0};
+    var nf=(last.to===9999?last.from+100:last.to)+1;
+    piSlabs.push({from:nf,to:nf+49,type:'per-part',amount:0});
+    piRenderSlabs(piSlabs,slabCont); showToast('Slab '+(piSlabs.length)+' added','success');
+  };
+  var slabAddBottom=document.createElement('button'); slabAddBottom.className='btn btn-ghost';
+  slabAddBottom.style.cssText='width:100%;justify-content:center;font-size:11px;margin-bottom:14px;';
+  slabAddBottom.textContent='+ Add Another Slab'; slabAddBottom.onclick=function(){slabAddBtn.onclick();};
+  body.appendChild(slabAddBottom);
+
+  /* Status + Effective From */
+  var g2s=document.createElement('div'); g2s.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;';
+  var stW=piWrap('Status'); var stS=document.createElement('select'); stS.id='piStatus'; stS.className='inp';
+  ['Active','Draft','Inactive'].forEach(function(o){var op=document.createElement('option');op.textContent=o;stS.appendChild(op);}); stW.appendChild(stS);
+  var efW=piWrap('Effective From'); var efI=document.createElement('input'); efI.className='inp'; efI.type='date'; efI.value='2025-04-01'; efW.appendChild(efI);
+  g2s.appendChild(stW); g2s.appendChild(efW); body.appendChild(g2s);
+
+  /* ── GENERATE BUTTON ── */
+  var genRow=document.createElement('div'); genRow.style.cssText='display:flex;align-items:center;gap:8px;';
+  var genBtn=document.createElement('button'); genBtn.type='button'; genBtn.className='btn btn-primary';
+  genBtn.style.cssText='font-size:12px;padding:9px 20px;';
+  genBtn.innerHTML='\u26A1 Generate Configurations';
+  genBtn.onclick=function(){
+    var machines = machPicker.getSelected();
+    var comps    = compPicker.getSelected();
+    var models   = modelPicker.getSelected();
+    var fps      = fpPicker.getSelected();
+    if(!machines.length){showToast('Select at least one machine','error');return;}
+    if(!comps.length){showToast('Select at least one component','error');return;}
+    if(!fps.length){showToast('Select at least one finish part','error');return;}
+    var tq=document.getElementById('piTargetQty').value;
+    if(!tq){showToast('Target Qty is required','error');return;}
+    /* generate all combinations */
+    var generated=0;
+    pendingWrap.innerHTML=''; pendingConfigs.length=0;
+    machines.forEach(function(mach){
+      comps.forEach(function(comp){
+        fps.forEach(function(fp){
+          var modelLabel = models.length ? models.map(function(m){return m.val;}).join(', ') : 'N/A';
+          var cfg={
+            machine: mach.val,
+            comp: comp.val,
+            model: modelLabel,
+            finishPart: fp.label.split('(')[0].trim(),
+            partCode: fp.val,
+            targetQty: tq,
+            targetPer: document.getElementById('piTargetPer').value,
+            minQty: document.getElementById('piMinQty').value,
+            maxCap: document.getElementById('piMaxCap').value,
+            slabs: JSON.parse(JSON.stringify(piSlabs))
+          };
+          pendingConfigs.push(cfg);
+          pendingWrap.appendChild(piMakePendingCard(cfg, pendingConfigs.length-1, pendingConfigs, pendingWrap, data, tbody));
+          generated++;
+        });
+      });
+    });
+    pendingHdr.style.display = generated>0 ? 'block':'none';
+    formWrap.style.display='none';
+    pendingHdr.scrollIntoView({behavior:'smooth',block:'start'});
+    showToast(generated+' configuration'+(generated===1?'':'s')+' generated \u2014 review and save each','success');
+  };
+  var cancelBtn=document.createElement('button'); cancelBtn.type='button'; cancelBtn.className='btn btn-ghost';
+  cancelBtn.textContent='Cancel'; cancelBtn.onclick=function(){formWrap.style.display='none';};
+  var countNote=document.createElement('span'); countNote.style.cssText='font-size:10px;color:var(--txt-muted);margin-left:4px;';
+  countNote.textContent='Each machine \u00d7 component \u00d7 finish part combination becomes one config';
+  genRow.appendChild(genBtn); genRow.appendChild(cancelBtn); genRow.appendChild(countNote);
+  body.appendChild(genRow);
+
+  card.appendChild(body); formWrap.appendChild(card); el.appendChild(formWrap);
+}
+
+function piUpdateTargetPreview() {
+  var qty=document.getElementById('piTargetQty'); var per=document.getElementById('piTargetPer'); var min=document.getElementById('piMinQty');
+  if(!qty)return;
+  var v=qty.value||'\u2014'; var p=per?per.value:'Day'; var m=min?min.value:'';
+  document.getElementById('piPrevVal').textContent=v+' pcs';
+  document.getElementById('piPrevLbl').textContent='Target per '+p+(m?'  \u00b7  Min to qualify: '+m+' pcs':'');
+}
+/* ══ END CFG-015 ══ */
+
+
+
+
+/* ══ RENDER MOCK SCREEN ══ */
+function renderMock(code, label, icon, s) {
+  var el = document.getElementById('screen-MOCK');
+  el.innerHTML = '';
+  if (code === 'CFG-015') { renderProductionIncentive(el, label, icon); return; }
+  var data = MASTER_DATA[code];
+  var formCfg = FORM_CONFIG[code] || [{label:'Name',type:'text'},{label:'Code',type:'text'},{label:'Description',type:'text'},{label:'Status',type:'select',options:['Active','Inactive','Draft']}];
+
+  /* top bar */
+  var top = document.createElement('div');
+  top.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px;border-bottom:1px solid var(--border);gap:10px;flex-wrap:wrap;flex-shrink:0;';
+  var ta = document.createElement('div');
+  ta.style.cssText = 'display:flex;align-items:center;gap:9px;';
+  ta.innerHTML = '<span style="font-size:22px;">' + icon + '</span>'
+    + '<div><div style="font-size:14px;font-weight:800;color:var(--txt);">' + label + '</div>'
+    + '<div style="font-size:10px;color:var(--txt-muted);">' + code + ' &middot; ' + (data ? data.rows.length : 0) + ' records</div></div>';
+  var aa = document.createElement('div');
+  aa.style.cssText = 'display:flex;align-items:center;gap:7px;';
+  var sb = document.createElement('input');
+  sb.placeholder = 'Search records...';
+  sb.style.cssText = 'background:var(--input-bg);border:1px solid var(--border);border-radius:7px;padding:6px 11px;color:var(--txt);font-size:11.5px;font-family:inherit;outline:none;width:190px;';
+  sb.oninput = function() { filterTable(this.value); };
+  var ab = document.createElement('button');
+  ab.className = 'btn btn-primary'; ab.style.fontSize = '11.5px'; ab.textContent = '+ Add New';
+  ab.onclick = function() {
+    var fw = document.getElementById('addFormWrap');
+    if (!fw) return;
+    var showing = fw.style.display !== 'none';
+    fw.style.display = showing ? 'none' : 'block';
+    if (!showing) { resetForm(icon, label); fw.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+  };
+  aa.appendChild(sb); aa.appendChild(ab);
+  top.appendChild(ta); top.appendChild(aa); el.appendChild(top);
+
+  /* table */
+  if (data) {
+    var tw = document.createElement('div');
+    tw.style.cssText = 'padding:14px 18px;overflow-x:auto;';
+    var tbl = document.createElement('table');
+    tbl.id = 'masterTable';
+    tbl.style.cssText = 'width:100%;border-collapse:collapse;min-width:600px;';
+    var thead = document.createElement('thead');
+    var hr = document.createElement('tr'); hr.style.background = 'var(--teal-dim)';
+    ['#'].concat(data.cols).concat(['Actions']).forEach(function(c) {
+      var th = document.createElement('th'); th.textContent = c;
+      th.style.cssText = 'padding:8px 11px;text-align:left;font-size:10px;font-weight:700;color:var(--txt-muted);letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid var(--border-md);white-space:nowrap;';
+      hr.appendChild(th);
+    });
+    thead.appendChild(hr); tbl.appendChild(thead);
+    var tbody = document.createElement('tbody'); tbody.id = 'masterTbody';
+    data.rows.forEach(function(row, ri) {
+      var tr = document.createElement('tr');
+      tr.onmouseenter = function() { this.style.background = 'var(--teal-dim)'; };
+      tr.onmouseleave = function() { this.style.background = ''; };
+      var ntd = document.createElement('td'); ntd.textContent = String(ri + 1);
+      ntd.style.cssText = 'padding:9px 11px;font-size:10px;color:var(--txt-muted);border-bottom:1px solid var(--border);';
+      tr.appendChild(ntd);
+      row.forEach(function(cell, ci) {
+        var td = document.createElement('td');
+        td.style.cssText = 'padding:9px 11px;font-size:11.5px;border-bottom:1px solid var(--border);white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;';
+        if (ci === 0) { td.style.fontWeight = '700'; td.style.color = 'var(--txt)'; td.textContent = cell; }
+        else if (ci === row.length - 1 && cell === 'Active') {
+          td.innerHTML = '<span style="background:rgba(34,197,94,.12);color:#22c55e;border:1px solid rgba(34,197,94,.25);padding:2px 9px;border-radius:10px;font-size:10px;font-weight:700;">&#9679; Active</span>';
+        } else if (ci === row.length - 1 && cell === 'Inactive') {
+          td.innerHTML = '<span style="background:rgba(244,162,97,.1);color:#f4a261;border:1px solid rgba(244,162,97,.25);padding:2px 9px;border-radius:10px;font-size:10px;font-weight:700;">&#9679; Inactive</span>';
+        } else { td.style.color = 'var(--txt-sec)'; td.textContent = cell; }
+        tr.appendChild(td);
+      });
+      var atd = document.createElement('td');
+      atd.style.cssText = 'padding:9px 11px;border-bottom:1px solid var(--border);white-space:nowrap;';
+      (function(rowIdx, rowData) {
+        var eb = document.createElement('button'); eb.textContent = 'Edit';
+        eb.style.cssText = 'background:var(--teal-dim);border:1px solid var(--border-md);color:var(--teal);padding:3px 10px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;margin-right:5px;';
+        eb.onclick = function() { editRow(code, rowData, rowIdx, formCfg, icon, label); };
+        var db = document.createElement('button'); db.textContent = 'Del';
+        db.style.cssText = 'background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#ef4444;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;';
+        db.onclick = function() { if (confirm('Delete this record?')) { tr.remove(); showToast('Record deleted','error'); } };
+        atd.appendChild(eb); atd.appendChild(db);
+      })(ri, row.slice());
+      tr.appendChild(atd); tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody); tw.appendChild(tbl); el.appendChild(tw);
+  }
+
+  /* add / edit form */
+  var fw = document.createElement('div'); fw.id = 'addFormWrap'; fw.style.cssText = 'display:none;padding:0 18px 18px;';
+  var card = document.createElement('div'); card.className = 'fs'; card.style.margin = '0';
+  var fhdr = document.createElement('div'); fhdr.className = 'fs-hdr';
+  fhdr.innerHTML = '<div class="fs-title" id="formTitle"><span class="fs-ic">' + icon + '</span>Add New ' + label + '</div><span class="fs-tog">&#9660;</span>';
+  fhdr.onclick = function() { toggleSec(fhdr); };
+  card.appendChild(fhdr);
+  var fbody = document.createElement('div'); fbody.id = 'addFormBody'; fbody.className = 'fs-body';
+
+  /* build fields in 2-column grid */
+  var grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:14px;';
+
+  formCfg.forEach(function(cfg) {
+    if (cfg.type === 'workdays') {
+      grid.appendChild(buildWorkdaysField(cfg));
+    } else {
+      grid.appendChild(buildField(cfg));
+    }
+  });
+
+  /* status + effective from always at bottom */
+  var statusWrap = document.createElement('div'); statusWrap.className = 'field';
+  var sl = document.createElement('label'); sl.textContent = 'Status'; statusWrap.appendChild(sl);
+  var ss = document.createElement('select'); ss.className = 'inp'; ss.setAttribute('data-field','Status');
+  ['Active','Inactive','Draft'].forEach(function(o){ var opt=document.createElement('option'); opt.textContent=o; ss.appendChild(opt); });
+  statusWrap.appendChild(ss);
+
+  var effWrap = document.createElement('div'); effWrap.className = 'field';
+  var el2 = document.createElement('label'); el2.textContent = 'Effective From'; effWrap.appendChild(el2);
+  var ei = document.createElement('input'); ei.className='inp'; ei.type='date'; ei.value='2025-04-01'; ei.setAttribute('data-field','Effective From');
+  effWrap.appendChild(ei);
+
+  grid.appendChild(statusWrap); grid.appendChild(effWrap);
+  fbody.appendChild(grid);
+
+  /* save/clear buttons */
+  var br = document.createElement('div'); br.style.cssText = 'display:flex;gap:8px;';
+  var svb = document.createElement('button'); svb.className = 'btn btn-primary'; svb.textContent = 'Save Record'; svb.id = 'formSaveBtn';
+  svb.onclick = function() {
+    showToast(label + ' record saved!', 'success');
+    fw.style.display = 'none';
+    resetForm(icon, label);
+  };
+  var clb = document.createElement('button'); clb.className = 'btn btn-ghost'; clb.textContent = 'Clear';
+  clb.onclick = function() { resetForm(icon, label); showToast('Form cleared','info'); };
+  br.appendChild(svb); br.appendChild(clb); fbody.appendChild(br);
+  card.appendChild(fbody); fw.appendChild(card); el.appendChild(fw);
+}
+
+/* ══ RESET FORM ══ */
+function resetForm(icon, label) {
+  var ft = document.getElementById('formTitle');
+  if (ft) ft.innerHTML = '<span class="fs-ic">' + icon + '</span>Add New ' + label;
+  var fb = document.getElementById('addFormBody');
+  if (!fb) return;
+  fb.querySelectorAll('input[type="text"],input[type="number"],input[type="time"],input[type="date"]').forEach(function(i){ i.value=''; });
+  fb.querySelectorAll('select').forEach(function(s){ s.selectedIndex=0; });
+  fb.querySelectorAll('.wday').forEach(function(d){ d.classList.toggle('on', ['Mon','Tue','Wed','Thu','Fri'].indexOf(d.textContent)>-1); });
+  var svb = document.getElementById('formSaveBtn');
+  if (svb) svb.textContent = 'Save Record';
+}
+
+/* ══ EDIT ROW ══ */
+function editRow(code, rowData, rowIdx, formCfg, icon, label) {
+  var fw = document.getElementById('addFormWrap');
+  if (!fw) return;
+  fw.style.display = 'block';
+  var ft = document.getElementById('formTitle');
+  if (ft) ft.innerHTML = '<span class="fs-ic">&#9998;</span> Editing Record ' + (rowIdx + 1);
+  var fb = document.getElementById('addFormBody');
+  if (!fb) return;
+
+  /* fill text/number/time/date inputs in order */
+  var allInputs = Array.from(fb.querySelectorAll('input[data-field], select[data-field]'));
+  var dataIdx = 0;
+  allInputs.forEach(function(inp) {
+    if (dataIdx < rowData.length) {
+      inp.value = rowData[dataIdx];
+      dataIdx++;
+    }
+  });
+
+  var svb = document.getElementById('formSaveBtn');
+  if (svb) {
+    svb.textContent = 'Update Record';
+    svb.onclick = function() {
+      showToast('Record ' + (rowIdx + 1) + ' updated!', 'success');
+      fw.style.display = 'none';
+      resetForm(icon, label);
+    };
+  }
+  fw.scrollIntoView({behavior:'smooth',block:'nearest'});
+  showToast('Editing row ' + (rowIdx + 1) + ' — update fields below', 'info');
+}
+
+/* ══ FILTER TABLE ══ */
+function filterTable(val) {
+  var tb = document.getElementById('masterTbody');
+  if (!tb) return;
+  var lc = val.toLowerCase();
+  tb.querySelectorAll('tr').forEach(function(tr) {
+    tr.style.display = tr.textContent.toLowerCase().indexOf(lc) > -1 ? '' : 'none';
+  });
+}
+
+/* ══ PREV / NEXT ══ */
+function nextScreen() {
+  var idx = screenOrder.indexOf(currentScreen);
+  if (idx < screenOrder.length - 1) { var n = screenOrder[idx+1]; navigate(n, SCREENS[n].label, SCREENS[n].icon); }
+  else showToast('All screens complete!','success');
+}
+function prevScreen() {
+  var idx = screenOrder.indexOf(currentScreen);
+  if (idx > 0) { var p = screenOrder[idx-1]; navigate(p, SCREENS[p].label, SCREENS[p].icon); }
+  else showToast('Already at first screen','info');
+}
+
+/* ══ DRAWER ══ */
+function toggleDrawer() {
+  var open = document.getElementById('drawer').classList.toggle('open');
+  document.getElementById('drawerMask').classList.toggle('open', open);
+  document.getElementById('mainHbg').classList.toggle('open', open);
+}
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawerMask').classList.remove('open');
+  document.getElementById('mainHbg').classList.remove('open');
+}
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeDrawer(); });
+
+/* ══ SA PANEL ══ */
+function toggleSA() {
+  var b = document.getElementById('saBody'); var a = document.getElementById('saArr');
+  var open = b.classList.toggle('open'); a.classList.toggle('open', open);
+}
+
+/* ══ SECTION COLLAPSE (form panels) ══ */
+function toggleSec(hdr) {
+  var b = hdr.nextElementSibling; var t = hdr.querySelector('.fs-tog');
+  if (!b || !t) return;
+  var hidden = b.classList.toggle('hidden'); t.classList.toggle('closed', hidden);
+}
+
+/* ══ TABS CFG-001 ══ */
+function switchTab(el, id) {
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  el.classList.add('active');
+  ['general','compliance','address','fiscal','preferences','branches','contacts'].forEach(function(t) {
+    var e2 = document.getElementById('tab-' + t); if (e2) e2.style.display = 'none';
+  });
+  var tg = document.getElementById('tab-' + id); if (tg) tg.style.display = '';
+  document.getElementById('formScroll').scrollTop = 0;
+}
+
+/* ══ ADDR TABS ══ */
+function switchAddrTab(el, id) {
+  document.querySelectorAll('.at').forEach(function(t) { t.classList.remove('active'); });
+  el.classList.add('active');
+  document.getElementById('addr-reg').style.display = id === 'reg' ? '' : 'none';
+  document.getElementById('addr-corp').style.display = id === 'corp' ? '' : 'none';
+}
+function toggleCopyAddr() {
+  var c = document.getElementById('cpChk'); c.classList.toggle('on');
+  if (c.classList.contains('on')) {
+    document.getElementById('ca1').value = '4th Floor, Prestige Tech Park, Marathahalli';
+    document.getElementById('cc').value = 'Bengaluru';
+    document.getElementById('cp').value = '560103';
+    document.getElementById('cs').value = 'Karnataka';
+    showToast('Address copied','info');
+  } else {
+    ['ca1','cc','cp'].forEach(function(id2) { document.getElementById(id2).value = ''; });
+    document.getElementById('cs').value = '';
+  }
+}
+
+/* ══ STATUS ══ */
+function selStatus(el, color) {
+  document.querySelectorAll('.sp').forEach(function(sp) { sp.classList.remove('sel','green','blue','amber'); });
+  el.classList.add('sel', color);
+  showToast('Status: ' + el.dataset.val, 'info');
+}
+
+/* ══ CO SELECT ══ */
+function selectCo(el, initial, grad, name, code, meta) {
+  document.querySelectorAll('.co-item').forEach(function(i) { i.classList.remove('selected'); });
+  el.classList.add('selected');
+  document.getElementById('detLogo').textContent = initial;
+  document.getElementById('detLogo').style.background = grad;
+  document.getElementById('detName').textContent = name;
+  document.getElementById('detMeta').textContent = code + ' \u00b7 ' + meta;
+  var dn = document.getElementById('fDisplayName'); if (dn) dn.value = name;
+  var fc = document.getElementById('fCode'); if (fc) fc.value = code;
+  showToast('Loaded: ' + name, 'info');
+}
+function filterCo(val) {
+  document.querySelectorAll('.co-item').forEach(function(item) {
+    item.style.display = item.querySelector('.co-name').textContent.toLowerCase().indexOf(val.toLowerCase()) > -1 ? '' : 'none';
+  });
+}
+function addNewCo() {
+  document.querySelectorAll('.co-item').forEach(function(i) { i.classList.remove('selected'); });
+  document.getElementById('detName').textContent = 'New Company';
+  document.getElementById('detMeta').textContent = 'Draft — fill details below';
+  ['fDisplayName','fCode','fShortName','fEmpCount'].forEach(function(id2) { var e2 = document.getElementById(id2); if (e2) e2.value = ''; });
+  showToast('New company form ready','info');
+}
+
+/* ══ FY / DAYS / TOGGLES ══ */
+function selFY(el) {
+  document.querySelectorAll('.fyp').forEach(function(p) { p.classList.remove('active'); });
+  el.classList.add('active'); showToast('Fiscal year: ' + el.textContent.trim(),'info');
+}
+function togDay(el) {
+  el.classList.toggle('on');
+  var active = Array.from(document.querySelectorAll('.wday.on')).map(function(d) { return d.textContent; }).join(', ');
+  showToast('Working days: ' + (active || 'None'),'info');
+}
+function togFB(input, lbl) { showToast(lbl + ' — ' + (input.checked ? 'Enabled' : 'Disabled'),'info'); }
+
+/* ══ SAVE / VERIFY / LOGO ══ */
+function saveRecord() {
+  var n = document.getElementById('fDisplayName');
+  if (!n || !n.value.trim()) { showToast('Display Name is required','error'); return; }
+  var now = new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  var ls = document.getElementById('lastSaved'); if (ls) ls.textContent = 'Today, ' + now;
+  var at = document.getElementById('autosaveTxt'); if (at) at.textContent = 'Saved \u00b7 ' + now;
+  showToast(n.value.trim() + ' saved!','success');
+}
+function verifyDomain() {
+  var v = document.getElementById('fEmailDomain').value.trim();
+  showToast(v ? 'Domain "' + v + '" verified' : 'Enter a domain first', v ? 'success' : 'error');
+}
+function openWebsite() {
+  var url = document.getElementById('fWebsite').value || 'https://www.avyrentechnologies.com';
+  window.open(url,'_blank'); showToast('Opening website...','info');
+}
+function triggerLogoUpload() { var e2 = document.getElementById('logoInput'); if (e2) e2.click(); }
+function previewLogo(input) {
+  if (input.files && input.files[0]) {
+    var r = new FileReader();
+    r.onload = function(ev) { document.getElementById('logoBox').innerHTML = '<img src="' + ev.target.result + '" style="width:58px;height:58px;object-fit:contain;border-radius:6px;"/>'; };
+    r.readAsDataURL(input.files[0]); showToast('Logo uploaded!','success');
+  }
+}
+
+/* ══ CLOCK ══ */
+function updateClock() {
+  var n = new Date();
+  var t = [n.getHours(),n.getMinutes(),n.getSeconds()].map(function(v){ return String(v).padStart(2,'0'); }).join(':');
+  var clk = document.getElementById('clock'); if (clk) clk.textContent = t + ' | ' + n.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+  var secs = Math.floor((Date.now()-startTime)/1000);
+  var st = String(Math.floor(secs/60)).padStart(2,'0') + ':' + String(secs%60).padStart(2,'0');
+  ['saSessionTime','dSessionTime'].forEach(function(id2){ var e2=document.getElementById(id2); if(e2) e2.textContent=st; });
+}
+setInterval(updateClock, 1000); updateClock();
+
+/* ══ TOAST ══ */
+var tTimer;
+function showToast(msg, type) {
+  type = type || 'success';
+  var t = document.getElementById('toast');
+  var icons = {success:'✅',error:'❌',info:'ℹ️'};
+  t.className = type + ' show';
+  t.textContent = (icons[type]||'') + ' ' + msg;
+  clearTimeout(tTimer); tTimer = setTimeout(function(){ t.classList.remove('show'); }, 3000);
+}
+
+/* ══ THEME ══ */
+function toggleTheme() {
+  var r = document.documentElement; var b = document.getElementById('themeBtn');
+  var light = r.getAttribute('data-theme') === 'light';
+  r.setAttribute('data-theme', light ? 'dark' : 'light');
+  if (b) b.textContent = light ? '🌙' : '☀️';
+  showToast(light ? 'Dark mode' : 'Light mode','info');
+}
+
+/* ══ INIT ══ */
+window.addEventListener('DOMContentLoaded', function() {
+  updateProgStrip('CFG-001', SCREENS['CFG-001']);
+  openSecGroup('org');
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,2076 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>HRMS · Employee Hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+/* ══════════════════════════════════════════
+   THEME VARIABLES
+══════════════════════════════════════════ */
+[data-theme="dark"] {
+  --bg:        #070b12;
+  --bg2:       #0c1220;
+  --surface:   #111827;
+  --card:      #162032;
+  --card2:     #1c2840;
+  --border:    #233044;
+  --border2:   #2c3d5a;
+  --text:      #e2e8f4;
+  --text2:     #8aa0bf;
+  --text3:     #546a85;
+  --accent:    #3b82f6;
+  --accent2:   #2563eb;
+  --glow:      rgba(59,130,246,0.16);
+  --green:     #10b981;  --green-bg:  rgba(16,185,129,0.12);
+  --amber:     #f59e0b;  --amber-bg:  rgba(245,158,11,0.12);
+  --rose:      #f43f5e;  --rose-bg:   rgba(244,63,94,0.12);
+  --violet:    #8b5cf6;  --violet-bg: rgba(139,92,246,0.12);
+  --cyan:      #06b6d4;  --cyan-bg:   rgba(6,182,212,0.12);
+  --orange:    #f97316;  --orange-bg: rgba(249,115,22,0.12);
+  --inp-bg:    #0c1220;
+  --inp-br:    #233044;
+  --shadow:    0 8px 32px rgba(0,0,0,0.45);
+  --shadow2:   0 2px 8px rgba(0,0,0,0.3);
+}
+[data-theme="light"] {
+  --bg:        #f0f4fb;
+  --bg2:       #e8eef8;
+  --surface:   #ffffff;
+  --card:      #ffffff;
+  --card2:     #f6f9ff;
+  --border:    #dce5f2;
+  --border2:   #c8d5e8;
+  --text:      #18243e;
+  --text2:     #4a607e;
+  --text3:     #8a9db8;
+  --accent:    #2563eb;
+  --accent2:   #1d4ed8;
+  --glow:      rgba(37,99,235,0.10);
+  --green:     #059669;  --green-bg:  rgba(5,150,105,0.08);
+  --amber:     #d97706;  --amber-bg:  rgba(217,119,6,0.08);
+  --rose:      #e11d48;  --rose-bg:   rgba(225,29,72,0.08);
+  --violet:    #7c3aed;  --violet-bg: rgba(124,58,237,0.08);
+  --cyan:      #0891b2;  --cyan-bg:   rgba(8,145,178,0.08);
+  --orange:    #ea6c00;  --orange-bg: rgba(234,108,0,0.08);
+  --inp-bg:    #f8faff;
+  --inp-br:    #dce5f2;
+  --shadow:    0 4px 24px rgba(0,0,0,0.08);
+  --shadow2:   0 2px 8px rgba(0,0,0,0.05);
+}
+
+/* ══ RESET & BASE ══ */
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;transition:background .3s,color .3s;overflow-x:hidden}
+button,input,select,textarea{font-family:inherit}
+a{text-decoration:none;color:inherit}
+
+/* ══ DEVICE SWITCHER — always outside, top-right ══ */
+.device-bar{
+  position:fixed;top:0;right:0;z-index:9999;
+  display:flex;align-items:center;gap:6px;
+  padding:7px 14px;
+  background:var(--bg2);
+  border-bottom:1px solid var(--border);
+  border-left:1px solid var(--border);
+  border-radius:0 0 0 12px;
+}
+.dev-sw{display:flex;align-items:center;gap:2px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:3px}
+.dev-btn{padding:5px 12px;border-radius:6px;border:none;font-size:.7rem;font-weight:700;cursor:pointer;color:var(--text3);background:transparent;transition:all .2s;display:flex;align-items:center;gap:4px;letter-spacing:.01em}
+.dev-btn.on{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(59,130,246,.4)}
+.dev-btn:not(.on):hover{color:var(--text);background:var(--card2)}
+.theme-pill{display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:.72rem;font-weight:600;color:var(--text2);transition:all .2s;white-space:nowrap}
+.theme-pill:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ══ TOP HEADER ══ */
+.header{
+  position:sticky;top:0;z-index:200;
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  padding:0 24px;height:56px;
+  display:flex;align-items:center;gap:14px;
+  backdrop-filter:blur(16px);
+}
+.logo-mark{
+  display:flex;align-items:center;gap:9px;
+}
+.logo-icon{
+  width:32px;height:32px;border-radius:9px;
+  background:linear-gradient(135deg,var(--accent),#8b5cf6);
+  display:flex;align-items:center;justify-content:center;
+  font-size:.9rem;font-weight:900;color:#fff;letter-spacing:-.5px;
+  font-family:'Fira Code',monospace;flex-shrink:0;
+}
+.logo-text{font-size:1rem;font-weight:800;letter-spacing:-.4px}
+.logo-text span{color:var(--accent)}
+.hdr-divider{width:1px;height:22px;background:var(--border)}
+.hdr-module{
+  display:flex;align-items:center;gap:8px;
+  font-size:.78rem;font-weight:600;color:var(--text2);
+}
+.hdr-module .mod-badge{
+  font-family:'Fira Code',monospace;font-size:.62rem;
+  padding:2px 9px;border-radius:20px;
+  background:var(--green-bg);color:var(--green);border:1px solid var(--green);
+}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:10px;padding-right:160px}
+.hdr-search{
+  display:flex;align-items:center;gap:8px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:9px;padding:7px 13px;
+  font-size:.75rem;color:var(--text3);cursor:text;
+  transition:all .2s;
+}
+.hdr-search:hover{border-color:var(--border2)}
+.hdr-search kbd{font-family:'Fira Code',monospace;font-size:.6rem;background:var(--card2);border:1px solid var(--border);border-radius:4px;padding:1px 5px}
+.hdr-icon-btn{
+  width:34px;height:34px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--card);border:1px solid var(--border);
+  cursor:pointer;font-size:1rem;color:var(--text2);
+  position:relative;transition:all .2s;
+}
+.hdr-icon-btn:hover{border-color:var(--accent);color:var(--accent)}
+.hdr-icon-btn .notif-dot{
+  position:absolute;top:4px;right:4px;
+  width:7px;height:7px;border-radius:50%;
+  background:var(--rose);border:1.5px solid var(--bg2);
+}
+.hdr-avatar{
+  width:34px;height:34px;border-radius:9px;
+  background:linear-gradient(135deg,#10b981,#0891b2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:.72rem;font-weight:800;color:#fff;cursor:pointer;
+  font-family:'Fira Code',monospace;
+}
+
+/* ══ NAV TABS ══ */
+.nav-strip{
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  padding:0 24px;display:flex;gap:0;overflow-x:auto;scrollbar-width:none;
+}
+.nav-strip::-webkit-scrollbar{display:none}
+.nav-tab{
+  display:flex;align-items:center;gap:7px;
+  padding:0 18px;height:44px;font-size:.78rem;font-weight:600;
+  color:var(--text3);cursor:pointer;white-space:nowrap;
+  border-bottom:2.5px solid transparent;transition:all .2s;
+}
+.nav-tab:hover{color:var(--text);background:var(--glow)}
+.nav-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.nav-tab .ntbadge{
+  font-family:'Fira Code',monospace;font-size:.58rem;
+  background:var(--glow);color:var(--accent);
+  padding:1px 6px;border-radius:10px;
+}
+
+/* ══ LAYOUT ══ */
+.layout{display:flex;min-height:calc(100vh - 100px)}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:230px;flex-shrink:0;
+  background:var(--bg2);border-right:1px solid var(--border);
+  padding:16px 0;
+  position:sticky;top:100px;height:calc(100vh - 100px);
+  overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent;
+  transition:width .3s,transform .3s;
+}
+.sb-section{
+  padding:10px 16px 5px;
+  font-size:.6rem;font-weight:700;letter-spacing:1.4px;
+  color:var(--text3);text-transform:uppercase;
+}
+.sb-item{
+  display:flex;align-items:center;gap:9px;
+  padding:9px 18px;font-size:.77rem;font-weight:500;
+  color:var(--text2);cursor:pointer;
+  border-left:2.5px solid transparent;transition:all .15s;
+}
+.sb-item:hover{color:var(--text);background:var(--glow)}
+.sb-item.active{color:var(--accent);background:var(--glow);border-left-color:var(--accent);font-weight:600}
+.sb-item .sbi-ico{font-size:.95rem;flex-shrink:0}
+.sb-item .sbi-badge{
+  margin-left:auto;font-family:'Fira Code',monospace;font-size:.6rem;
+  color:var(--text3);background:var(--surface);padding:1px 7px;border-radius:8px;
+}
+.sb-item .sbi-dot{
+  margin-left:auto;width:7px;height:7px;border-radius:50%;flex-shrink:0;
+}
+.sb-divider{height:1px;background:var(--border);margin:10px 16px}
+
+/* ── MAIN ── */
+.main{flex:1;padding:26px;min-width:0;overflow:hidden}
+
+/* ══ PAGE SECTIONS ══ */
+.pg{display:none}
+.pg.active{display:block;animation:fadeUp .28s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+
+/* ══ PAGE HEADER BANNER ══ */
+.pg-banner{
+  display:flex;align-items:flex-start;gap:18px;
+  padding:22px 24px;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:16px;margin-bottom:22px;
+  border-left:4px solid var(--accent);
+  position:relative;overflow:hidden;
+}
+.pg-banner::after{
+  content:'';position:absolute;top:-30px;right:-30px;
+  width:140px;height:140px;border-radius:50%;
+  background:var(--glow);pointer-events:none;
+}
+.pg-banner-ico{
+  width:50px;height:50px;border-radius:14px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.5rem;flex-shrink:0;
+}
+.pg-banner-body{flex:1;min-width:0}
+.pg-banner-body h2{font-size:1.18rem;font-weight:800;margin-bottom:5px;letter-spacing:-.3px}
+.pg-banner-body p{font-size:.8rem;color:var(--text2);line-height:1.65;max-width:700px}
+.pg-tags{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
+.ptag{
+  font-size:.65rem;font-weight:700;padding:3px 10px;
+  border-radius:20px;border:1px solid;
+}
+.pg-banner-stats{
+  display:flex;gap:20px;flex-shrink:0;align-items:flex-start;
+}
+.banner-stat .bsv{
+  font-family:'Fira Code',monospace;font-size:1.5rem;font-weight:800;line-height:1;
+}
+.banner-stat .bsl{font-size:.62rem;color:var(--text3);margin-top:2px}
+
+/* ══ KPI ROW ══ */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:22px}
+.kpi{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:13px;padding:16px 18px;
+  transition:all .2s;cursor:default;position:relative;overflow:hidden;
+}
+.kpi:hover{transform:translateY(-2px);border-color:var(--border2);box-shadow:var(--shadow2)}
+.kpi-val{font-family:'Fira Code',monospace;font-size:1.7rem;font-weight:800;line-height:1;margin-bottom:5px}
+.kpi-lbl{font-size:.68rem;color:var(--text2)}
+.kpi-delta{font-size:.63rem;margin-top:4px;display:flex;align-items:center;gap:4px}
+.kpi-bar{
+  position:absolute;bottom:0;left:0;height:3px;
+  border-radius:0 0 13px 13px;
+}
+
+/* ══ SECTION CARD ══ */
+.sc{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:14px;overflow:hidden;margin-bottom:16px;
+}
+.sc-head{
+  padding:13px 18px;display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid var(--border);
+  background:var(--card2);
+}
+.sc-head-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sc-head h3{font-size:.85rem;font-weight:700;flex:1}
+.sc-head .sc-tag{font-family:'Fira Code',monospace;font-size:.6rem;color:var(--text3)}
+.sc-head .sc-actions{display:flex;gap:6px;margin-left:auto}
+.sc-body{padding:16px 18px}
+
+/* ══ DATA TABLE ══ */
+.tbl{width:100%;border-collapse:collapse;font-size:.78rem}
+.tbl th{
+  text-align:left;padding:10px 14px;
+  font-size:.64rem;font-weight:700;color:var(--text3);
+  text-transform:uppercase;letter-spacing:.8px;
+  background:var(--card2);border-bottom:1px solid var(--border);
+  white-space:nowrap;
+}
+.tbl td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tbody tr{transition:background .15s;cursor:pointer}
+.tbl tbody tr:hover td{background:var(--glow)}
+.tbl-wrap{overflow-x:auto;border-radius:0 0 14px 14px}
+
+/* ══ EMPLOYEE ROW ══ */
+.emp-cell{display:flex;align-items:center;gap:10px}
+.emp-avatar{
+  width:34px;height:34px;border-radius:9px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.72rem;font-weight:800;color:#fff;
+  font-family:'Fira Code',monospace;flex-shrink:0;
+}
+.emp-name{font-weight:700;font-size:.8rem}
+.emp-sub{font-size:.67rem;color:var(--text2)}
+
+/* ══ CHIPS / BADGES ══ */
+.chip{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 10px;border-radius:20px;
+  font-size:.68rem;font-weight:700;border:1px solid;
+  white-space:nowrap;
+}
+.ch-green{border-color:var(--green);color:var(--green);background:var(--green-bg)}
+.ch-amber{border-color:var(--amber);color:var(--amber);background:var(--amber-bg)}
+.ch-rose{border-color:var(--rose);color:var(--rose);background:var(--rose-bg)}
+.ch-blue{border-color:var(--accent);color:var(--accent);background:var(--glow)}
+.ch-violet{border-color:var(--violet);color:var(--violet);background:var(--violet-bg)}
+.ch-cyan{border-color:var(--cyan);color:var(--cyan);background:var(--cyan-bg)}
+.ch-orange{border-color:var(--orange);color:var(--orange);background:var(--orange-bg)}
+.ch-gray{border-color:var(--border2);color:var(--text3);background:var(--card2)}
+
+/* ══ BUTTONS ══ */
+.btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:8px 17px;border-radius:9px;
+  font-size:.76rem;font-weight:600;cursor:pointer;
+  border:none;transition:all .2s;letter-spacing:.01em;
+}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2);transform:translateY(-1px);box-shadow:0 4px 14px rgba(59,130,246,.4)}
+.btn-success{background:var(--green);color:#fff}
+.btn-success:hover{opacity:.88;transform:translateY(-1px)}
+.btn-warn{background:var(--amber);color:#fff}
+.btn-danger{background:var(--rose);color:#fff}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text2)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm{padding:5px 12px;font-size:.7rem;border-radius:7px}
+
+/* ══ FORM ELEMENTS ══ */
+.form-shell{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.form-topbar{
+  background:var(--card2);border-bottom:1px solid var(--border);
+  padding:14px 22px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+}
+.form-topbar h3{font-size:.9rem;font-weight:800;flex:1;letter-spacing:-.2px}
+.prog-bar{
+  display:flex;align-items:center;gap:0;
+  padding:16px 24px;border-bottom:1px solid var(--border);
+  overflow-x:auto;scrollbar-width:none;
+}
+.prog-bar::-webkit-scrollbar{display:none}
+.prog-step{display:flex;align-items:center}
+.ps-dot{
+  width:30px;height:30px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.68rem;font-weight:700;flex-shrink:0;
+  font-family:'Fira Code',monospace;transition:all .25s;
+}
+.ps-dot.done{background:var(--green);color:#fff;box-shadow:0 0 0 3px var(--green-bg)}
+.ps-dot.now{background:var(--accent);color:#fff;box-shadow:0 0 0 4px var(--glow)}
+.ps-dot.todo{background:var(--card2);color:var(--text3);border:2px solid var(--border)}
+.ps-lbl{font-size:.67rem;font-weight:600;margin:0 9px;white-space:nowrap;color:var(--text2)}
+.ps-lbl.now{color:var(--accent)}
+.ps-lbl.done{color:var(--green)}
+.ps-line{width:28px;height:2px;background:var(--border);flex-shrink:0}
+.ps-line.done{background:var(--green)}
+.fbd{padding:24px}
+.frow{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:16px}
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg label{font-size:.7rem;font-weight:600;color:var(--text2)}
+.fg .req{color:var(--rose)}
+.finp,.fsel,.ftxt{
+  background:var(--inp-bg);border:1.5px solid var(--inp-br);
+  border-radius:9px;padding:9px 13px;font-size:.79rem;color:var(--text);
+  transition:border .2s,box-shadow .2s;outline:none;width:100%;
+}
+.finp:focus,.fsel:focus,.ftxt:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--glow)}
+.finp:disabled,.fsel:disabled{opacity:.55;cursor:not-allowed}
+.ftxt{resize:vertical;min-height:80px}
+.fsel{
+  cursor:pointer;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238aa0bf' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;
+}
+.fhint{font-size:.63rem;color:var(--text3);margin-top:2px}
+.fdiv{
+  font-size:.67rem;font-weight:700;color:var(--text3);
+  text-transform:uppercase;letter-spacing:1px;
+  padding:13px 0 9px;border-top:1px solid var(--border);margin-top:8px;
+}
+.fdiv:first-child{border-top:none;padding-top:0}
+.factions{display:flex;gap:10px;justify-content:flex-end;padding-top:10px}
+
+/* ══ TOGGLE ══ */
+.tog{
+  width:40px;height:22px;border-radius:11px;
+  background:var(--border2);position:relative;
+  cursor:pointer;transition:background .2s;flex-shrink:0;
+}
+.tog::after{
+  content:'';position:absolute;width:16px;height:16px;
+  background:#fff;border-radius:50%;top:3px;left:3px;
+  transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.3);
+}
+.tog.on{background:var(--accent)}
+.tog.on::after{left:21px}
+
+/* ══ TABS (inner) ══ */
+.tabs-row{display:flex;gap:4px;margin-bottom:18px;flex-wrap:wrap}
+.tab-btn{
+  padding:7px 16px;border-radius:9px;font-size:.75rem;font-weight:600;
+  cursor:pointer;border:1.5px solid var(--border);color:var(--text3);
+  transition:all .2s;background:transparent;
+}
+.tab-btn:hover{border-color:var(--border2);color:var(--text)}
+.tab-btn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tab-pane{display:none}
+.tab-pane.on{display:block;animation:fadeUp .2s ease}
+
+/* ══ SEARCH / FILTER BAR ══ */
+.toolbar{
+  display:flex;align-items:center;gap:10px;
+  margin-bottom:16px;flex-wrap:wrap;
+}
+.search-box{
+  display:flex;align-items:center;gap:8px;
+  background:var(--inp-bg);border:1.5px solid var(--inp-br);
+  border-radius:9px;padding:8px 13px;
+  flex:1;min-width:200px;max-width:320px;
+  transition:border .2s;
+}
+.search-box:focus-within{border-color:var(--accent)}
+.search-box input{
+  background:transparent;border:none;outline:none;
+  font-size:.78rem;color:var(--text);width:100%;
+}
+.search-box input::placeholder{color:var(--text3)}
+.filter-sel{
+  background:var(--inp-bg);border:1.5px solid var(--inp-br);
+  border-radius:9px;padding:7px 32px 7px 12px;
+  font-size:.75rem;color:var(--text);outline:none;cursor:pointer;
+  appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%238aa0bf' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;
+  transition:border .2s;
+}
+.filter-sel:focus{border-color:var(--accent)}
+.tbar-r{margin-left:auto;display:flex;gap:8px;align-items:center}
+
+/* ══ PIPELINE FLOW ══ */
+.pipe-wrap{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:14px;padding:20px;margin-bottom:18px;
+  overflow-x:auto;
+}
+.pipe-lbl{font-size:.65rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px}
+.pipe{display:flex;align-items:center;gap:0;min-width:max-content}
+.pipe-node{text-align:center;min-width:106px;position:relative}
+.pipe-box{
+  border-radius:11px;padding:11px 12px;
+  font-size:.73rem;font-weight:700;border:1.5px solid;
+  transition:transform .2s,box-shadow .2s;cursor:default;position:relative;
+}
+.pipe-box:hover{transform:translateY(-2px);box-shadow:var(--shadow2)}
+.pn{
+  position:absolute;top:-8px;left:50%;transform:translateX(-50%);
+  width:17px;height:17px;border-radius:50%;font-size:.58rem;font-weight:800;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Fira Code',monospace;
+}
+.pi{font-size:1.15rem;margin-bottom:3px}
+.pl{font-size:.7rem;font-weight:700}
+.ps{font-size:.6rem;opacity:.7;margin-top:2px}
+.pipe-arr{color:var(--text3);font-size:1rem;padding:0 8px;padding-bottom:14px;flex-shrink:0}
+
+/* ══ ONBOARDING CHECKLIST ══ */
+.ob-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:18px}
+.ob-dept{background:var(--card);border:1px solid var(--border);border-radius:13px;overflow:hidden}
+.ob-dhead{padding:11px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.ob-dtitle{font-size:.8rem;font-weight:700;flex:1}
+.ob-dbody{padding:10px 14px}
+.ob-task{display:flex;align-items:flex-start;gap:9px;padding:8px 0;border-bottom:1px solid var(--border);font-size:.74rem}
+.ob-task:last-child{border-bottom:none}
+.ob-chk{
+  width:18px;height:18px;border-radius:5px;border:1.5px solid var(--border);
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-size:.6rem;margin-top:1px;cursor:pointer;transition:all .15s;
+}
+.ob-chk.done{background:var(--green);border-color:var(--green);color:#fff}
+.ob-chk.late{background:var(--rose-bg);border-color:var(--rose);color:var(--rose)}
+.ob-task-name{font-weight:600;margin-bottom:1px}
+.ob-task-meta{font-size:.65rem;color:var(--text3)}
+.ob-prog{height:4px;background:var(--border);border-radius:2px;margin-top:10px}
+.ob-progfill{height:100%;border-radius:2px;transition:width .5s}
+
+/* ══ PROBATION ROWS ══ */
+.prob-list{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.prob-hdr{
+  display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr auto;gap:12px;
+  padding:10px 16px;background:var(--card2);border-bottom:1px solid var(--border);
+  font-size:.63rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.7px;
+}
+.prob-row{
+  display:grid;grid-template-columns:1.8fr 1fr 1fr 1fr auto;gap:12px;
+  padding:13px 16px;border-bottom:1px solid var(--border);align-items:center;
+  transition:background .15s;cursor:pointer;
+}
+.prob-row:hover{background:var(--glow)}
+.prob-row:last-child{border-bottom:none}
+.prob-urgent{background:var(--rose-bg)!important}
+
+/* ══ TRANSFER CARDS ══ */
+.tc{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 18px;border:1px solid var(--border);
+  border-radius:12px;margin-bottom:10px;
+  background:var(--card2);transition:border-color .2s;
+}
+.tc:hover{border-color:var(--border2)}
+.tc-av{
+  width:40px;height:40px;border-radius:11px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.8rem;font-weight:800;color:#fff;flex-shrink:0;
+  font-family:'Fira Code',monospace;
+}
+.tc-body{flex:1}
+.tc-name{font-size:.82rem;font-weight:700;margin-bottom:3px}
+.tc-meta{font-size:.7rem;color:var(--text2);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.tc-arr{color:var(--accent);font-weight:800}
+.tc-right{display:flex;gap:7px;align-items:center;flex-shrink:0}
+
+/* ══ TIMELINE ══ */
+.timeline{padding-left:28px;position:relative}
+.timeline::before{content:'';position:absolute;left:10px;top:6px;bottom:6px;width:1.5px;background:var(--border)}
+.tl-item{position:relative;padding-bottom:20px}
+.tl-item:last-child{padding-bottom:0}
+.tl-dot{
+  position:absolute;left:-22px;top:4px;
+  width:14px;height:14px;border-radius:50%;
+  border:2px solid;display:flex;align-items:center;
+  justify-content:center;font-size:.5rem;font-weight:800;
+  background:var(--card);
+}
+.tl-title{font-size:.79rem;font-weight:700;margin-bottom:2px}
+.tl-sub{font-size:.69rem;color:var(--text2)}
+
+/* ══ SALARY ROWS ══ */
+.sal-row{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 0;border-bottom:1px solid var(--border);font-size:.77rem;
+}
+.sal-row:last-child{border-bottom:none}
+.sal-name{flex:1;color:var(--text2)}
+.sal-type{
+  font-family:'Fira Code',monospace;font-size:.6rem;
+  padding:2px 7px;border-radius:5px;background:var(--card2);color:var(--text3);
+}
+.sal-amt{font-family:'Fira Code',monospace;font-weight:700;min-width:90px;text-align:right}
+
+/* ══ ALERT / INFO BANNERS ══ */
+.banner-warn{
+  display:flex;align-items:center;gap:10px;
+  padding:11px 16px;border:1px solid var(--amber);
+  background:var(--amber-bg);border-radius:11px;margin-bottom:14px;
+  font-size:.75rem;
+}
+.banner-info{
+  display:flex;align-items:center;gap:10px;
+  padding:11px 16px;border:1px solid var(--accent);
+  background:var(--glow);border-radius:11px;margin-bottom:14px;
+  font-size:.75rem;
+}
+.banner-success{
+  display:flex;align-items:center;gap:10px;
+  padding:11px 16px;border:1px solid var(--green);
+  background:var(--green-bg);border-radius:11px;margin-bottom:14px;
+  font-size:.75rem;
+}
+.ban-ico{font-size:1.05rem;flex-shrink:0}
+.ban-body{flex:1;color:var(--text2)}
+.ban-body strong{color:var(--text)}
+
+/* ══ MODAL ══ */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);
+  backdrop-filter:blur(4px);z-index:5000;
+  display:none;align-items:center;justify-content:center;padding:20px;
+}
+.modal-overlay.open{display:flex;animation:fadeUp .2s ease}
+.modal{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:18px;width:100%;max-width:600px;
+  max-height:90vh;overflow-y:auto;
+  box-shadow:0 24px 80px rgba(0,0,0,.6);
+}
+.modal-hd{
+  padding:20px 24px 16px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;
+}
+.modal-hd h3{font-size:.95rem;font-weight:800;flex:1}
+.modal-close{
+  width:30px;height:30px;border-radius:7px;border:none;
+  background:var(--card2);color:var(--text2);cursor:pointer;
+  font-size:.9rem;display:flex;align-items:center;justify-content:center;
+  transition:all .2s;
+}
+.modal-close:hover{background:var(--rose-bg);color:var(--rose)}
+.modal-body{padding:20px 24px}
+.modal-ft{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+
+/* ══ PROFILE DRAWER ══ */
+.drawer-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.5);
+  backdrop-filter:blur(3px);z-index:4000;
+  display:none;
+}
+.drawer-overlay.open{display:block}
+.drawer{
+  position:fixed;right:0;top:0;bottom:0;
+  width:420px;background:var(--surface);
+  border-left:1px solid var(--border);
+  z-index:4001;overflow-y:auto;
+  transform:translateX(100%);transition:transform .3s ease;
+  box-shadow:-8px 0 40px rgba(0,0,0,.3);
+}
+.drawer.open{transform:translateX(0)}
+.drawer-hd{
+  padding:20px 22px 16px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;
+  background:var(--card2);position:sticky;top:0;z-index:1;
+}
+.drawer-close{
+  margin-left:auto;width:30px;height:30px;border-radius:7px;
+  background:var(--card);border:1px solid var(--border);
+  color:var(--text2);cursor:pointer;font-size:.85rem;
+  display:flex;align-items:center;justify-content:center;transition:all .2s;
+}
+.drawer-close:hover{background:var(--rose-bg);color:var(--rose);border-color:var(--rose)}
+.drawer-body{padding:20px 22px}
+
+/* ══ SUMMARY COUNTER ROW ══ */
+.sum-row{
+  display:flex;align-items:center;gap:6px;
+  font-size:.72rem;color:var(--text3);margin-bottom:14px;
+}
+.sum-row strong{color:var(--text);font-weight:700}
+.sum-dot{width:5px;height:5px;border-radius:50%;background:var(--border2)}
+
+/* ══ MOBILE RESPONSIVE ══ */
+body.mob .sidebar{
+  width:100%;height:auto;position:relative;top:0;
+  border-right:none;border-bottom:1px solid var(--border);
+  display:flex;overflow-x:auto;padding:6px 0;scrollbar-width:none;
+}
+body.mob .sidebar::-webkit-scrollbar{display:none}
+body.mob .sb-section{display:none}
+body.mob .sb-divider{display:none}
+body.mob .sb-item{
+  flex-direction:column;gap:3px;padding:7px 14px;
+  border-left:none;border-bottom:2.5px solid transparent;
+  white-space:nowrap;min-width:auto;font-size:.67rem;
+}
+body.mob .sb-item.active{border-left:none;border-bottom-color:var(--accent)}
+body.mob .sbi-badge{display:none!important}
+body.mob .sbi-dot{display:none!important}
+body.mob .main{padding:14px}
+body.mob .kpi-row{grid-template-columns:repeat(2,1fr)}
+body.mob .frow{grid-template-columns:1fr}
+body.mob .layout{flex-direction:column}
+body.mob .pg-banner{flex-direction:column;gap:12px}
+body.mob .pg-banner-stats{flex-direction:row;gap:18px}
+body.mob .hdr-search{display:none}
+body.mob .prob-hdr,.body.mob .prob-row{grid-template-columns:1.4fr 1fr auto}
+body.mob .prob-hdr span:nth-child(2),.body.mob .prob-row>*:nth-child(2){display:none}
+body.mob .drawer{width:100%}
+body.mob .ob-grid{grid-template-columns:1fr}
+body.mob .prog-bar{padding:12px 14px}
+body.mob .ps-lbl{display:none}
+body.mob .ps-line{width:14px}
+
+/* ══ MISC ══ */
+.mono{font-family:'Fira Code',monospace}
+.txt-green{color:var(--green)}
+.txt-amber{color:var(--amber)}
+.txt-rose{color:var(--rose)}
+.txt-accent{color:var(--accent)}
+.txt-violet{color:var(--violet)}
+.txt-cyan{color:var(--cyan)}
+.txt-muted{color:var(--text3)}
+.fw7{font-weight:700}
+.fw8{font-weight:800}
+.fz8{font-size:.8rem}
+.fz7{font-size:.72rem}
+.gap-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mt10{margin-top:10px}
+.mt14{margin-top:14px}
+.mt18{margin-top:18px}
+.mb10{margin-bottom:10px}
+.mb14{margin-bottom:14px}
+.mb18{margin-bottom:18px}
+.vis-sep{height:1px;background:var(--border);margin:16px 0}
+.empty-state{text-align:center;padding:40px 20px;color:var(--text3)}
+.empty-state .es-ico{font-size:2.4rem;margin-bottom:10px}
+.tag-row{display:flex;gap:6px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+  DEVICE SWITCHER + THEME — always top-right, outside both views
+═══════════════════════════════════════════ -->
+<div class="device-bar">
+  <div class="dev-sw">
+    <button class="dev-btn on" id="btn-desk" onclick="setDevice('desk')">🖥️ Desktop</button>
+    <button class="dev-btn" id="btn-mob" onclick="setDevice('mob')">📱 Mobile</button>
+  </div>
+  <div class="theme-pill" onclick="toggleTheme()">
+    <span id="th-ico">☀️</span><span id="th-lbl">Light Mode</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+  HEADER
+═══════════════════════════════════════════ -->
+<div class="header">
+  <div class="logo-mark">
+    <div class="logo-icon">HR</div>
+    <div class="logo-text">Avi<span>ERP</span></div>
+  </div>
+  <div class="hdr-divider"></div>
+  <div class="hdr-module">
+    <span>Human Resources</span>
+    <span class="mod-badge">Module 2</span>
+  </div>
+  <div class="hdr-right">
+    <div class="hdr-search" onclick="document.getElementById('gsearch').focus()">
+      <span class="txt-muted" style="font-size:.85rem">🔍</span>
+      <input id="gsearch" placeholder="Search employees, IDs, actions…" style="background:transparent;border:none;outline:none;font-size:.75rem;color:var(--text);width:200px"/>
+      <kbd>⌘K</kbd>
+    </div>
+    <div class="hdr-icon-btn" title="Notifications">
+      🔔
+      <div class="notif-dot"></div>
+    </div>
+    <div class="hdr-icon-btn" title="Tasks">📋</div>
+    <div class="hdr-avatar" title="Sneha Kapoor — HR Admin">SK</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+  NAV TABS
+═══════════════════════════════════════════ -->
+<div class="nav-strip">
+  <div class="nav-tab" onclick="switchPg('dashboard',this)"><span>📊</span> Dashboard</div>
+  <div class="nav-tab active" onclick="switchPg('employee-hub',this)"><span>👤</span> Employee Hub <span class="ntbadge">4→1</span></div>
+  <div class="nav-tab" onclick="switchPg('payroll',this)"><span>💰</span> Payroll</div>
+  <div class="nav-tab" onclick="switchPg('attendance',this)"><span>📅</span> Attendance</div>
+  <div class="nav-tab" onclick="switchPg('leave',this)"><span>🌴</span> Leave</div>
+  <div class="nav-tab" onclick="switchPg('performance',this)"><span>⭐</span> Performance</div>
+  <div class="nav-tab" onclick="switchPg('recruitment',this)"><span>🎯</span> Recruitment</div>
+  <div class="nav-tab" onclick="switchPg('reports',this)"><span>📈</span> Reports</div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+  LAYOUT
+═══════════════════════════════════════════ -->
+<div class="layout">
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sb-section">Employee Hub</div>
+  <div class="sb-item active" onclick="openSbItem('emp-directory',this)">
+    <span class="sbi-ico">👥</span>Employee Directory
+    <span class="sbi-badge">342</span>
+  </div>
+  <div class="sb-item" onclick="openSbItem('new-hire',this)">
+    <span class="sbi-ico">➕</span>New Hire Entry
+    <span class="sbi-dot" style="background:var(--green)"></span>
+  </div>
+  <div class="sb-item" onclick="openSbItem('onboarding',this)">
+    <span class="sbi-ico">✅</span>Onboarding
+    <span class="sbi-badge" style="color:var(--amber)">4</span>
+  </div>
+  <div class="sb-item" onclick="openSbItem('probation',this)">
+    <span class="sbi-ico">🕐</span>Probation
+    <span class="sbi-badge" style="color:var(--rose)">6</span>
+  </div>
+  <div class="sb-item" onclick="openSbItem('transfers',this)">
+    <span class="sbi-ico">🔄</span>Transfers
+    <span class="sbi-badge" style="color:var(--violet)">2</span>
+  </div>
+  <div class="sb-item" onclick="openSbItem('promotions',this)">
+    <span class="sbi-ico">⬆️</span>Promotions
+    <span class="sbi-badge">3</span>
+  </div>
+  <div class="sb-divider"></div>
+  <div class="sb-section">Quick Actions</div>
+  <div class="sb-item" onclick="openModal('modal-newhire')">
+    <span class="sbi-ico">📋</span>Add Employee
+  </div>
+  <div class="sb-item" onclick="openDrawer('EMP-2024-0089','Arjun Mehta','Engineering','L4 · Senior Dev','#3b82f6')">
+    <span class="sbi-ico">🔍</span>Employee Profile
+  </div>
+  <div class="sb-item" onclick="openSbItem('transfers',this)">
+    <span class="sbi-ico">📑</span>Generate Letter
+  </div>
+  <div class="sb-divider"></div>
+  <div class="sb-section">Settings</div>
+  <div class="sb-item"><span class="sbi-ico">⚙️</span>Configuration</div>
+  <div class="sb-item"><span class="sbi-ico">📤</span>Import / Export</div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div class="main">
+
+<!-- ═══════ EMPLOYEE DIRECTORY ═══════ -->
+<div id="pg-emp-directory" class="pg active">
+
+  <div class="pg-banner" style="border-left-color:var(--accent)">
+    <div class="pg-banner-ico" style="background:var(--glow)">👥</div>
+    <div class="pg-banner-body">
+      <h2>Employee Hub — Directory & Lifecycle</h2>
+      <p>Unified view for all employee records, onboarding, probation tracking, transfers & promotions. All lifecycle events auto-logged. Works for any industry — manufacturing, services, IT, healthcare, retail.</p>
+      <div class="pg-tags">
+        <span class="ptag" style="background:var(--green-bg);color:var(--green);border-color:var(--green)">342 Active</span>
+        <span class="ptag" style="background:var(--glow);color:var(--accent);border-color:var(--accent)">4 Onboarding</span>
+        <span class="ptag" style="background:var(--rose-bg);color:var(--rose);border-color:var(--rose)">6 Probation Due</span>
+        <span class="ptag" style="background:var(--violet-bg);color:var(--violet);border-color:var(--violet)">All Industries</span>
+      </div>
+    </div>
+    <div class="pg-banner-stats">
+      <div class="banner-stat"><div class="bsv txt-green">342</div><div class="bsl">Total Active</div></div>
+      <div class="banner-stat"><div class="bsv txt-amber">4</div><div class="bsl">In Onboarding</div></div>
+      <div class="banner-stat"><div class="bsv txt-rose">6</div><div class="bsl">Probation Due</div></div>
+    </div>
+  </div>
+
+  <!-- KPI Row -->
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-val txt-green">342</div>
+      <div class="kpi-lbl">Active Employees</div>
+      <div class="kpi-delta txt-green">▲ +7 this month</div>
+      <div class="kpi-bar" style="width:78%;background:var(--green)"></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val txt-accent">7</div>
+      <div class="kpi-lbl">New Joiners (Mar)</div>
+      <div class="kpi-delta txt-accent">4 onboarding active</div>
+      <div class="kpi-bar" style="width:45%;background:var(--accent)"></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val txt-rose">6</div>
+      <div class="kpi-lbl">Probation Ending</div>
+      <div class="kpi-delta txt-rose">⚠️ 2 this week</div>
+      <div class="kpi-bar" style="width:35%;background:var(--rose)"></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val txt-violet">2</div>
+      <div class="kpi-lbl">Transfers Pending</div>
+      <div class="kpi-delta txt-muted">Awaiting approval</div>
+      <div class="kpi-bar" style="width:20%;background:var(--violet)"></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val txt-cyan">3</div>
+      <div class="kpi-lbl">Promotions (Mar)</div>
+      <div class="kpi-delta txt-green">All letters sent</div>
+      <div class="kpi-bar" style="width:30%;background:var(--cyan)"></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val txt-amber">14</div>
+      <div class="kpi-lbl">Depts Covered</div>
+      <div class="kpi-delta txt-muted">Across 3 locations</div>
+      <div class="kpi-bar" style="width:100%;background:var(--amber)"></div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="search-box">
+      <span style="font-size:.85rem;color:var(--text3)">🔍</span>
+      <input id="emp-search" placeholder="Search name, ID, department…" oninput="filterTable(this.value)"/>
+    </div>
+    <select class="filter-sel" id="dept-filter" onchange="filterTable()">
+      <option value="">All Departments</option>
+      <option>Engineering</option>
+      <option>Product Design</option>
+      <option>Sales</option>
+      <option>Finance</option>
+      <option>HR</option>
+      <option>Operations</option>
+      <option>Marketing</option>
+      <option>Legal</option>
+    </select>
+    <select class="filter-sel" id="status-filter" onchange="filterTable()">
+      <option value="">All Status</option>
+      <option>Active</option>
+      <option>Probation</option>
+      <option>On Leave</option>
+      <option>Inactive</option>
+    </select>
+    <select class="filter-sel" id="loc-filter" onchange="filterTable()">
+      <option value="">All Locations</option>
+      <option>Bangalore HQ</option>
+      <option>Mumbai Office</option>
+      <option>Delhi NCR</option>
+      <option>Remote</option>
+    </select>
+    <div class="tbar-r">
+      <span class="txt-muted fz7 mono" id="emp-count">342 employees</span>
+      <button class="btn btn-ghost btn-sm">📤 Export</button>
+      <button class="btn btn-primary btn-sm" onclick="openModal('modal-newhire')">➕ Add Employee</button>
+    </div>
+  </div>
+
+  <!-- Employee Table -->
+  <div class="sc">
+    <div class="tbl-wrap">
+      <table class="tbl" id="emp-table">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>EMP ID</th>
+            <th>Department</th>
+            <th>Designation</th>
+            <th>Location</th>
+            <th>Joined</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="emp-tbody">
+          <!-- Rows injected by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /emp-directory -->
+
+
+<!-- ═══════ NEW HIRE ENTRY ═══════ -->
+<div id="pg-new-hire" class="pg">
+
+  <div class="pg-banner" style="border-left-color:var(--green)">
+    <div class="pg-banner-ico" style="background:var(--green-bg)">➕</div>
+    <div class="pg-banner-body">
+      <h2>New Hire Entry — TRN-010</h2>
+      <p>6-tab guided form. Progress auto-saved. Import from accepted offer letter pre-fills all key fields. On submit: Employee ID auto-generated, corporate email created, system access provisioned, and onboarding checklist triggered instantly.</p>
+      <div class="pg-tags">
+        <span class="ptag" style="background:var(--green-bg);color:var(--green);border-color:var(--green)">Auto-saves progress</span>
+        <span class="ptag" style="background:var(--glow);color:var(--accent);border-color:var(--accent)">Offer letter import</span>
+        <span class="ptag" style="background:var(--amber-bg);color:var(--amber);border-color:var(--amber)">Auto EMP ID</span>
+        <span class="ptag" style="background:var(--cyan-bg);color:var(--cyan);border-color:var(--cyan)">Onboarding triggered</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-shell">
+    <div class="form-topbar">
+      <h3>New Employee — Priya Iyer</h3>
+      <span class="chip ch-amber">Draft — Step 2 of 6</span>
+      <button class="btn btn-ghost btn-sm">📥 Import from Offer</button>
+      <button class="btn btn-primary btn-sm" onclick="goToStep(3)">Save & Continue →</button>
+    </div>
+    <div class="prog-bar" id="hire-prog">
+      <div class="prog-step"><div class="ps-dot done">✓</div><div class="ps-lbl done">Personal</div><div class="ps-line done"></div></div>
+      <div class="prog-step"><div class="ps-dot now">2</div><div class="ps-lbl now">Professional</div><div class="ps-line"></div></div>
+      <div class="prog-step"><div class="ps-dot todo">3</div><div class="ps-lbl">Salary</div><div class="ps-line"></div></div>
+      <div class="prog-step"><div class="ps-dot todo">4</div><div class="ps-lbl">Bank</div><div class="ps-line"></div></div>
+      <div class="prog-step"><div class="ps-dot todo">5</div><div class="ps-lbl">Documents</div><div class="ps-line"></div></div>
+      <div class="prog-step"><div class="ps-dot todo">6</div><div class="ps-lbl">Review</div></div>
+    </div>
+
+    <!-- Step 1: Personal (filled/done) -->
+    <div id="hire-step-1" class="fbd" style="display:none">
+      <div class="fdiv">Personal Information</div>
+      <div class="frow">
+        <div class="fg"><label>First Name <span class="req">*</span></label><input class="finp" value="Priya"/></div>
+        <div class="fg"><label>Last Name <span class="req">*</span></label><input class="finp" value="Iyer"/></div>
+        <div class="fg"><label>Date of Birth <span class="req">*</span></label><input class="finp" type="date" value="1994-07-22"/></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Gender <span class="req">*</span></label><select class="fsel"><option selected>Female</option><option>Male</option><option>Non-binary</option><option>Prefer not to say</option></select></div>
+        <div class="fg"><label>Nationality</label><input class="finp" value="Indian"/></div>
+        <div class="fg"><label>Personal Email <span class="req">*</span></label><input class="finp" type="email" value="priya.iyer@gmail.com"/></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Mobile <span class="req">*</span></label><input class="finp" value="+91 98765 43210"/></div>
+        <div class="fg"><label>Aadhaar No.</label><input class="finp" value="XXXX XXXX 4521" placeholder="Masked for security"/></div>
+        <div class="fg"><label>PAN No. <span class="req">*</span></label><input class="finp" value="BRQPI2345G"/></div>
+      </div>
+      <div class="fdiv">Address</div>
+      <div class="frow">
+        <div class="fg" style="grid-column:1/-1"><label>Permanent Address</label><input class="finp" value="42, 3rd Cross, Indiranagar, Bangalore — 560038"/></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Emergency Contact Name</label><input class="finp" value="Ramesh Iyer"/></div>
+        <div class="fg"><label>Relation</label><input class="finp" value="Father"/></div>
+        <div class="fg"><label>Emergency Phone</label><input class="finp" value="+91 97654 32109"/></div>
+      </div>
+      <div class="factions">
+        <button class="btn btn-primary" onclick="goToStep(2)">Next: Professional →</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Professional (active) -->
+    <div id="hire-step-2" class="fbd">
+      <div class="banner-info mb14">
+        <span class="ban-ico">🤖</span>
+        <div class="ban-body"><strong>Auto-filled from Offer Letter OL-2026-0141:</strong> Designation, Department, Grade, Joining Date, CTC imported. Verify and continue.</div>
+      </div>
+      <div class="fdiv">Professional Details</div>
+      <div class="frow">
+        <div class="fg"><label>Employee ID</label><input class="finp" value="EMP-2026-0142" disabled/><div class="fhint">Auto-generated on final submit</div></div>
+        <div class="fg"><label>Joining Date <span class="req">*</span></label><input class="finp" type="date" value="2026-03-15"/></div>
+        <div class="fg"><label>Employee Type <span class="req">*</span></label><select class="fsel"><option>Permanent</option><option>Contractual</option><option>Intern</option><option>Consultant</option><option>Apprentice</option></select></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Department <span class="req">*</span></label>
+          <select class="fsel" id="dept-sel" onchange="updateDesignations()">
+            <option>Product Design</option><option>Engineering</option><option>Sales</option><option>Finance</option><option>HR</option><option>Operations</option><option>Marketing</option><option>Legal</option>
+          </select>
+        </div>
+        <div class="fg"><label>Designation <span class="req">*</span></label>
+          <select class="fsel" id="desig-sel">
+            <option>Senior Product Designer</option><option>Product Designer</option><option>Lead Designer</option><option>UX Researcher</option>
+          </select>
+        </div>
+        <div class="fg"><label>Grade / Band <span class="req">*</span></label>
+          <select class="fsel"><option>L4 — Senior</option><option>L3 — Mid</option><option>L2 — Junior</option><option>L5 — Lead</option><option>L6 — Principal</option></select>
+        </div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Reporting Manager <span class="req">*</span></label><input class="finp" value="Vikram Nair (VP Design)" placeholder="Search by name or EMP ID…"/></div>
+        <div class="fg"><label>Work Location <span class="req">*</span></label><select class="fsel"><option>Bangalore HQ</option><option>Mumbai Office</option><option>Delhi NCR</option><option>Remote</option><option>Hybrid</option></select></div>
+        <div class="fg"><label>Cost Centre</label><input class="finp" value="CC-PD-001"/></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Shift</label><select class="fsel"><option>General (9am–6pm)</option><option>Morning (8am–5pm)</option><option>Flexible</option><option>US Shift</option></select></div>
+        <div class="fg"><label>Notice Period</label><select class="fsel"><option>60 days</option><option>30 days</option><option>90 days</option></select></div>
+        <div class="fg"><label>Work Calendar</label><select class="fsel"><option>India Standard (Mon–Fri)</option><option>US Calendar</option><option>24×7 Rotation</option></select></div>
+      </div>
+      <div class="fdiv">Probation (Auto-configured)</div>
+      <div class="frow">
+        <div class="fg"><label>Probation Period</label><input class="finp" value="3 months" disabled/><div class="fhint">From HRMS Config</div></div>
+        <div class="fg"><label>Probation End Date</label><input class="finp" value="2026-06-14" disabled/><div class="fhint">Auto-calculated</div></div>
+        <div class="fg"><label>Manager Reminder</label><input class="finp" value="30 days before — May 15, 2026" disabled/></div>
+      </div>
+      <div class="factions">
+        <button class="btn btn-ghost" onclick="goToStep(1)">← Back</button>
+        <button class="btn btn-primary" onclick="goToStep(3)">Save & Next: Salary →</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Salary -->
+    <div id="hire-step-3" class="fbd" style="display:none">
+      <div class="fdiv">Salary & CTC</div>
+      <div class="frow">
+        <div class="fg"><label>Annual CTC (₹ LPA) <span class="req">*</span></label><input class="finp" type="number" value="18" oninput="calcCTC(this.value)"/><div class="fhint">Structure auto-applied from L4 template</div></div>
+        <div class="fg"><label>Salary Structure</label><select class="fsel"><option selected>L4 Standard — Product</option><option>L4 Sales Commission</option><option>L4 Technical</option></select></div>
+        <div class="fg"><label>Payment Mode</label><select class="fsel"><option>NEFT</option><option>IMPS</option><option>Cheque</option></select></div>
+      </div>
+      <div class="fdiv">CTC Breakup Preview — Monthly</div>
+      <div style="background:var(--card2);border:1px solid var(--border);border-radius:11px;padding:16px;margin-bottom:14px">
+        <div class="sal-row"><span class="sal-name">Basic Salary</span><span class="sal-type">40% of CTC</span><span class="sal-amt txt-accent" id="sl-basic">₹6,000</span></div>
+        <div class="sal-row"><span class="sal-name">HRA</span><span class="sal-type">50% of Basic</span><span class="sal-amt" id="sl-hra">₹3,000</span></div>
+        <div class="sal-row"><span class="sal-name">Conveyance</span><span class="sal-type">Fixed</span><span class="sal-amt">₹1,600</span></div>
+        <div class="sal-row"><span class="sal-name">Medical Allowance</span><span class="sal-type">Fixed</span><span class="sal-amt">₹1,250</span></div>
+        <div class="sal-row"><span class="sal-name">Special Allowance</span><span class="sal-type">Balancing</span><span class="sal-amt" id="sl-special">₹2,150</span></div>
+        <div class="sal-row"><span class="sal-name">PF (Employee 12%)</span><span class="sal-type">Deduction</span><span class="sal-amt txt-rose" id="sl-pf">−₹720</span></div>
+        <div class="sal-row" style="font-weight:700;border-top:1px solid var(--border2);padding-top:10px;margin-top:4px">
+          <span class="sal-name fw8">Gross Monthly</span><span class="sal-type" style="visibility:hidden">x</span><span class="sal-amt txt-green fw8" id="sl-gross">₹14,000</span>
+        </div>
+        <div class="sal-row" style="font-weight:700">
+          <span class="sal-name fw8">Net Take-home</span><span class="sal-type" style="visibility:hidden">x</span><span class="sal-amt txt-accent fw8" id="sl-net">₹13,280</span>
+        </div>
+      </div>
+      <div class="factions">
+        <button class="btn btn-ghost" onclick="goToStep(2)">← Back</button>
+        <button class="btn btn-primary" onclick="goToStep(4)">Save & Next: Bank →</button>
+      </div>
+    </div>
+
+    <!-- Step 4: Bank -->
+    <div id="hire-step-4" class="fbd" style="display:none">
+      <div class="fdiv">Bank Details</div>
+      <div class="frow">
+        <div class="fg"><label>IFSC Code <span class="req">*</span></label><input class="finp" id="ifsc-inp" placeholder="e.g. HDFC0001234" oninput="lookupIFSC(this.value)"/><div class="fhint" id="ifsc-hint">Bank name auto-fills on valid IFSC</div></div>
+        <div class="fg"><label>Bank Name</label><input class="finp" id="bank-name" placeholder="Auto-filled from IFSC" disabled/></div>
+        <div class="fg"><label>Branch</label><input class="finp" id="bank-branch" placeholder="Auto-filled" disabled/></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Account Number <span class="req">*</span></label><input class="finp" id="acc-num" type="password" placeholder="Enter account number"/></div>
+        <div class="fg"><label>Confirm Account Number <span class="req">*</span></label><input class="finp" id="acc-conf" placeholder="Re-enter to confirm" oninput="checkAccMatch()"/><div class="fhint" id="acc-hint"></div></div>
+        <div class="fg"><label>Account Type</label><select class="fsel"><option>Savings</option><option>Current</option></select></div>
+      </div>
+      <div class="factions">
+        <button class="btn btn-ghost" onclick="goToStep(3)">← Back</button>
+        <button class="btn btn-primary" onclick="goToStep(5)">Save & Next: Documents →</button>
+      </div>
+    </div>
+
+    <!-- Step 5: Documents -->
+    <div id="hire-step-5" class="fbd" style="display:none">
+      <div class="fdiv">Document Upload</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px">
+        <div id="doc-aadhaar" class="fg" style="background:var(--card2);border:1px solid var(--border);border-radius:11px;padding:14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span>🪪</span><span style="font-size:.78rem;font-weight:700">Aadhaar Card</span>
+            <span class="chip ch-rose btn-sm" style="margin-left:auto;font-size:.6rem">Required</span>
+          </div>
+          <input class="finp" type="file" style="padding:6px" onchange="markDocUploaded('doc-aadhaar',this)"/>
+          <div class="fhint">PDF / JPG · Max 2MB</div>
+        </div>
+        <div id="doc-pan" class="fg" style="background:var(--card2);border:1px solid var(--border);border-radius:11px;padding:14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span>🪪</span><span style="font-size:.78rem;font-weight:700">PAN Card</span>
+            <span class="chip ch-rose btn-sm" style="margin-left:auto;font-size:.6rem">Required</span>
+          </div>
+          <input class="finp" type="file" style="padding:6px" onchange="markDocUploaded('doc-pan',this)"/>
+          <div class="fhint">PDF / JPG · Max 2MB</div>
+        </div>
+        <div id="doc-photo" class="fg" style="background:var(--card2);border:1px solid var(--border);border-radius:11px;padding:14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span>📷</span><span style="font-size:.78rem;font-weight:700">Passport Photo</span>
+            <span class="chip ch-rose btn-sm" style="margin-left:auto;font-size:.6rem">Required</span>
+          </div>
+          <input class="finp" type="file" style="padding:6px" onchange="markDocUploaded('doc-photo',this)"/>
+          <div class="fhint">JPG / PNG · Max 500KB</div>
+        </div>
+        <div id="doc-degree" class="fg" style="background:var(--card2);border:1px solid var(--border);border-radius:11px;padding:14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span>🎓</span><span style="font-size:.78rem;font-weight:700">Degree Certificate</span>
+            <span class="chip ch-amber btn-sm" style="margin-left:auto;font-size:.6rem">Optional</span>
+          </div>
+          <input class="finp" type="file" style="padding:6px" onchange="markDocUploaded('doc-degree',this)"/>
+          <div class="fhint">PDF · Max 5MB</div>
+        </div>
+        <div id="doc-prevOffer" class="fg" style="background:var(--card2);border:1px solid var(--border);border-radius:11px;padding:14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span>📄</span><span style="font-size:.78rem;font-weight:700">Previous Offer Letter</span>
+            <span class="chip ch-amber btn-sm" style="margin-left:auto;font-size:.6rem">Optional</span>
+          </div>
+          <input class="finp" type="file" style="padding:6px" onchange="markDocUploaded('doc-prevOffer',this)"/>
+          <div class="fhint">PDF · Max 5MB</div>
+        </div>
+        <div id="doc-relieve" class="fg" style="background:var(--card2);border:1px solid var(--border);border-radius:11px;padding:14px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span>📋</span><span style="font-size:.78rem;font-weight:700">Relieving Letter</span>
+            <span class="chip ch-amber btn-sm" style="margin-left:auto;font-size:.6rem">If applicable</span>
+          </div>
+          <input class="finp" type="file" style="padding:6px" onchange="markDocUploaded('doc-relieve',this)"/>
+          <div class="fhint">PDF · Max 5MB</div>
+        </div>
+      </div>
+      <div class="factions">
+        <button class="btn btn-ghost" onclick="goToStep(4)">← Back</button>
+        <button class="btn btn-primary" onclick="goToStep(6)">Save & Next: Review →</button>
+      </div>
+    </div>
+
+    <!-- Step 6: Review -->
+    <div id="hire-step-6" class="fbd" style="display:none">
+      <div class="banner-success mb14">
+        <span class="ban-ico">✅</span>
+        <div class="ban-body"><strong>Almost done!</strong> Review all details before submitting. Clicking Submit will generate EMP ID, create corporate email, provision system access, and trigger the onboarding checklist.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:16px">
+          <div style="font-size:.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">👤 Personal</div>
+          <div class="sal-row"><span class="sal-name">Full Name</span><span style="font-weight:700;font-size:.78rem">Priya Iyer</span></div>
+          <div class="sal-row"><span class="sal-name">Date of Birth</span><span class="fz7">22 Jul 1994</span></div>
+          <div class="sal-row"><span class="sal-name">PAN</span><span class="fz7 mono">BRQPI2345G</span></div>
+          <div class="sal-row"><span class="sal-name">Mobile</span><span class="fz7">+91 98765 43210</span></div>
+        </div>
+        <div style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:16px">
+          <div style="font-size:.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">💼 Professional</div>
+          <div class="sal-row"><span class="sal-name">Designation</span><span style="font-weight:700;font-size:.78rem">Sr. Product Designer</span></div>
+          <div class="sal-row"><span class="sal-name">Department</span><span class="fz7">Product Design</span></div>
+          <div class="sal-row"><span class="sal-name">Grade</span><span class="fz7">L4 — Senior</span></div>
+          <div class="sal-row"><span class="sal-name">Manager</span><span class="fz7">Vikram Nair</span></div>
+        </div>
+        <div style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:16px">
+          <div style="font-size:.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">💰 Salary</div>
+          <div class="sal-row"><span class="sal-name">Annual CTC</span><span style="font-weight:800;color:var(--accent);font-size:.85rem;font-family:'Fira Code',monospace">₹18 LPA</span></div>
+          <div class="sal-row"><span class="sal-name">Monthly Gross</span><span class="fz7 mono">₹1,40,000</span></div>
+          <div class="sal-row"><span class="sal-name">Net Take-home</span><span class="fz7 mono txt-green">₹1,32,800</span></div>
+        </div>
+        <div style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:16px">
+          <div style="font-size:.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">⚡ On Submit</div>
+          <div class="sal-row"><span class="sal-name">EMP ID</span><span class="fz7 mono txt-accent">EMP-2026-0142 (auto)</span></div>
+          <div class="sal-row"><span class="sal-name">Corp Email</span><span class="fz7 mono">priya.iyer@company.com</span></div>
+          <div class="sal-row"><span class="sal-name">System Access</span><span class="chip ch-green" style="font-size:.6rem">Auto-provisioned</span></div>
+          <div class="sal-row"><span class="sal-name">Onboarding</span><span class="chip ch-cyan" style="font-size:.6rem">Triggered</span></div>
+        </div>
+      </div>
+      <div class="factions mt14">
+        <button class="btn btn-ghost" onclick="goToStep(5)">← Back</button>
+        <button class="btn btn-success" onclick="submitNewHire()">🚀 Submit & Generate EMP ID</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /new-hire -->
+
+
+<!-- ═══════ ONBOARDING ═══════ -->
+<div id="pg-onboarding" class="pg">
+
+  <div class="pg-banner" style="border-left-color:var(--cyan)">
+    <div class="pg-banner-ico" style="background:var(--cyan-bg)">✅</div>
+    <div class="pg-banner-body">
+      <h2>Onboarding Checklist — TRN-006</h2>
+      <p>Automatically created when a new hire is submitted. Tasks assigned to IT, Admin, HR, and the new joiner (ESS). Overdue tasks highlighted and reminders auto-sent. Progress tracked per department in real time.</p>
+      <div class="pg-tags">
+        <span class="ptag" style="background:var(--cyan-bg);color:var(--cyan);border-color:var(--cyan)">Auto-created on hire</span>
+        <span class="ptag" style="background:var(--green-bg);color:var(--green);border-color:var(--green)">ESS self-service</span>
+        <span class="ptag" style="background:var(--rose-bg);color:var(--rose);border-color:var(--rose)">Overdue alerts</span>
+      </div>
+    </div>
+    <div class="pg-banner-stats">
+      <div class="banner-stat"><div class="bsv txt-cyan">4</div><div class="bsl">Active</div></div>
+      <div class="banner-stat"><div class="bsv txt-rose">2</div><div class="bsl">Overdue Tasks</div></div>
+    </div>
+  </div>
+
+  <!-- Joiner selector -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px" id="ob-selector">
+    <div class="ob-emp-btn active" onclick="selectJoiner(this,'priya')" style="padding:9px 16px;background:var(--accent);color:#fff;border-radius:11px;font-size:.75rem;font-weight:700;cursor:pointer;border:1.5px solid var(--accent)">
+      Priya Iyer · Day 1 <span style="background:rgba(255,255,255,.2);padding:2px 8px;border-radius:6px;font-size:.6rem;margin-left:6px">68%</span>
+    </div>
+    <div class="ob-emp-btn" onclick="selectJoiner(this,'arjun')" style="padding:9px 16px;background:var(--card2);color:var(--text2);border-radius:11px;font-size:.75rem;font-weight:600;cursor:pointer;border:1.5px solid var(--border)">
+      Arjun Shah · Day 5 <span style="background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:6px;font-size:.6rem;margin-left:6px">92%</span>
+    </div>
+    <div class="ob-emp-btn" onclick="selectJoiner(this,'kavita')" style="padding:9px 16px;background:var(--card2);color:var(--text2);border-radius:11px;font-size:.75rem;font-weight:600;cursor:pointer;border:1.5px solid var(--rose)">
+      Kavita Rao · Day 8 <span style="background:var(--rose-bg);color:var(--rose);padding:2px 8px;border-radius:6px;font-size:.6rem;margin-left:6px">41%</span>
+    </div>
+    <div class="ob-emp-btn" onclick="selectJoiner(this,'dev')" style="padding:9px 16px;background:var(--card2);color:var(--text2);border-radius:11px;font-size:.75rem;font-weight:600;cursor:pointer;border:1.5px solid var(--border)">
+      Dev Mehta · Day 12 <span style="background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:6px;font-size:.6rem;margin-left:6px">85%</span>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <button class="btn btn-ghost btn-sm">📧 Remind All</button>
+      <button class="btn btn-primary btn-sm">➕ Add Task</button>
+    </div>
+  </div>
+
+  <div class="banner-warn" id="ob-alert">
+    <span class="ban-ico">⚠️</span>
+    <div class="ban-body"><strong>2 overdue tasks</strong> for Kavita Rao — IT: System Access (3 days overdue), Admin: ID Card (1 day overdue). <a href="#" style="color:var(--amber);font-weight:700;text-decoration:underline">Send reminders →</a></div>
+  </div>
+
+  <div id="ob-content">
+    <!-- Injected by JS -->
+  </div>
+
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+    <button class="btn btn-ghost">📧 Send All Pending Reminders</button>
+    <button class="btn btn-primary">✅ Mark All HR Tasks Complete</button>
+  </div>
+</div><!-- /onboarding -->
+
+
+<!-- ═══════ PROBATION ═══════ -->
+<div id="pg-probation" class="pg">
+
+  <div class="pg-banner" style="border-left-color:var(--amber)">
+    <div class="pg-banner-ico" style="background:var(--amber-bg)">🕐</div>
+    <div class="pg-banner-body">
+      <h2>Probation & Confirmation — TRN-007</h2>
+      <p>Probation end dates auto-calculated from joining date. Managers alerted 30 days before expiry with a pre-filled confirmation form. Confirm, Extend, or Initiate Exit — all decisions auto-generate and dispatch letters via e-sign.</p>
+      <div class="pg-tags">
+        <span class="ptag" style="background:var(--amber-bg);color:var(--amber);border-color:var(--amber)">30-day auto-alert</span>
+        <span class="ptag" style="background:var(--green-bg);color:var(--green);border-color:var(--green)">Letter auto-dispatch</span>
+        <span class="ptag" style="background:var(--rose-bg);color:var(--rose);border-color:var(--rose)">Exit gate</span>
+      </div>
+    </div>
+    <div class="pg-banner-stats">
+      <div class="banner-stat"><div class="bsv txt-amber">6</div><div class="bsl">Due (30d)</div></div>
+      <div class="banner-stat"><div class="bsv txt-rose">2</div><div class="bsl">Critical</div></div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search-box">
+      <span style="font-size:.85rem;color:var(--text3)">🔍</span>
+      <input placeholder="Search probation…"/>
+    </div>
+    <select class="filter-sel">
+      <option>All Status</option>
+      <option>Critical (&lt;7d)</option>
+      <option>Due (7–30d)</option>
+      <option>Confirmed</option>
+      <option>Extended</option>
+    </select>
+    <div class="tbar-r">
+      <button class="btn btn-ghost btn-sm">📧 Remind All Managers</button>
+      <button class="btn btn-amber btn-sm">📋 Bulk Action</button>
+    </div>
+  </div>
+
+  <!-- Probation list -->
+  <div class="prob-list">
+    <div class="prob-hdr">
+      <span>Employee</span><span>Probation End</span><span>Days Left</span><span>Manager</span><span>Action</span>
+    </div>
+
+    <div class="prob-row prob-urgent" onclick="openConfirmModal('Sneha Kapoor','EMP-2025-0298','Mar 12, 2026','4','Rahul Sharma','Product')">
+      <div class="emp-cell">
+        <div class="emp-avatar" style="background:#f43f5e">SK</div>
+        <div><div class="emp-name">Sneha Kapoor</div><div class="emp-sub">Product · EMP-2025-0298</div></div>
+      </div>
+      <div><div class="fz7 fw7">Mar 12, 2026</div></div>
+      <div><span class="chip ch-rose">⚠️ 4 days</span></div>
+      <div class="fz7" style="color:var(--text2)">Rahul Sharma<br><span class="txt-rose" style="font-size:.65rem">No action yet</span></div>
+      <div><button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openConfirmModal('Sneha Kapoor','EMP-2025-0298','Mar 12, 2026','4','Rahul Sharma','Product')">Review →</button></div>
+    </div>
+
+    <div class="prob-row" onclick="openConfirmModal('Amit Mishra','EMP-2025-0301','Mar 18, 2026','10','Sonal Verma','Finance')">
+      <div class="emp-cell">
+        <div class="emp-avatar" style="background:#f59e0b">AM</div>
+        <div><div class="emp-name">Amit Mishra</div><div class="emp-sub">Finance · EMP-2025-0301</div></div>
+      </div>
+      <div><div class="fz7 fw7">Mar 18, 2026</div></div>
+      <div><span class="chip ch-amber">10 days</span></div>
+      <div class="fz7" style="color:var(--text2)">Sonal Verma<br><span class="txt-green" style="font-size:.65rem">Reminder sent Mar 7</span></div>
+      <div><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openConfirmModal('Amit Mishra','EMP-2025-0301','Mar 18, 2026','10','Sonal Verma','Finance')">Open Form</button></div>
+    </div>
+
+    <div class="prob-row" onclick="openConfirmModal('Deepa Nair','EMP-2025-0315','Mar 25, 2026','17','Vikram Nair','Product Design')">
+      <div class="emp-cell">
+        <div class="emp-avatar" style="background:#8b5cf6">DN</div>
+        <div><div class="emp-name">Deepa Nair</div><div class="emp-sub">Product Design · EMP-2025-0315</div></div>
+      </div>
+      <div><div class="fz7 fw7">Mar 25, 2026</div></div>
+      <div><span class="chip ch-amber">17 days</span></div>
+      <div class="fz7" style="color:var(--text2)">Vikram Nair<br><span class="txt-muted" style="font-size:.65rem">Awaiting action</span></div>
+      <div><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">Open Form</button></div>
+    </div>
+
+    <div class="prob-row" style="opacity:.65" onclick="openConfirmModal('Riya Joshi','EMP-2025-0295','Mar 08, 2026','0','Dev Anand','Engineering')">
+      <div class="emp-cell">
+        <div class="emp-avatar" style="background:#10b981">RJ</div>
+        <div><div class="emp-name">Riya Joshi</div><div class="emp-sub">Engineering · EMP-2025-0295</div></div>
+      </div>
+      <div><div class="fz7 fw7">Mar 8, 2026</div></div>
+      <div><span class="chip ch-green">✓ Done</span></div>
+      <div class="fz7" style="color:var(--text2)">Dev Anand<br><span class="txt-green" style="font-size:.65rem">Confirmed Mar 6</span></div>
+      <div><button class="btn btn-ghost btn-sm" style="opacity:.5" onclick="event.stopPropagation()">Letter Sent ✓</button></div>
+    </div>
+
+    <div class="prob-row" onclick="openConfirmModal('Pradeep Kumar','EMP-2025-0310','Apr 15, 2026','38','Neha Roy','Sales')">
+      <div class="emp-cell">
+        <div class="emp-avatar" style="background:#06b6d4">PK</div>
+        <div><div class="emp-name">Pradeep Kumar</div><div class="emp-sub">Sales · EMP-2025-0310</div></div>
+      </div>
+      <div><div class="fz7 fw7">Apr 15, 2026</div></div>
+      <div><span class="chip ch-violet">⏳ Extended</span></div>
+      <div class="fz7" style="color:var(--text2)">Neha Roy<br><span class="txt-violet" style="font-size:.65rem">Extended +45d Feb 10</span></div>
+      <div><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">View</button></div>
+    </div>
+
+    <div class="prob-row" onclick="openConfirmModal('Karan Jain','EMP-2026-0130','Jun 14, 2026','98','Arjun Mehta','Engineering')">
+      <div class="emp-cell">
+        <div class="emp-avatar" style="background:#3b82f6">KJ</div>
+        <div><div class="emp-name">Karan Jain</div><div class="emp-sub">Engineering · EMP-2026-0130</div></div>
+      </div>
+      <div><div class="fz7 fw7">Jun 14, 2026</div></div>
+      <div><span class="chip ch-gray">98 days</span></div>
+      <div class="fz7" style="color:var(--text2)">Arjun Mehta<br><span class="txt-muted" style="font-size:.65rem">No action needed yet</span></div>
+      <div><button class="btn btn-ghost btn-sm" style="opacity:.5" onclick="event.stopPropagation()">Monitor</button></div>
+    </div>
+  </div>
+</div><!-- /probation -->
+
+
+<!-- ═══════ TRANSFERS ═══════ -->
+<div id="pg-transfers" class="pg">
+
+  <div class="pg-banner" style="border-left-color:var(--violet)">
+    <div class="pg-banner-ico" style="background:var(--violet-bg)">🔄</div>
+    <div class="pg-banner-body">
+      <h2>Transfers — TRN-008</h2>
+      <p>Process inter-department, inter-location, or reporting-manager transfers. Org chart auto-updated on effective date. Transfer letter auto-generated and dispatched via e-sign. All changes logged in employee timeline.</p>
+      <div class="pg-tags">
+        <span class="ptag" style="background:var(--violet-bg);color:var(--violet);border-color:var(--violet)">Org chart auto-update</span>
+        <span class="ptag" style="background:var(--green-bg);color:var(--green);border-color:var(--green)">E-sign dispatch</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs-row">
+    <button class="tab-btn on" onclick="swTab(this,'tab-pending-tf')">⏳ Pending Approval (2)</button>
+    <button class="tab-btn" onclick="swTab(this,'tab-new-tf')">➕ New Transfer</button>
+    <button class="tab-btn" onclick="swTab(this,'tab-history-tf')">📜 History</button>
+  </div>
+
+  <div id="tab-pending-tf" class="tab-pane on">
+    <div class="tc" style="border-color:var(--amber)">
+      <div class="tc-av" style="background:#f59e0b">NP</div>
+      <div class="tc-body">
+        <div class="tc-name">Nikhil Pillai <span class="mono txt-muted" style="font-size:.68rem">EMP-2024-0112</span></div>
+        <div class="tc-meta">
+          <span>Engineering</span><span class="tc-arr">→</span><span>Product Design</span>
+          <span style="color:var(--border2)">·</span>
+          <span>Bengaluru</span><span class="tc-arr">→</span><span>Mumbai</span>
+          <span style="color:var(--border2)">·</span>
+          <span>Eff: Apr 1, 2026</span>
+        </div>
+      </div>
+      <div class="tc-right">
+        <span class="chip ch-amber">Awaiting HR</span>
+        <button class="btn btn-success btn-sm">✓ Approve</button>
+        <button class="btn btn-ghost btn-sm">Reject</button>
+      </div>
+    </div>
+    <div class="tc" style="border-color:var(--accent)">
+      <div class="tc-av" style="background:#8b5cf6">SR</div>
+      <div class="tc-body">
+        <div class="tc-name">Sunita Rajan <span class="mono txt-muted" style="font-size:.68rem">EMP-2023-0087</span></div>
+        <div class="tc-meta">
+          <span>Sales</span><span class="tc-arr">→</span><span>Business Dev</span>
+          <span style="color:var(--border2)">·</span>
+          <span>Mumbai (same)</span>
+          <span style="color:var(--border2)">·</span>
+          <span>Eff: Mar 16, 2026</span>
+        </div>
+      </div>
+      <div class="tc-right">
+        <span class="chip ch-blue">In Approval Chain</span>
+        <button class="btn btn-ghost btn-sm">View</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-new-tf" class="tab-pane">
+    <div class="form-shell">
+      <div class="form-topbar"><h3>New Transfer Request</h3><button class="btn btn-primary btn-sm">Submit → Auto Letter</button></div>
+      <div class="fbd">
+        <div class="frow">
+          <div class="fg"><label>Employee <span class="req">*</span></label><input class="finp" placeholder="Search by name or EMP ID…"/></div>
+          <div class="fg"><label>Effective Date <span class="req">*</span></label><input class="finp" type="date"/></div>
+          <div class="fg"><label>Transfer Type <span class="req">*</span></label><select class="fsel"><option>Department Change</option><option>Location Change</option><option>Both</option><option>Reporting Manager Change</option><option>Inter-company</option></select></div>
+        </div>
+        <div class="frow">
+          <div class="fg"><label>New Department</label><select class="fsel"><option>— Select —</option><option>Engineering</option><option>Product Design</option><option>Sales</option><option>Finance</option><option>HR</option><option>Operations</option></select></div>
+          <div class="fg"><label>New Location</label><select class="fsel"><option>— Same —</option><option>Bangalore HQ</option><option>Mumbai Office</option><option>Delhi NCR</option><option>Remote</option></select></div>
+          <div class="fg"><label>New Reporting Manager</label><input class="finp" placeholder="Search by name or EMP ID…"/></div>
+        </div>
+        <div class="frow">
+          <div class="fg" style="grid-column:1/-1"><label>Reason for Transfer <span class="req">*</span></label><textarea class="ftxt" placeholder="Briefly explain the business reason for this transfer…"></textarea></div>
+        </div>
+        <div class="frow">
+          <div class="fg"><label>Approval Required</label><input class="finp" value="HR Admin + Department Head" disabled/></div>
+          <div class="fg"><label>Letter Template</label><select class="fsel"><option>Standard Transfer Letter</option><option>Inter-company Transfer</option><option>Deputation Letter</option></select></div>
+        </div>
+        <div class="factions">
+          <button class="btn btn-ghost">Save Draft</button>
+          <button class="btn btn-primary">Submit for Approval + Generate Transfer Letter</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-history-tf" class="tab-pane">
+    <div class="sc">
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th>Employee</th><th>From</th><th>To</th><th>Effective</th><th>Status</th><th>Letter</th></tr></thead>
+          <tbody>
+            <tr><td><div class="emp-cell"><div class="emp-avatar" style="background:#10b981">MK</div><div><div class="emp-name">Meera Kapoor</div><div class="emp-sub">EMP-2023-0054</div></div></div></td><td class="fz7">HR · Bangalore</td><td class="fz7">Admin · Mumbai</td><td class="fz7 mono">Feb 15, 2026</td><td><span class="chip ch-green">Complete</span></td><td><button class="btn btn-ghost btn-sm">📄 View</button></td></tr>
+            <tr><td><div class="emp-cell"><div class="emp-avatar" style="background:#f59e0b">RT</div><div><div class="emp-name">Rohan Tripathi</div><div class="emp-sub">EMP-2024-0078</div></div></div></td><td class="fz7">Finance · Delhi</td><td class="fz7">Finance · Bangalore</td><td class="fz7 mono">Jan 1, 2026</td><td><span class="chip ch-green">Complete</span></td><td><button class="btn btn-ghost btn-sm">📄 View</button></td></tr>
+            <tr><td><div class="emp-cell"><div class="emp-avatar" style="background:#8b5cf6">PS</div><div><div class="emp-name">Priya Shah</div><div class="emp-sub">EMP-2022-0031</div></div></div></td><td class="fz7">Sales · Mumbai</td><td class="fz7">Business Dev · Mumbai</td><td class="fz7 mono">Dec 1, 2025</td><td><span class="chip ch-green">Complete</span></td><td><button class="btn btn-ghost btn-sm">📄 View</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div><!-- /transfers -->
+
+
+<!-- ═══════ PROMOTIONS ═══════ -->
+<div id="pg-promotions" class="pg">
+
+  <div class="pg-banner" style="border-left-color:var(--green)">
+    <div class="pg-banner-ico" style="background:var(--green-bg)">⬆️</div>
+    <div class="pg-banner-body">
+      <h2>Promotions — TRN-008</h2>
+      <p>Promotion wizard with CTC redesign, grade-band validation, and multi-level approval routing. New designation, grade, and revised salary components — all in one flow. Promotion letter auto-generated and dispatched on approval.</p>
+      <div class="pg-tags">
+        <span class="ptag" style="background:var(--green-bg);color:var(--green);border-color:var(--green)">Grade band validation</span>
+        <span class="ptag" style="background:var(--amber-bg);color:var(--amber);border-color:var(--amber)">CTC redesign wizard</span>
+        <span class="ptag" style="background:var(--violet-bg);color:var(--violet);border-color:var(--violet)">Multi-level approval</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs-row">
+    <button class="tab-btn on" onclick="swTab(this,'tab-promo-wizard')">⬆️ Promotion Wizard</button>
+    <button class="tab-btn" onclick="swTab(this,'tab-promo-history')">📊 This Month's Promotions</button>
+  </div>
+
+  <div id="tab-promo-wizard" class="tab-pane on">
+    <div class="form-shell">
+      <div class="form-topbar">
+        <h3>Promotion Wizard — Deepa Nair</h3>
+        <span class="chip ch-violet">L3 → L4</span>
+        <button class="btn btn-primary btn-sm">Submit → Auto Promotion Letter</button>
+      </div>
+      <div class="fbd">
+        <div class="frow">
+          <div class="fg"><label>Employee <span class="req">*</span></label><input class="finp" value="Deepa Nair (EMP-2023-0091)"/></div>
+          <div class="fg"><label>Effective Date <span class="req">*</span></label><input class="finp" type="date" value="2026-04-01"/></div>
+          <div class="fg"><label>Promotion Type</label><select class="fsel"><option>Annual Performance</option><option>Merit-based</option><option>Role Change</option><option>Fast-track</option></select></div>
+        </div>
+        <div class="fdiv">Current vs Proposed</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:16px">
+            <div style="font-size:.67rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">📌 Current</div>
+            <div class="sal-row"><span class="sal-name">Designation</span><span style="font-weight:700;font-size:.78rem">Product Designer</span></div>
+            <div class="sal-row"><span class="sal-name">Grade Band</span><span class="fz7">L3 — Mid</span></div>
+            <div class="sal-row"><span class="sal-name">Annual CTC</span><span class="mono fw7">₹14.5L</span></div>
+            <div class="sal-row"><span class="sal-name">Monthly Gross</span><span class="mono fz7">₹1,08,333</span></div>
+          </div>
+          <div style="background:var(--green-bg);border:1px solid var(--green);border-radius:12px;padding:16px">
+            <div style="font-size:.67rem;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">⬆️ Proposed</div>
+            <div class="sal-row"><span class="sal-name">Designation</span><select class="fsel" style="padding:3px 26px 3px 8px;font-size:.75rem;height:auto"><option>Senior Product Designer</option><option>Lead Designer</option></select></div>
+            <div class="sal-row"><span class="sal-name">Grade Band</span><span class="fz7 txt-green fw7">L4 — Senior ✓</span></div>
+            <div class="sal-row"><span class="sal-name">New CTC (₹ LPA)</span><input class="finp" style="padding:4px 10px;font-size:.78rem;width:100px;display:inline" value="19" type="number" oninput="calcPromoIncrement(this.value)"/></div>
+            <div class="sal-row"><span class="sal-name">Increment</span><span class="mono fw7 txt-green" id="promo-inc">+31.0%</span></div>
+          </div>
+        </div>
+        <div class="banner-success mb14">
+          <span class="ban-ico">✅</span>
+          <div class="ban-body"><strong>Grade band validated:</strong> ₹19L is within L4 band (₹16L–₹24L). Single approval required: HR Admin (below L5).</div>
+        </div>
+        <div class="fdiv">New CTC Component Breakup — Auto-Applied (Monthly)</div>
+        <div style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">
+          <div class="sal-row"><span class="sal-name">Basic Salary (40%)</span><span class="sal-type">Fixed</span><span class="sal-amt txt-accent mono">₹6,333</span></div>
+          <div class="sal-row"><span class="sal-name">HRA (50% of Basic)</span><span class="sal-type">Fixed</span><span class="sal-amt mono">₹3,167</span></div>
+          <div class="sal-row"><span class="sal-name">Conveyance</span><span class="sal-type">Fixed</span><span class="sal-amt mono">₹1,600</span></div>
+          <div class="sal-row"><span class="sal-name">Medical Allowance</span><span class="sal-type">Fixed</span><span class="sal-amt mono">₹1,250</span></div>
+          <div class="sal-row"><span class="sal-name">Special Allowance</span><span class="sal-type">Balancing</span><span class="sal-amt mono">₹3,483</span></div>
+          <div class="sal-row"><span class="sal-name">PF Employer (12%)</span><span class="sal-type">Employer cost</span><span class="sal-amt mono txt-muted">₹760</span></div>
+          <div class="sal-row" style="font-weight:800;border-top:1px solid var(--border2);padding-top:10px;margin-top:4px">
+            <span class="sal-name">Monthly CTC</span><span class="sal-type" style="visibility:hidden">x</span><span class="sal-amt txt-green mono" style="font-size:.9rem">₹15,833</span>
+          </div>
+        </div>
+        <div class="frow">
+          <div class="fg" style="grid-column:1/-1"><label>Justification / Comments</label><textarea class="ftxt" placeholder="Add performance highlights or justification for this promotion…">Consistently exceeded quarterly targets by 20%+. Led the design system revamp independently. Strong peer feedback scores (4.6/5). Ready for senior responsibilities.</textarea></div>
+        </div>
+        <div class="factions">
+          <button class="btn btn-ghost">Save Draft</button>
+          <button class="btn btn-primary">Submit for Approval + Generate Promotion Letter</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-promo-history" class="tab-pane">
+    <div class="sc">
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th>Employee</th><th>From</th><th>To</th><th>CTC Change</th><th>Effective</th><th>Status</th><th>Letter</th></tr></thead>
+          <tbody>
+            <tr><td><div class="emp-cell"><div class="emp-avatar" style="background:#3b82f6">AS</div><div><div class="emp-name">Arjun Shah</div><div class="emp-sub">EMP-2025-0308</div></div></div></td><td class="fz7">L2 — Junior Eng.</td><td class="fz7">L3 — Mid Eng.</td><td class="fz7 txt-green mono">₹9L → ₹12L (+33%)</td><td class="fz7 mono">Mar 1, 2026</td><td><span class="chip ch-green">Active</span></td><td><button class="btn btn-ghost btn-sm">📄 View</button></td></tr>
+            <tr><td><div class="emp-cell"><div class="emp-avatar" style="background:#f59e0b">RV</div><div><div class="emp-name">Rohit Verma</div><div class="emp-sub">EMP-2024-0102</div></div></div></td><td class="fz7">L3 — Sales Exec.</td><td class="fz7">L4 — Sr. Sales Exec.</td><td class="fz7 txt-green mono">₹12L → ₹16L (+33%)</td><td class="fz7 mono">Mar 1, 2026</td><td><span class="chip ch-green">Active</span></td><td><button class="btn btn-ghost btn-sm">📄 View</button></td></tr>
+            <tr><td><div class="emp-cell"><div class="emp-avatar" style="background:#10b981">MP</div><div><div class="emp-name">Meera Pillai</div><div class="emp-sub">EMP-2023-0041</div></div></div></td><td class="fz7">L4 — HR Exec.</td><td class="fz7">L5 — HR Lead</td><td class="fz7 txt-green mono">₹16L → ₹22L (+37%)</td><td class="fz7 mono">Mar 1, 2026</td><td><span class="chip ch-violet">Awaiting Finance</span></td><td><button class="btn btn-ghost btn-sm">📄 Draft</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /promotions -->
+
+
+<!-- ═══════ PLACEHOLDER PAGES ═══════ -->
+<div id="pg-dashboard" class="pg">
+  <div class="pg-banner" style="border-left-color:var(--accent)">
+    <div class="pg-banner-ico" style="background:var(--glow)">📊</div>
+    <div class="pg-banner-body"><h2>HRMS Dashboard</h2><p>Click <strong>Employee Hub</strong> in the top navigation to explore the full Employee Hub ERP module.</p></div>
+  </div>
+  <div class="empty-state"><div class="es-ico">📊</div><div>Dashboard module — Navigate to <strong>Employee Hub</strong> tab</div></div>
+</div>
+<div id="pg-payroll" class="pg"><div class="empty-state"><div class="es-ico">💰</div><div>Payroll module — coming next</div></div></div>
+<div id="pg-attendance" class="pg"><div class="empty-state"><div class="es-ico">📅</div><div>Attendance module</div></div></div>
+<div id="pg-leave" class="pg"><div class="empty-state"><div class="es-ico">🌴</div><div>Leave module</div></div></div>
+<div id="pg-performance" class="pg"><div class="empty-state"><div class="es-ico">⭐</div><div>Performance module</div></div></div>
+<div id="pg-recruitment" class="pg"><div class="empty-state"><div class="es-ico">🎯</div><div>Recruitment module</div></div></div>
+<div id="pg-reports" class="pg"><div class="empty-state"><div class="es-ico">📈</div><div>Reports module</div></div></div>
+
+</div><!-- /main -->
+</div><!-- /layout -->
+
+
+<!-- ════════════════════════════════════════════════
+  MODAL: NEW HIRE (Quick Add)
+════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-newhire">
+  <div class="modal">
+    <div class="modal-hd">
+      <div style="width:36px;height:36px;border-radius:9px;background:var(--green-bg);display:flex;align-items:center;justify-content:center;font-size:1.1rem">➕</div>
+      <h3>Quick Add Employee</h3>
+      <button class="modal-close" onclick="closeModal('modal-newhire')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="banner-info mb14">
+        <span class="ban-ico">💡</span>
+        <div class="ban-body">Quick add creates a draft. Switch to <strong>New Hire Entry</strong> for the full 6-tab onboarding form with salary, bank, and document upload.</div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>First Name <span class="req">*</span></label><input class="finp" placeholder="e.g. Rahul"/></div>
+        <div class="fg"><label>Last Name <span class="req">*</span></label><input class="finp" placeholder="e.g. Sharma"/></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Personal Email <span class="req">*</span></label><input class="finp" type="email" placeholder="candidate@email.com"/></div>
+        <div class="fg"><label>Mobile <span class="req">*</span></label><input class="finp" placeholder="+91 XXXXX XXXXX"/></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Department <span class="req">*</span></label><select class="fsel"><option>— Select —</option><option>Engineering</option><option>Product Design</option><option>Sales</option><option>Finance</option><option>HR</option><option>Operations</option></select></div>
+        <div class="fg"><label>Designation <span class="req">*</span></label><input class="finp" placeholder="e.g. Senior Engineer"/></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Joining Date <span class="req">*</span></label><input class="finp" type="date"/></div>
+        <div class="fg"><label>Import from Offer</label><input class="finp" placeholder="Offer Letter No. e.g. OL-2026-0145"/></div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="closeModal('modal-newhire')">Cancel</button>
+      <button class="btn btn-ghost">Save as Draft</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-newhire');openSbItem('new-hire',null)">Open Full Form →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+  MODAL: CONFIRMATION FORM
+════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-confirm">
+  <div class="modal">
+    <div class="modal-hd">
+      <div style="width:36px;height:36px;border-radius:9px;background:var(--amber-bg);display:flex;align-items:center;justify-content:center;font-size:1.1rem">🕐</div>
+      <h3 id="conf-title">Probation Review</h3>
+      <button class="modal-close" onclick="closeModal('modal-confirm')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:14px;background:var(--card2);border-radius:11px;border:1px solid var(--border)">
+        <div id="conf-avatar" style="width:42px;height:42px;border-radius:10px;background:var(--rose);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.85rem;flex-shrink:0;font-family:'Fira Code',monospace">SK</div>
+        <div style="flex:1">
+          <div id="conf-name" style="font-size:.88rem;font-weight:800">Sneha Kapoor</div>
+          <div id="conf-meta" style="font-size:.7rem;color:var(--text2)">EMP-2025-0298 · Product · Manager: Rahul Sharma</div>
+        </div>
+        <div style="text-align:right">
+          <div id="conf-days" class="mono fw8 txt-rose" style="font-size:1.1rem">4 days</div>
+          <div style="font-size:.63rem;color:var(--text3)">remaining</div>
+        </div>
+      </div>
+      <div class="fdiv" style="border-top:none;padding-top:0">Performance Rating</div>
+      <div style="display:flex;gap:8px;margin-bottom:4px" id="rating-stars">
+        <span class="star" data-val="1" onclick="setRating(1)" style="font-size:1.6rem;cursor:pointer">⭐</span>
+        <span class="star" data-val="2" onclick="setRating(2)" style="font-size:1.6rem;cursor:pointer">⭐</span>
+        <span class="star" data-val="3" onclick="setRating(3)" style="font-size:1.6rem;cursor:pointer">⭐</span>
+        <span class="star" data-val="4" onclick="setRating(4)" style="font-size:1.6rem;cursor:pointer">⭐</span>
+        <span class="star" data-val="5" onclick="setRating(5)" style="font-size:1.6rem;cursor:pointer;opacity:.3">⭐</span>
+      </div>
+      <div style="font-size:.68rem;color:var(--text2);margin-bottom:14px" id="rating-lbl">Current: 4/5 — Good performer</div>
+      <div class="fg mb14">
+        <label>Manager Remarks</label>
+        <textarea class="ftxt" rows="3" placeholder="Add performance summary…">Met all targets consistently. Good team communication. Ready for confirmation.</textarea>
+      </div>
+      <div class="fdiv">Decision</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div onclick="selectDecision(this,'confirm')" class="decision-card" style="padding:14px;border:2px solid var(--green);border-radius:11px;text-align:center;cursor:pointer;background:var(--green-bg);transition:all .2s">
+          <div style="font-size:1.4rem">✅</div>
+          <div style="font-size:.75rem;font-weight:700;color:var(--green);margin-top:4px">Confirm</div>
+          <div style="font-size:.62rem;color:var(--text3);margin-top:2px">Permanent employee</div>
+        </div>
+        <div onclick="selectDecision(this,'extend')" class="decision-card" style="padding:14px;border:2px solid var(--border);border-radius:11px;text-align:center;cursor:pointer;transition:all .2s">
+          <div style="font-size:1.4rem">⏳</div>
+          <div style="font-size:.75rem;font-weight:700;color:var(--amber);margin-top:4px">Extend</div>
+          <div style="font-size:.62rem;color:var(--text3);margin-top:2px">Requires reason + date</div>
+        </div>
+        <div onclick="selectDecision(this,'terminate')" class="decision-card" style="padding:14px;border:2px solid var(--border);border-radius:11px;text-align:center;cursor:pointer;transition:all .2s">
+          <div style="font-size:1.4rem">🚪</div>
+          <div style="font-size:.75rem;font-weight:700;color:var(--rose);margin-top:4px">Initiate Exit</div>
+          <div style="font-size:.62rem;color:var(--text3);margin-top:2px">Triggers separation</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-ghost" onclick="closeModal('modal-confirm')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitConfirmation()">Submit Decision + Generate Letter →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════
+  EMPLOYEE PROFILE DRAWER
+════════════════════════════════════════════════ -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="emp-drawer">
+  <div class="drawer-hd">
+    <div id="dr-avatar" style="width:40px;height:40px;border-radius:10px;background:#3b82f6;color:#fff;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:800;flex-shrink:0;font-family:'Fira Code',monospace">AM</div>
+    <div>
+      <div id="dr-name" style="font-size:.88rem;font-weight:800">Arjun Mehta</div>
+      <div id="dr-meta" style="font-size:.68rem;color:var(--text2)">EMP-2024-0089 · Engineering</div>
+    </div>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+      <span class="chip ch-green">● Active</span>
+      <span class="chip ch-blue">L4 · Senior Dev</span>
+      <span class="chip ch-gray">Bangalore HQ</span>
+    </div>
+    <div style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px">
+      <div class="fdiv" style="border-top:none;padding-top:0;margin-bottom:8px">Employment</div>
+      <div class="sal-row"><span class="sal-name">Joining Date</span><span class="fz7 mono">Oct 12, 2024</span></div>
+      <div class="sal-row"><span class="sal-name">Department</span><span class="fz7">Engineering</span></div>
+      <div class="sal-row"><span class="sal-name">Reporting Manager</span><span class="fz7">Vikram Nair</span></div>
+      <div class="sal-row"><span class="sal-name">Location</span><span class="fz7">Bangalore HQ</span></div>
+      <div class="sal-row"><span class="sal-name">Employee Type</span><span class="fz7">Permanent</span></div>
+      <div class="sal-row"><span class="sal-name">Notice Period</span><span class="fz7">60 days</span></div>
+    </div>
+    <div style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px">
+      <div class="fdiv" style="border-top:none;padding-top:0;margin-bottom:8px">Compensation</div>
+      <div class="sal-row"><span class="sal-name">Annual CTC</span><span class="mono fw7 txt-accent">₹22 LPA</span></div>
+      <div class="sal-row"><span class="sal-name">Monthly Net</span><span class="mono fz7">₹1,53,000</span></div>
+      <div class="sal-row"><span class="sal-name">Last Revised</span><span class="fz7">Oct 1, 2025</span></div>
+    </div>
+    <div class="fdiv">Lifecycle Timeline</div>
+    <div class="timeline" style="margin-top:10px">
+      <div class="tl-item"><div class="tl-dot" style="border-color:var(--accent);color:var(--accent)">⬆</div><div class="tl-title">Salary Revised — +18%</div><div class="tl-sub">Oct 1, 2025 · Annual review · ₹18.6L → ₹22L</div></div>
+      <div class="tl-item"><div class="tl-dot" style="border-color:var(--green);color:var(--green)">✓</div><div class="tl-title">Probation Confirmed</div><div class="tl-sub">Jan 12, 2025 · Manager: Vikram Nair · Rating 4.5/5</div></div>
+      <div class="tl-item"><div class="tl-dot" style="border-color:var(--cyan);color:var(--cyan)">✅</div><div class="tl-title">Onboarding Completed</div><div class="tl-sub">Oct 27, 2024 · All 14 tasks complete</div></div>
+      <div class="tl-item"><div class="tl-dot" style="border-color:var(--green);color:var(--green)">🎉</div><div class="tl-title">Joined Organisation</div><div class="tl-sub">Oct 12, 2024 · L3 · ₹18.6L CTC · Bangalore HQ</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px">
+      <button class="btn btn-ghost btn-sm">📄 View Payslip</button>
+      <button class="btn btn-ghost btn-sm">📋 Leave Balance</button>
+      <button class="btn btn-ghost btn-sm" onclick="openSbItem('transfers',null);closeDrawer()">🔄 Transfer</button>
+      <button class="btn btn-primary btn-sm" onclick="openSbItem('promotions',null);closeDrawer()">⬆️ Promote</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+  JAVASCRIPT
+════════════════════════════════════════════ -->
+<script>
+/* ─── EMPLOYEE DATA ─── */
+const employees = [
+  {id:'EMP-2021-0011',name:'Vikram Nair',       dept:'Product Design', desig:'VP Design',            loc:'Bangalore HQ',  joined:'Jan 10, 2021', status:'Active',     color:'#8b5cf6'},
+  {id:'EMP-2022-0031',name:'Priya Shah',         dept:'Sales',          desig:'Business Dev Manager', loc:'Mumbai Office', joined:'Mar 5, 2022',  status:'Active',     color:'#06b6d4'},
+  {id:'EMP-2022-0034',name:'Sonal Verma',        dept:'Finance',        desig:'Finance Manager',      loc:'Mumbai Office', joined:'May 2, 2022',  status:'Active',     color:'#10b981'},
+  {id:'EMP-2023-0041',name:'Meera Pillai',       dept:'HR',             desig:'HR Lead (Promoted)',   loc:'Bangalore HQ',  joined:'Jul 18, 2023', status:'Active',     color:'#f59e0b'},
+  {id:'EMP-2023-0054',name:'Meera Kapoor',       dept:'Admin',          desig:'Office Manager',       loc:'Mumbai Office', joined:'Sep 10, 2023', status:'Active',     color:'#f43f5e'},
+  {id:'EMP-2023-0087',name:'Sunita Rajan',       dept:'Business Dev',   desig:'Sr. BD Executive',     loc:'Mumbai Office', joined:'Oct 1, 2023',  status:'Active',     color:'#8b5cf6'},
+  {id:'EMP-2023-0091',name:'Deepa Nair',         dept:'Product Design', desig:'Product Designer',     loc:'Bangalore HQ',  joined:'Sep 5, 2023',  status:'Active',     color:'#06b6d4'},
+  {id:'EMP-2024-0078',name:'Rohan Tripathi',     dept:'Finance',        desig:'Finance Analyst',      loc:'Bangalore HQ',  joined:'Jan 1, 2024',  status:'Active',     color:'#f97316'},
+  {id:'EMP-2024-0089',name:'Arjun Mehta',        dept:'Engineering',    desig:'Senior Developer',     loc:'Bangalore HQ',  joined:'Oct 12, 2024', status:'Active',     color:'#3b82f6'},
+  {id:'EMP-2024-0102',name:'Rohit Verma',        dept:'Sales',          desig:'Sr. Sales Executive',  loc:'Delhi NCR',     joined:'Mar 15, 2024', status:'Active',     color:'#10b981'},
+  {id:'EMP-2024-0112',name:'Nikhil Pillai',      dept:'Product Design', desig:'Product Designer',     loc:'Bangalore HQ',  joined:'May 20, 2024', status:'Active',     color:'#f59e0b'},
+  {id:'EMP-2025-0295',name:'Riya Joshi',         dept:'Engineering',    desig:'Software Engineer',    loc:'Bangalore HQ',  joined:'Mar 8, 2025',  status:'Active',     color:'#10b981'},
+  {id:'EMP-2025-0298',name:'Sneha Kapoor',       dept:'Product',        desig:'Product Analyst',      loc:'Bangalore HQ',  joined:'Dec 12, 2024', status:'Probation',  color:'#f43f5e'},
+  {id:'EMP-2025-0301',name:'Amit Mishra',        dept:'Finance',        desig:'Finance Executive',    loc:'Mumbai Office', joined:'Dec 18, 2024', status:'Probation',  color:'#f59e0b'},
+  {id:'EMP-2025-0308',name:'Arjun Shah',         dept:'Engineering',    desig:'Mid-level Engineer',   loc:'Bangalore HQ',  joined:'Jan 1, 2025',  status:'Active',     color:'#3b82f6'},
+  {id:'EMP-2025-0310',name:'Pradeep Kumar',      dept:'Sales',          desig:'Sales Executive',      loc:'Delhi NCR',     joined:'Dec 25, 2024', status:'Probation',  color:'#06b6d4'},
+  {id:'EMP-2025-0315',name:'Deepa Nair (Jr.)',   dept:'Product Design', desig:'Junior Designer',      loc:'Remote',        joined:'Dec 25, 2024', status:'Probation',  color:'#8b5cf6'},
+  {id:'EMP-2026-0130',name:'Karan Jain',         dept:'Engineering',    desig:'Junior Developer',     loc:'Bangalore HQ',  joined:'Mar 15, 2026', status:'Probation',  color:'#3b82f6'},
+  {id:'EMP-2026-0138',name:'Dev Mehta',          dept:'Marketing',      desig:'Marketing Exec.',      loc:'Mumbai Office', joined:'Feb 24, 2026', status:'On Leave',   color:'#10b981'},
+  {id:'EMP-2026-0139',name:'Kavita Rao',         dept:'Operations',     desig:'Operations Analyst',   loc:'Delhi NCR',     joined:'Feb 28, 2026', status:'Active',     color:'#f97316'},
+  {id:'EMP-2026-0140',name:'Arjun Shah (II)',    dept:'Engineering',    desig:'Junior Developer',     loc:'Bangalore HQ',  joined:'Mar 1, 2026',  status:'Active',     color:'#06b6d4'},
+  {id:'EMP-2026-0141',name:'Priya Iyer',         dept:'Product Design', desig:'Sr. Product Designer', loc:'Bangalore HQ',  joined:'Mar 15, 2026', status:'Active',     color:'#8b5cf6'},
+];
+
+function getInitials(name){return name.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase()}
+
+function buildTable(data){
+  const tbody=document.getElementById('emp-tbody');
+  const statusMap={Active:'ch-green',Probation:'ch-amber','On Leave':'ch-blue',Inactive:'ch-gray'};
+  tbody.innerHTML=data.map(e=>`
+    <tr onclick="openDrawer('${e.id}','${e.name}','${e.dept}','${e.desig}','${e.color}')">
+      <td><div class="emp-cell">
+        <div class="emp-avatar" style="background:${e.color}">${getInitials(e.name)}</div>
+        <div><div class="emp-name">${e.name}</div><div class="emp-sub">${e.desig}</div></div>
+      </div></td>
+      <td class="mono txt-muted" style="font-size:.72rem">${e.id}</td>
+      <td class="fz7">${e.dept}</td>
+      <td class="fz7">${e.desig}</td>
+      <td class="fz7">${e.loc}</td>
+      <td class="fz7 mono">${e.joined}</td>
+      <td><span class="chip ${statusMap[e.status]||'ch-gray'}">${e.status}</span></td>
+      <td>
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openDrawer('${e.id}','${e.name}','${e.dept}','${e.desig}','${e.color}')">View</button>
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">⋯</button>
+        </div>
+      </td>
+    </tr>`).join('');
+  document.getElementById('emp-count').textContent=data.length+' employees';
+}
+
+function filterTable(val){
+  const q=(val||document.getElementById('emp-search').value||'').toLowerCase();
+  const dept=document.getElementById('dept-filter').value;
+  const stat=document.getElementById('status-filter').value;
+  const loc=document.getElementById('loc-filter').value;
+  let filtered=employees.filter(e=>{
+    const matchQ=!q||(e.name+e.id+e.dept+e.desig).toLowerCase().includes(q);
+    const matchD=!dept||e.dept===dept;
+    const matchS=!stat||e.status===stat;
+    const matchL=!loc||e.loc===loc;
+    return matchQ&&matchD&&matchS&&matchL;
+  });
+  buildTable(filtered);
+}
+
+/* ─── THEME ─── */
+function toggleTheme(){
+  const h=document.documentElement;
+  const dark=h.getAttribute('data-theme')==='dark';
+  h.setAttribute('data-theme',dark?'light':'dark');
+  document.getElementById('th-ico').textContent=dark?'🌙':'☀️';
+  document.getElementById('th-lbl').textContent=dark?'Dark Mode':'Light Mode';
+}
+
+/* ─── DEVICE ─── */
+function setDevice(m){
+  document.body.classList.toggle('mob',m==='mob');
+  document.getElementById('btn-desk').classList.toggle('on',m==='desk');
+  document.getElementById('btn-mob').classList.toggle('on',m==='mob');
+}
+
+/* ─── NAV PAGES ─── */
+function switchPg(id,el){
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  // Show employee hub sub-nav
+  document.querySelectorAll('[id^="pg-"]').forEach(p=>p.classList.remove('active'));
+  // Map tab to page
+  const map={dashboard:'dashboard','employee-hub':'emp-directory',payroll:'payroll',attendance:'attendance',leave:'leave',performance:'performance',recruitment:'recruitment',reports:'reports'};
+  const pg=document.getElementById('pg-'+(map[id]||id));
+  if(pg)pg.classList.add('active');
+  // Update sidebar
+  if(id==='employee-hub'){
+    document.querySelectorAll('.sb-item').forEach(s=>s.classList.remove('active'));
+    document.querySelector('.sb-item').classList.add('active');
+  }
+}
+
+/* ─── SIDEBAR ITEMS ─── */
+function openSbItem(id,el){
+  document.querySelectorAll('.sb-item').forEach(s=>s.classList.remove('active'));
+  if(el)el.classList.add('active');
+  document.querySelectorAll('[id^="pg-"]').forEach(p=>p.classList.remove('active'));
+  const target=document.getElementById('pg-'+id);
+  if(target)target.classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* ─── HIRE FORM STEPS ─── */
+function goToStep(n){
+  for(let i=1;i<=6;i++){
+    const el=document.getElementById('hire-step-'+i);
+    if(el)el.style.display=i===n?'block':'none';
+  }
+  const dots=document.querySelectorAll('#hire-prog .ps-dot');
+  const lines=document.querySelectorAll('#hire-prog .ps-line');
+  const lbls=document.querySelectorAll('#hire-prog .ps-lbl');
+  dots.forEach((d,i)=>{
+    d.className='ps-dot '+(i+1<n?'done':i+1===n?'now':'todo');
+    d.textContent=i+1<n?'✓':i+1;
+  });
+  lines.forEach((l,i)=>{ l.className='ps-line'+(i+1<n?' done':''); });
+  lbls.forEach((l,i)=>{
+    l.className='ps-lbl'+(i+1<n?' done':i+1===n?' now':'');
+  });
+}
+
+/* ─── SALARY CALCULATOR ─── */
+function calcCTC(lpa){
+  const monthly=(lpa*100000)/12;
+  const basic=monthly*0.40;
+  const hra=basic*0.50;
+  const special=monthly-basic-hra-1600-1250;
+  const pf=basic*0.12;
+  document.getElementById('sl-basic').textContent='₹'+Math.round(basic).toLocaleString('en-IN');
+  document.getElementById('sl-hra').textContent='₹'+Math.round(hra).toLocaleString('en-IN');
+  document.getElementById('sl-special').textContent='₹'+Math.round(special).toLocaleString('en-IN');
+  document.getElementById('sl-pf').textContent='−₹'+Math.round(pf).toLocaleString('en-IN');
+  document.getElementById('sl-gross').textContent='₹'+Math.round(monthly).toLocaleString('en-IN');
+  document.getElementById('sl-net').textContent='₹'+Math.round(monthly-pf).toLocaleString('en-IN');
+}
+
+/* ─── BANK IFSC LOOKUP ─── */
+const ifscData={'HDFC0001234':{bank:'HDFC Bank',branch:'Indiranagar, Bangalore'},'ICIC0000101':{bank:'ICICI Bank',branch:'MG Road, Bangalore'},'SBIN0040026':{bank:'State Bank of India',branch:'Koramangala, Bangalore'},'AXIS0000062':{bank:'Axis Bank',branch:'Whitefield, Bangalore'}};
+function lookupIFSC(val){
+  const v=val.toUpperCase();
+  const data=ifscData[v];
+  if(data){
+    document.getElementById('bank-name').value=data.bank;
+    document.getElementById('bank-branch').value=data.branch;
+    document.getElementById('ifsc-hint').textContent='✓ Valid IFSC — Bank details auto-filled';
+    document.getElementById('ifsc-hint').style.color='var(--green)';
+  } else {
+    document.getElementById('bank-name').value='';
+    document.getElementById('bank-branch').value='';
+    document.getElementById('ifsc-hint').textContent=v.length>=11?'IFSC not found — try HDFC0001234':'Bank name auto-fills on valid IFSC';
+    document.getElementById('ifsc-hint').style.color='var(--text3)';
+  }
+}
+function checkAccMatch(){
+  const a=document.getElementById('acc-num').value;
+  const b=document.getElementById('acc-conf').value;
+  const hint=document.getElementById('acc-hint');
+  if(!b){hint.textContent='';return;}
+  if(a===b){hint.textContent='✓ Account numbers match';hint.style.color='var(--green)';}
+  else{hint.textContent='✗ Account numbers do not match';hint.style.color='var(--rose)';}
+}
+
+/* ─── DOCUMENT UPLOAD ─── */
+function markDocUploaded(id,inp){
+  const card=document.getElementById(id);
+  if(inp.files&&inp.files.length){
+    card.style.borderColor='var(--green)';
+    card.style.background='var(--green-bg)';
+  }
+}
+
+/* ─── SUBMIT NEW HIRE ─── */
+function submitNewHire(){
+  alert('✅ Employee record submitted!\n\nEMP ID: EMP-2026-0142 generated\nCorporate email: priya.iyer@company.com created\nSystem access: Provisioned for Product Design · L4\nOnboarding checklist: Triggered (14 tasks assigned to IT, Admin, HR)\n\nPriya Iyer will receive a welcome email with ESS login credentials.');
+  openSbItem('onboarding',null);
+}
+
+/* ─── ONBOARDING DATA ─── */
+const obData={
+  priya:{name:'Priya Iyer',day:'Day 1',dept:'Product Design',pct:68,
+    tasks:{
+      IT:[{name:'Corporate Email',owner:'IT · Completed Mar 15',done:true},{name:'Laptop Issuance (DL2026-004)',owner:'IT · Completed',done:true},{name:'System Access & VPN',owner:'IT · Pending',done:false,late:false}],
+      Admin:[{name:'ID Card Issued',owner:'Admin · Mar 15',done:true},{name:'Seat Allocated (Floor 3, D-12)',owner:'Admin · Completed',done:true},{name:'Access Card (ACB-2890)',owner:'Admin · Completed',done:true}],
+      HR:[{name:'Induction Scheduled',owner:'HR · Mar 20 (Group)',done:true},{name:'Policy Acknowledgement',owner:'HR · Sent to ESS',done:false},{name:'Buddy Assignment',owner:'HR · Pending',done:false}],
+      ESS:[{name:'PAN Upload',owner:'Employee · Submitted',done:true},{name:'Aadhaar Upload',owner:'Employee · Submitted',done:true},{name:'NDA e-Sign',owner:'Employee · Pending',done:false},{name:'Degree Certificate',owner:'Employee · Pending',done:false}]
+    }
+  },
+  arjun:{name:'Arjun Shah',day:'Day 5',dept:'Engineering',pct:92,
+    tasks:{
+      IT:[{name:'Corporate Email',owner:'IT · Done',done:true},{name:'MacBook Pro Issued',owner:'IT · Done',done:true},{name:'VPN & GitHub Access',owner:'IT · Done',done:true}],
+      Admin:[{name:'ID Card',owner:'Admin · Done',done:true},{name:'Seat Allocated (Floor 2, B-7)',owner:'Admin · Done',done:true},{name:'Parking (P-042)',owner:'Admin · Done',done:true}],
+      HR:[{name:'Induction Complete',owner:'HR · Mar 5',done:true},{name:'Policy Signed',owner:'HR · Done',done:true},{name:'Buddy: Karan Jain',owner:'HR · Assigned',done:true}],
+      ESS:[{name:'All Documents',owner:'Employee · Submitted',done:true},{name:'Bank Details',owner:'Employee · Pending',done:false}]
+    }
+  },
+  kavita:{name:'Kavita Rao',day:'Day 8',dept:'Operations',pct:41,
+    tasks:{
+      IT:[{name:'Corporate Email',owner:'IT · Done',done:true},{name:'Laptop Issuance',owner:'IT · Done',done:true},{name:'System Access',owner:'IT · 3 days overdue',done:false,late:true}],
+      Admin:[{name:'ID Card',owner:'Admin · 1 day overdue',done:false,late:true},{name:'Seat',owner:'Admin · Done',done:true},{name:'Access Card',owner:'Admin · Done',done:true}],
+      HR:[{name:'Induction',owner:'HR · Pending',done:false},{name:'Policy Acknowledgement',owner:'HR · Pending',done:false},{name:'Buddy',owner:'HR · Pending',done:false}],
+      ESS:[{name:'PAN',owner:'Employee · Submitted',done:true},{name:'Aadhaar',owner:'Employee · Pending',done:false},{name:'NDA',owner:'Employee · Pending',done:false}]
+    }
+  },
+  dev:{name:'Dev Mehta',day:'Day 12',dept:'Marketing',pct:85,
+    tasks:{
+      IT:[{name:'Email & Tools',owner:'IT · Done',done:true},{name:'Laptop',owner:'IT · Done',done:true},{name:'Design Software',owner:'IT · Done',done:true}],
+      Admin:[{name:'ID Card',owner:'Admin · Done',done:true},{name:'Seat (Floor 4, A-3)',owner:'Admin · Done',done:true},{name:'Access Card',owner:'Admin · Done',done:true}],
+      HR:[{name:'Induction',owner:'HR · Done',done:true},{name:'Policy Signed',owner:'HR · Done',done:true},{name:'Buddy Assigned',owner:'HR · Done',done:true}],
+      ESS:[{name:'All Documents',owner:'Employee · Done',done:true},{name:'Benefits Enrollment',owner:'Employee · Pending',done:false}]
+    }
+  }
+};
+const deptIcons={'IT':'💻','Admin':'🏢','HR':'👥','ESS':'📱'};
+function getObPct(tasks){const all=Object.values(tasks).flat();return Math.round(all.filter(t=>t.done).length/all.length*100)}
+function renderOb(key){
+  const d=obData[key];const c=document.getElementById('ob-content');
+  const pct=getObPct(d.tasks);
+  let html=`<div class="ob-grid">`;
+  for(const[dept,tasks] of Object.entries(d.tasks)){
+    const done=tasks.filter(t=>t.done).length;const total=tasks.length;
+    const p=Math.round(done/total*100);
+    const col=p===100?'var(--green)':p<50?'var(--rose)':'var(--amber)';
+    html+=`<div class="ob-dept"><div class="ob-dhead"><span>${deptIcons[dept]||'📋'}</span><span class="ob-dtitle">${dept}</span><span class="chip ${p===100?'ch-green':p<50?'ch-rose':'ch-amber'}" style="font-size:.6rem">${p}%</span></div><div class="ob-dbody">`;
+    tasks.forEach(t=>{
+      html+=`<div class="ob-task"><div class="ob-chk ${t.done?'done':t.late?'late':''}" onclick="this.classList.toggle('done')">${t.done?'✓':t.late?'!':''}</div><div class="ob-task-body"><div class="ob-task-name">${t.name}</div><div class="ob-task-meta">${t.owner}</div></div></div>`;
+    });
+    html+=`</div><div class="ob-prog"><div class="ob-progfill" style="width:${p}%;background:${col}"></div></div></div>`;
+  }
+  html+=`</div>`;
+  c.innerHTML=html;
+}
+function selectJoiner(el,key){
+  document.querySelectorAll('.ob-emp-btn').forEach(b=>{b.style.background='var(--card2)';b.style.color='var(--text2)';b.style.borderColor='var(--border)';});
+  el.style.background='var(--accent)';el.style.color='#fff';el.style.borderColor='var(--accent)';
+  const d=obData[key];
+  if(key==='kavita'){document.getElementById('ob-alert').style.display='flex';}
+  else{document.getElementById('ob-alert').style.display='none';}
+  renderOb(key);
+}
+
+/* ─── TABS ─── */
+function swTab(btn,targetId){
+  const parent=btn.closest('.pg');
+  parent.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  parent.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('on'));
+  const t=document.getElementById(targetId);
+  if(t)t.classList.add('on');
+}
+
+/* ─── PROBATION MODAL ─── */
+function openConfirmModal(name,id,end,days,mgr,dept){
+  document.getElementById('conf-title').textContent='Probation Review — '+name;
+  document.getElementById('conf-name').textContent=name;
+  document.getElementById('conf-meta').textContent=id+' · '+dept+' · Manager: '+mgr;
+  document.getElementById('conf-days').textContent=days==='0'?'Due today':days+' days';
+  document.getElementById('conf-days').style.color=parseInt(days)<7?'var(--rose)':parseInt(days)<15?'var(--amber)':'var(--green)';
+  const av=document.getElementById('conf-avatar');
+  av.textContent=getInitials(name);
+  openModal('modal-confirm');
+}
+let currentRating=4;
+function setRating(n){
+  currentRating=n;
+  document.querySelectorAll('.star').forEach((s,i)=>s.style.opacity=i<n?'1':'.3');
+  const labels=['','Poor — Below expectations','Fair — Needs improvement','Good — Meets expectations','Strong — Exceeds expectations','Excellent — Outstanding performance'];
+  document.getElementById('rating-lbl').textContent='Rating: '+n+'/5 — '+labels[n];
+}
+let currentDecision='confirm';
+function selectDecision(el,d){
+  currentDecision=d;
+  document.querySelectorAll('.decision-card').forEach(c=>{c.style.borderColor='var(--border)';c.style.background='transparent';});
+  const col=d==='confirm'?'var(--green)':d==='extend'?'var(--amber)':'var(--rose)';
+  el.style.borderColor=col;el.style.background=d==='confirm'?'var(--green-bg)':d==='extend'?'var(--amber-bg)':'var(--rose-bg)';
+}
+function submitConfirmation(){
+  const name=document.getElementById('conf-name').textContent;
+  const msgs={confirm:`✅ ${name} has been confirmed as a permanent employee.\n\nConfirmation letter auto-generated and dispatched via e-sign to employee's ESS.\n\nEmployee notified via email and push notification.`,extend:`⏳ Probation extended for ${name}.\n\nExtension letter generated. Manager will receive a new reminder 30 days before the extended end date.`,terminate:`🚪 Exit process initiated for ${name}.\n\nSeparation workflow triggered. Clearance checklist sent to IT, Admin, Finance, HR, and Manager.`};
+  closeModal('modal-confirm');
+  setTimeout(()=>alert(msgs[currentDecision]),200);
+}
+
+/* ─── PROMOTION INCREMENT ─── */
+function calcPromoIncrement(newCTC){
+  const pct=((newCTC-14.5)/14.5*100).toFixed(1);
+  const el=document.getElementById('promo-inc');
+  if(el)el.textContent=(pct>0?'+':'')+pct+'%';
+}
+
+/* ─── MODAL HELPERS ─── */
+function openModal(id){document.getElementById(id).classList.add('open')}
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',function(e){if(e.target===this)closeModal(this.id)}));
+
+/* ─── DRAWER ─── */
+function openDrawer(id,name,dept,desig,color){
+  const initials=getInitials(name);
+  document.getElementById('dr-avatar').textContent=initials;
+  document.getElementById('dr-avatar').style.background=color||'var(--accent)';
+  document.getElementById('dr-name').textContent=name;
+  document.getElementById('dr-meta').textContent=id+' · '+dept;
+  document.getElementById('drawer-overlay').classList.add('open');
+  document.getElementById('emp-drawer').classList.add('open');
+}
+function closeDrawer(){
+  document.getElementById('drawer-overlay').classList.remove('open');
+  document.getElementById('emp-drawer').classList.remove('open');
+}
+
+/* ─── INIT ─── */
+buildTable(employees);
+renderOb('priya');
+calcCTC(18);
+</script>
+</body>
+</html>

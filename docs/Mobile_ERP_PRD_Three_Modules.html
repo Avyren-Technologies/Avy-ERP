@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mobile ERP — PRD: HR, Machine Management & Visitor Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Literata:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0D0F14;
+  --surface: #13161E;
+  --surface2: #1A1E29;
+  --border: rgba(255,255,255,0.07);
+  --border-light: rgba(255,255,255,0.04);
+  --text: #D4D8E8;
+  --text-dim: #6B7394;
+  --text-muted: #3D4260;
+
+  --hr-accent: #6EE7B7;
+  --hr-accent-dim: rgba(110,231,183,0.1);
+  --hr-accent-glow: rgba(110,231,183,0.2);
+
+  --mach-accent: #60A5FA;
+  --mach-accent-dim: rgba(96,165,250,0.1);
+  --mach-accent-glow: rgba(96,165,250,0.2);
+
+  --vis-accent: #F472B6;
+  --vis-accent-dim: rgba(244,114,182,0.1);
+  --vis-accent-glow: rgba(244,114,182,0.2);
+
+  --active: var(--hr-accent);
+  --sidebar-w: 290px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Literata', Georgia, serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.75;
+  font-size: 15px;
+  overflow-x: hidden;
+}
+
+/* ─── SIDEBAR ─── */
+.sidebar {
+  position: fixed; top: 0; left: 0; width: var(--sidebar-w); height: 100vh;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  z-index: 200;
+  transform: translateX(0);
+  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1);
+  overflow: hidden;
+}
+.sidebar::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--hr-accent), var(--mach-accent), var(--vis-accent), transparent);
+}
+
+.sidebar-brand {
+  padding: 32px 24px 24px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.brand-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: 'Syne', sans-serif; font-size: 10px; font-weight: 700;
+  letter-spacing: 2.5px; text-transform: uppercase;
+  color: #0D0F14; background: var(--hr-accent);
+  padding: 3px 10px; border-radius: 4px; margin-bottom: 12px;
+}
+.sidebar-brand h1 {
+  font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700;
+  color: #fff; letter-spacing: -0.3px; line-height: 1.3;
+}
+.sidebar-brand p { font-size: 11.5px; color: var(--text-dim); margin-top: 4px; font-style: italic; }
+
+.nav-scroll { flex: 1; overflow-y: auto; padding: 16px 0; }
+.nav-scroll::-webkit-scrollbar { width: 2px; }
+.nav-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.nav-section-label {
+  font-family: 'Syne', sans-serif; font-size: 9.5px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--text-muted); padding: 16px 24px 6px;
+}
+.nav-module-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 24px; margin: 4px 0;
+  font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+  cursor: pointer; transition: all 0.15s;
+}
+.nav-module-header .dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.nav-link {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 24px 8px 40px; font-size: 13px; font-family: 'Literata', serif;
+  color: var(--text-dim); text-decoration: none; cursor: pointer;
+  border-left: 2px solid transparent; transition: all 0.15s ease;
+  position: relative;
+}
+.nav-link:hover { color: var(--text); background: var(--border-light); }
+.nav-link.active { color: #fff; font-weight: 500; background: var(--border-light); }
+.nav-link.active.hr-active { border-left-color: var(--hr-accent); color: var(--hr-accent); }
+.nav-link.active.mach-active { border-left-color: var(--mach-accent); color: var(--mach-accent); }
+.nav-link.active.vis-active { border-left-color: var(--vis-accent); color: var(--vis-accent); }
+
+.sidebar-footer {
+  padding: 14px 24px; border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--text-muted); font-family: 'Syne', sans-serif;
+  letter-spacing: 0.5px;
+}
+
+/* ─── HAMBURGER ─── */
+.hamburger {
+  position: fixed; top: 16px; left: 16px; z-index: 300;
+  width: 44px; height: 44px; border: 1px solid var(--border);
+  background: var(--surface); border-radius: 10px; cursor: pointer;
+  display: none; align-items: center; justify-content: center; flex-direction: column; gap: 5px;
+  transition: all 0.2s;
+}
+.hamburger span { display: block; width: 20px; height: 2px; background: var(--text); border-radius: 2px; transition: all 0.3s; }
+.hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hamburger.open span:nth-child(2) { opacity: 0; }
+.hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 150; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+.overlay.open { opacity: 1; pointer-events: auto; }
+
+/* ─── MAIN ─── */
+.main {
+  margin-left: var(--sidebar-w);
+  min-height: 100vh;
+  padding: 0 64px 100px;
+}
+.content { max-width: 840px; margin: 0 auto; }
+
+/* ─── COVER ─── */
+.cover {
+  position: relative; overflow: hidden;
+  padding: 72px 0 60px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+}
+.cover-bg {
+  position: absolute; inset: 0; z-index: 0;
+  background:
+    radial-gradient(ellipse 60% 80% at 80% 20%, rgba(110,231,183,0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 60% at 20% 80%, rgba(96,165,250,0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 50% at 60% 70%, rgba(244,114,182,0.04) 0%, transparent 60%);
+}
+.cover-content { position: relative; z-index: 1; }
+.cover-eyebrow {
+  font-family: 'Syne', sans-serif; font-size: 10px; font-weight: 700;
+  letter-spacing: 3px; text-transform: uppercase; color: var(--text-muted);
+  margin-bottom: 20px; display: flex; align-items: center; gap: 12px;
+}
+.cover-eyebrow::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.cover h1 {
+  font-family: 'Syne', sans-serif; font-size: 48px; font-weight: 800;
+  color: #fff; letter-spacing: -1.5px; line-height: 1.1; margin-bottom: 16px;
+}
+.cover h1 span { display: block; }
+.cover h1 .accent-hr { color: var(--hr-accent); }
+.cover h1 .accent-mach { color: var(--mach-accent); }
+.cover h1 .accent-vis { color: var(--vis-accent); }
+
+.cover-sub {
+  font-size: 15px; color: var(--text-dim); font-style: italic; max-width: 520px; margin-bottom: 32px;
+}
+.cover-tags {
+  display: flex; flex-wrap: wrap; gap: 10px;
+}
+.cover-tag {
+  font-family: 'Syne', sans-serif; font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 5px 14px; border-radius: 100px; border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.cover-tag.hr { border-color: var(--hr-accent); color: var(--hr-accent); background: var(--hr-accent-dim); }
+.cover-tag.mach { border-color: var(--mach-accent); color: var(--mach-accent); background: var(--mach-accent-dim); }
+.cover-tag.vis { border-color: var(--vis-accent); color: var(--vis-accent); background: var(--vis-accent-dim); }
+
+/* ─── MODULE HEADERS ─── */
+.module-section {
+  padding-top: 72px;
+  border-top: 1px solid var(--border);
+  margin-top: 72px;
+  scroll-margin-top: 32px;
+}
+.module-section:first-of-type { margin-top: 60px; border-top: none; padding-top: 60px; }
+
+.module-banner {
+  display: flex; align-items: flex-start; gap: 20px; margin-bottom: 36px;
+}
+.module-icon {
+  width: 52px; height: 52px; border-radius: 14px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 22px;
+}
+.module-icon.hr { background: var(--hr-accent-dim); border: 1px solid var(--hr-accent-glow); }
+.module-icon.mach { background: var(--mach-accent-dim); border: 1px solid var(--mach-accent-glow); }
+.module-icon.vis { background: var(--vis-accent-dim); border: 1px solid var(--vis-accent-glow); }
+
+.module-title-wrap {}
+.module-number {
+  font-family: 'Syne', sans-serif; font-size: 10px; font-weight: 700;
+  letter-spacing: 2.5px; text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.module-number.hr { color: var(--hr-accent); }
+.module-number.mach { color: var(--mach-accent); }
+.module-number.vis { color: var(--vis-accent); }
+
+.module-title {
+  font-family: 'Syne', sans-serif; font-size: 32px; font-weight: 800;
+  color: #fff; letter-spacing: -0.8px; line-height: 1.15;
+}
+.module-desc { font-size: 15px; color: var(--text-dim); font-style: italic; margin-top: 6px; }
+
+/* ─── TYPOGRAPHY ─── */
+.h2 {
+  font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700;
+  color: #fff; letter-spacing: -0.3px;
+  margin: 40px 0 14px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  scroll-margin-top: 32px;
+}
+.h3 {
+  font-family: 'Syne', sans-serif; font-size: 13.5px; font-weight: 700;
+  letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--text-dim); margin: 24px 0 10px;
+}
+
+p { color: var(--text-dim); margin: 8px 0; line-height: 1.8; }
+p strong { color: var(--text); font-weight: 500; }
+
+/* ─── BULLET ITEMS ─── */
+.bullets { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.bl {
+  display: flex; gap: 12px; align-items: flex-start;
+  color: var(--text-dim); line-height: 1.7; font-size: 14.5px;
+}
+.bl-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  flex-shrink: 0; margin-top: 9px;
+}
+.bl-dot.hr { background: var(--hr-accent); }
+.bl-dot.mach { background: var(--mach-accent); }
+.bl-dot.vis { background: var(--vis-accent); }
+.bl strong { color: var(--text); font-weight: 500; }
+
+/* ─── REQ CARDS ─── */
+.req {
+  border-radius: 12px; padding: 20px 24px; margin: 18px 0;
+  border: 1px solid var(--border); background: var(--surface2);
+  position: relative; overflow: hidden;
+}
+.req::before {
+  content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 3px;
+}
+.req.hr::before { background: var(--hr-accent); }
+.req.mach::before { background: var(--mach-accent); }
+.req.vis::before { background: var(--vis-accent); }
+
+.req-label {
+  font-family: 'Syne', sans-serif; font-size: 9.5px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.req-label.hr { color: var(--hr-accent); }
+.req-label.mach { color: var(--mach-accent); }
+.req-label.vis { color: var(--vis-accent); }
+
+.req-title {
+  font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700;
+  color: #fff; margin-bottom: 12px;
+}
+
+/* ─── TABLES ─── */
+.table-wrap {
+  overflow-x: auto; margin: 18px 0;
+  border-radius: 12px; border: 1px solid var(--border);
+  background: var(--surface2);
+}
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+thead th {
+  padding: 11px 16px; text-align: left;
+  font-family: 'Syne', sans-serif; font-size: 10px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--text-muted); border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+tbody td { padding: 11px 16px; border-bottom: 1px solid var(--border-light); color: var(--text-dim); vertical-align: top; }
+tbody tr:last-child td { border-bottom: none; }
+tbody td strong { color: var(--text); font-weight: 500; }
+tbody tr:hover td { background: var(--border-light); }
+
+/* ─── CALLOUT ─── */
+.callout {
+  border-radius: 10px; padding: 14px 18px; margin: 14px 0;
+  font-size: 13.5px; line-height: 1.65;
+  display: flex; gap: 12px; align-items: flex-start;
+}
+.callout.hr { background: var(--hr-accent-dim); border: 1px solid rgba(110,231,183,0.2); color: #a7f3d0; }
+.callout.mach { background: var(--mach-accent-dim); border: 1px solid rgba(96,165,250,0.2); color: #bfdbfe; }
+.callout.vis { background: var(--vis-accent-dim); border: 1px solid rgba(244,114,182,0.2); color: #fbcfe8; }
+.callout-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.callout strong { font-weight: 600; }
+
+/* ─── FLOW CARDS ─── */
+.flow-row {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
+  margin: 8px 0;
+}
+.flow-box {
+  padding: 10px 14px; border-radius: 8px; font-size: 13px;
+  border: 1px solid var(--border); background: var(--surface2);
+  color: var(--text-dim); text-align: center;
+}
+.flow-arrow { color: var(--text-muted); font-size: 16px; }
+
+/* ─── BADGE ─── */
+.badge {
+  display: inline-block; font-family: 'Syne', sans-serif;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+  padding: 2px 8px; border-radius: 4px; vertical-align: middle;
+}
+.badge.green { background: rgba(110,231,183,0.15); color: var(--hr-accent); }
+.badge.amber { background: rgba(251,191,36,0.15); color: #FCD34D; }
+.badge.red { background: rgba(248,113,113,0.15); color: #FCA5A5; }
+.badge.blue { background: rgba(96,165,250,0.15); color: var(--mach-accent); }
+.badge.pink { background: rgba(244,114,182,0.15); color: var(--vis-accent); }
+
+/* ─── STATUS LIST ─── */
+.status-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.status-item {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12.5px; color: var(--text-dim); font-family: 'Syne', sans-serif; font-weight: 600;
+}
+.status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* ─── DIVIDER ─── */
+.divider { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+
+/* ─── SUMMARY BOX ─── */
+.summary-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 20px 0;
+}
+.summary-card {
+  padding: 16px 18px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface2);
+}
+.summary-card .sc-label {
+  font-family: 'Syne', sans-serif; font-size: 9.5px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px;
+}
+.summary-card .sc-val {
+  font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: #fff;
+}
+.summary-card .sc-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; font-style: italic; }
+
+/* ─── END ─── */
+.end-mark {
+  text-align: center; padding: 64px 0 24px;
+  border-top: 1px solid var(--border); margin-top: 80px;
+  font-family: 'Syne', sans-serif; font-size: 11px; color: var(--text-muted);
+  letter-spacing: 2px; text-transform: uppercase;
+}
+.end-tricolor {
+  display: flex; justify-content: center; gap: 6px; margin-top: 14px;
+}
+.etc { width: 24px; height: 3px; border-radius: 3px; }
+
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 900px) {
+  .main { margin-left: 0; padding: 0 24px 100px; }
+  .sidebar {
+    transform: translateX(-100%);
+    box-shadow: 4px 0 40px rgba(0,0,0,0.5);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .hamburger { display: flex; }
+  .cover { padding: 80px 0 48px; }
+  .cover h1 { font-size: 34px; }
+}
+@media (max-width: 480px) {
+  .cover h1 { font-size: 26px; }
+  .flow-row { grid-template-columns: 1fr; }
+  .flow-arrow { display: none; }
+  .summary-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ─── ANIMATIONS ─── */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.cover-content > * { animation: fadeSlideUp 0.6s ease backwards; }
+.cover-content > *:nth-child(1) { animation-delay: 0.05s; }
+.cover-content > *:nth-child(2) { animation-delay: 0.15s; }
+.cover-content > *:nth-child(3) { animation-delay: 0.25s; }
+.cover-content > *:nth-child(4) { animation-delay: 0.35s; }
+</style>
+</head>
+<body>
+
+<!-- ─── HAMBURGER ─── -->
+<button class="hamburger" id="menuBtn" onclick="toggleMenu()" aria-label="Menu">
+  <span></span><span></span><span></span>
+</button>
+<div class="overlay" id="overlay" onclick="toggleMenu()"></div>
+
+<!-- ─── SIDEBAR ─── -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-badge">PRD v2.0</div>
+    <h1>Mobile ERP<br>Module Reference</h1>
+    <p>Three-Module Edition · Feb 2026</p>
+  </div>
+  <nav class="nav-scroll">
+
+    <div class="nav-section-label">Overview</div>
+    <a class="nav-link" onclick="nav('cover')">Introduction & Scope</a>
+
+    <div class="nav-section-label" style="color:var(--hr-accent)">HR Management</div>
+    <a class="nav-link" onclick="nav('hr-overview')">9.0 Overview</a>
+    <a class="nav-link" onclick="nav('hr-employees')">9.1 Employee Directory</a>
+    <a class="nav-link" onclick="nav('hr-attendance')">9.2 Attendance</a>
+    <a class="nav-link" onclick="nav('hr-leave')">9.3 Leave Management</a>
+    <a class="nav-link" onclick="nav('hr-payroll')">9.4 Payroll</a>
+    <a class="nav-link" onclick="nav('hr-incentive')">9.5 Incentive Config</a>
+    <a class="nav-link" onclick="nav('hr-roles')">9.6 Roles & Permissions</a>
+    <a class="nav-link" onclick="nav('hr-deps')">9.7 Dependencies</a>
+
+    <div class="nav-section-label" style="color:var(--mach-accent)">Machine Management</div>
+    <a class="nav-link" onclick="nav('mach-overview')">8.0 Overview</a>
+    <a class="nav-link" onclick="nav('mach-master')">8.1 Machine Master</a>
+    <a class="nav-link" onclick="nav('mach-schedule')">8.2 PM Schedule</a>
+    <a class="nav-link" onclick="nav('mach-breakdown')">8.3 Breakdown Mgmt</a>
+    <a class="nav-link" onclick="nav('mach-spares')">8.4 Spare Parts</a>
+    <a class="nav-link" onclick="nav('mach-oee')">8.5 OEE Integration</a>
+    <a class="nav-link" onclick="nav('mach-roles')">8.6 Roles & Permissions</a>
+    <a class="nav-link" onclick="nav('mach-deps')">8.7 Dependencies</a>
+
+    <div class="nav-section-label" style="color:var(--vis-accent)">Visitor Management</div>
+    <a class="nav-link" onclick="nav('vis-overview')">V.0 Overview</a>
+    <a class="nav-link" onclick="nav('vis-today')">V.1 Today's Visitors</a>
+    <a class="nav-link" onclick="nav('vis-prereg')">V.2 Pre-Registration</a>
+    <a class="nav-link" onclick="nav('vis-history')">V.3 Visit History</a>
+    <a class="nav-link" onclick="nav('vis-qr')">V.4 QR Self-Registration</a>
+    <a class="nav-link" onclick="nav('vis-security')">V.5 Security Integration</a>
+    <a class="nav-link" onclick="nav('vis-roles')">V.6 Roles & Permissions</a>
+    <a class="nav-link" onclick="nav('vis-deps')">V.7 Dependencies</a>
+
+    <div class="nav-section-label">Reference</div>
+    <a class="nav-link" onclick="nav('glossary')">Glossary</a>
+
+  </nav>
+  <div class="sidebar-footer">Mobile ERP · Draft · Feb 2026</div>
+</aside>
+
+<!-- ─── MAIN CONTENT ─── -->
+<div class="main">
+<div class="content">
+
+<!-- ─── COVER ─── -->
+<div class="cover" id="cover">
+  <div class="cover-bg"></div>
+  <div class="cover-content">
+    <div class="cover-eyebrow">Product Requirements Document · Module Specification</div>
+    <h1>
+      <span class="accent-hr">HR Management,</span>
+      <span class="accent-mach">Machine Management</span>
+      <span>&amp; <span class="accent-vis">Visitor Management</span></span>
+    </h1>
+    <p class="cover-sub">A comprehensive functional specification for three core modules of the Mobile ERP application — a manufacturing solution for small and medium-sized enterprises.</p>
+    <div class="cover-tags">
+      <span class="cover-tag">Version 2.0</span>
+      <span class="cover-tag">February 2026</span>
+      <span class="cover-tag">Status: Draft</span>
+      <span class="cover-tag">Internal / Confidential</span>
+      <span class="cover-tag hr">HR Management</span>
+      <span class="cover-tag mach">Machine Management</span>
+      <span class="cover-tag vis">Visitor Management</span>
+    </div>
+  </div>
+</div>
+
+<!-- INTRO -->
+<div class="module-section" style="margin-top:48px; border-top:none; padding-top:0;">
+  <div class="h2" style="margin-top:0">Introduction & Scope</div>
+  <p>This document is a focused module-level PRD extracted from the Mobile ERP v2.0 full product specification. It covers three modules in complete detail: <strong>HR Management</strong>, <strong>Machine Maintenance</strong>, and <strong>Visitor Management</strong>. Each module is described end-to-end — functional requirements, data flows, user interactions, business rules, integration dependencies, and access controls.</p>
+  <div class="callout hr">
+    <div class="callout-icon">ℹ️</div>
+    <div>The Mobile ERP is a <strong>mobile-first</strong> application serving manufacturing SMEs. All screens are designed for phone/tablet operation. Role-based access is enforced across every module — each user sees only the data and actions their role permits.</div>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="sc-label">Module</div>
+      <div class="sc-val" style="color:var(--hr-accent)">HR</div>
+      <div class="sc-sub">People & Payroll</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-label">Module</div>
+      <div class="sc-val" style="color:var(--mach-accent)">Machines</div>
+      <div class="sc-sub">Equipment Upkeep</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-label">Module</div>
+      <div class="sc-val" style="color:var(--vis-accent)">Visitors</div>
+      <div class="sc-sub">Gate & Registration</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-label">Platform</div>
+      <div class="sc-val">Mobile</div>
+      <div class="sc-sub">iOS & Android</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-label">Target</div>
+      <div class="sc-val">SMEs</div>
+      <div class="sc-sub">Manufacturing sector</div>
+    </div>
+    <div class="summary-card">
+      <div class="sc-label">Access</div>
+      <div class="sc-val">RBAC</div>
+      <div class="sc-sub">Role-based control</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════
+     MODULE 1: HR MANAGEMENT
+══════════════════════════════════════════════════ -->
+<div class="module-section" id="hr-overview">
+  <div class="module-banner">
+    <div class="module-icon hr">👥</div>
+    <div class="module-title-wrap">
+      <div class="module-number hr">Module 09 · HR Management</div>
+      <div class="module-title">HR Management</div>
+      <div class="module-desc">Employee records, attendance tracking, leave management, payroll processing, and production-based incentive configuration.</div>
+    </div>
+  </div>
+
+  <p>The HR Management module is the people-operations hub of the Mobile ERP. It handles the complete employee lifecycle — from onboarding and daily attendance through leave approval, salary computation, and incentive payouts. Attendance data is sourced from the Security module's gate-scan records, ensuring a single source of truth. Incentive calculations are driven by production output logged in the Production module.</p>
+
+  <div class="h3">Module Sub-Sections</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Section</th><th>Feature</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><strong>9.1</strong></td><td>Employee Directory</td><td>Searchable staff list with full profile, contacts, and direct actions</td></tr>
+        <tr><td><strong>9.2</strong></td><td>Attendance</td><td>Daily dashboard fed from Security gate; configurable working-hour thresholds</td></tr>
+        <tr><td><strong>9.3</strong></td><td>Leave Management</td><td>Employee leave requests with approve/reject workflow and notifications</td></tr>
+        <tr><td><strong>9.4</strong></td><td>Payroll</td><td>Monthly salary computation with structured earnings/deductions per employee</td></tr>
+        <tr><td><strong>9.5</strong></td><td>Incentive Configuration</td><td>Production-based slab incentive rules linked to parts, operations, and machines</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 9.1 Employee Directory -->
+<div id="hr-employees">
+  <div class="h2">9.1 Employee Directory</div>
+  <p>The primary screen of the HR module. Displays all employees with quick overview statistics and search functionality. Acts as the entry point for individual employee management.</p>
+
+  <div class="h3">Directory Overview Stats</div>
+  <div class="bullets">
+    <div class="bl"><div class="bl-dot hr"></div><div><strong>Total Staff</strong> — Aggregate headcount across all departments</div></div>
+    <div class="bl"><div class="bl-dot hr"></div><div><strong>Present Today</strong> — Count of employees marked present for the current day</div></div>
+    <div class="bl"><div class="bl-dot hr"></div><div><strong>On Leave</strong> — Count of employees on approved leave today</div></div>
+  </div>
+
+  <div class="h3">Employee List</div>
+  <div class="bullets">
+    <div class="bl"><div class="bl-dot hr"></div><div>Searchable by <strong>employee name</strong>, <strong>department</strong>, or <strong>employee ID</strong></div></div>
+    <div class="bl"><div class="bl-dot hr"></div><div>Each card shows: Name, Department, Designation, Employee ID</div></div>
+    <div class="bl"><div class="bl-dot hr"></div><div>Tapping a record opens the full employee detail view</div></div>
+  </div>
+
+  <div class="h3">Employee Detail View</div>
+  <div class="req hr">
+    <div class="req-label hr">Functional Requirement</div>
+    <div class="req-title">Employee Profile</div>
+    <p>Full employee information page accessible from the directory list. Contains:</p>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Personal Info:</strong> Name, photo, employee ID, date of joining</div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Role Info:</strong> Department, designation, reporting manager</div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Contact Details:</strong> Phone number, email address</div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Quick Actions:</strong> Call (direct dial), Email (opens mail client)</div></div>
+    </div>
+  </div>
+
+  <div class="h3">Add New Employee</div>
+  <div class="req hr">
+    <div class="req-label hr">Functional Requirement</div>
+    <div class="req-title">New Employee Onboarding Form</div>
+    <p>Accessible via a prominent action button in the directory. Captures all fields required to create an employee record and set up their payroll structure. Once saved, the employee appears in the directory and is eligible for attendance, leave, and payroll tracking.</p>
+  </div>
+</div>
+
+<!-- 9.2 Attendance -->
+<div id="hr-attendance">
+  <div class="h2">9.2 Attendance</div>
+  <p>The Attendance section provides HR personnel with a daily view of workforce presence. Data is not manually entered here — it is sourced directly from the Security module's gate attendance system, which captures entry/exit via manual code entry or face scanning.</p>
+
+  <div class="h3">Daily Attendance Dashboard</div>
+  <div class="bullets">
+    <div class="bl"><div class="bl-dot hr"></div><div><strong>Present</strong> — Number of employees who have checked in today and meet the working hour threshold</div></div>
+    <div class="bl"><div class="bl-dot hr"></div><div><strong>Absent</strong> — Employees with no gate record or below the minimum threshold</div></div>
+    <div class="bl"><div class="bl-dot hr"></div><div><strong>On Leave</strong> — Employees with approved leave for the selected date</div></div>
+    <div class="bl"><div class="bl-dot hr"></div><div>Date selector to review historical attendance records</div></div>
+  </div>
+
+  <div class="req hr">
+    <div class="req-label hr">Business Rule</div>
+    <div class="req-title">Working Hours Configuration</div>
+    <p>HR administrators configure minimum working hour thresholds used by the system to auto-categorise daily attendance for payroll purposes:</p>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Full Day Threshold</strong> — e.g., ≥ 8 hours → categorised as <span class="badge green">Full Day</span></div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Half Day Threshold</strong> — e.g., ≥ 4 hours and &lt; 8 hours → categorised as <span class="badge amber">Half Day</span></div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Absent Threshold</strong> — Below the half-day minimum → categorised as <span class="badge red">Absent</span></div></div>
+    </div>
+    <p>These thresholds are configurable and feed directly into payroll deduction calculations for the month.</p>
+  </div>
+
+  <div class="callout hr">
+    <div class="callout-icon">🔗</div>
+    <div><strong>Data Source:</strong> All attendance records originate in the Security module (Section 5.1). Gate punch-in/out timestamps are automatically synced to HR. HR does not duplicate entry — it consumes and categorises the Security data.</div>
+  </div>
+</div>
+
+<!-- 9.3 Leave Management -->
+<div id="hr-leave">
+  <div class="h2">9.3 Leave Management</div>
+  <p>Manages employee leave requests through an approval workflow. HR personnel review pending requests and take action, with the system notifying employees of the outcome.</p>
+
+  <div class="h3">Leave Request List</div>
+  <div class="bullets">
+    <div class="bl"><div class="bl-dot hr"></div><div>Displays all <strong>Pending</strong> requests requiring action, plus historical approved/rejected records</div></div>
+    <div class="bl"><div class="bl-dot hr"></div><div>Each item shows: Employee name, leave type, date range, number of days, submission date</div></div>
+    <div class="bl"><div class="bl-dot hr"></div><div>Filter by status: Pending, Approved, Rejected</div></div>
+  </div>
+
+  <div class="req hr">
+    <div class="req-label hr">Functional Requirement</div>
+    <div class="req-title">Leave Request Detail & Approval Workflow</div>
+    <p>Tapping a leave request opens its full detail:</p>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Employee:</strong> Name, department, designation</div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Leave Type:</strong> Casual Leave, Sick Leave, Earned Leave, etc.</div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Dates:</strong> From date, to date, total number of days</div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Reason:</strong> Employee-provided justification</div></div>
+    </div>
+    <p style="margin-top:10px">Available actions:</p>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot hr"></div><div><span class="badge green">Approve</span> — Marks request approved; updates attendance for those dates; notifies employee</div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><span class="badge red">Reject</span> — Marks request rejected; notifies employee with rejection</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 9.4 Payroll -->
+<div id="hr-payroll">
+  <div class="h2">9.4 Payroll</div>
+  <p>The Payroll section automates monthly salary calculations based on each employee's pre-configured salary structure, attendance records (full/half/absent days), and any applicable incentives from production output.</p>
+
+  <div class="h3">Monthly Payroll Summary</div>
+  <div class="bullets">
+    <div class="bl"><div class="bl-dot hr"></div><div><strong>Total Employees</strong> on payroll for the selected month</div></div>
+    <div class="bl"><div class="bl-dot hr"></div><div><strong>Gross Salary</strong> — Sum of all earnings before deductions across all employees</div></div>
+    <div class="bl"><div class="bl-dot hr"></div><div><strong>Total Deductions</strong> — PF, ESI, tax, loans aggregated</div></div>
+    <div class="bl"><div class="bl-dot hr"></div><div><strong>Net Payable</strong> — Final disbursement amount</div></div>
+    <div class="bl"><div class="bl-dot hr"></div><div>Per-employee rows showing individual gross, deductions, and net pay</div></div>
+  </div>
+
+  <div class="req hr">
+    <div class="req-label hr">Functional Requirement</div>
+    <div class="req-title">Payroll Master Configuration (Per Employee)</div>
+    <p>Each employee has an individually configured salary structure defined in the Payroll Master. This structure drives the automated monthly payroll calculation.</p>
+
+    <div class="h3" style="margin-top:14px">Earnings Components</div>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Basic Salary</strong> — Fixed base component</div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>HRA (House Rent Allowance)</strong></div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Conveyance Allowance</strong></div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Special Allowance</strong></div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Other Allowances</strong> — configurable additional components</div></div>
+    </div>
+
+    <div class="h3" style="margin-top:14px">Deduction Components</div>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>PF (Provident Fund)</strong> — Statutory deduction</div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>ESI (Employee State Insurance)</strong> — Statutory deduction</div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Professional Tax / Income Tax (TDS)</strong></div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Loan EMI</strong> — Advance/loan repayment deduction</div></div>
+    </div>
+
+    <div class="h3" style="margin-top:14px">Bank Details</div>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot hr"></div><div>Bank name, account number, IFSC code — used for payroll disbursement reference</div></div>
+    </div>
+  </div>
+
+  <div class="callout hr">
+    <div class="callout-icon">⚙️</div>
+    <div><strong>Calculation Logic:</strong> Monthly net pay = (Basic + All Allowances + Production Incentive) − (PF + ESI + TDS + Loan EMI) × (Attendance Factor based on working-day thresholds)</div>
+  </div>
+</div>
+
+<!-- 9.5 Incentive Config -->
+<div id="hr-incentive">
+  <div class="h2">9.5 Incentive Configuration</div>
+  <p>Configures production-based incentive rules that are applied to employee earnings. Incentive payouts are automatically calculated using production quantities logged in the Production module against the slab rules defined here.</p>
+
+  <div class="req hr">
+    <div class="req-label hr">Functional Requirement</div>
+    <div class="req-title">Production-Based Incentive Rule Setup</div>
+    <p>Each incentive rule is configured with the following parameters:</p>
+
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Part Selection (Multiple)</strong> — One or more finished goods / parts to which this rule applies</div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Operation Selection (Multiple)</strong> — One or more manufacturing operations (e.g., turning, milling, grinding) covered by this rule</div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Machine Selection (Multiple)</strong> — One or more machines on which qualifying production occurs</div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Target Production Quantity</strong> — The baseline output a worker must exceed before incentive slabs begin applying</div></div>
+      <div class="bl"><div class="bl-dot hr"></div><div><strong>Range-Based Slab Rules</strong> — Tiered payout rates per piece above the target</div></div>
+    </div>
+  </div>
+
+  <div class="h3">Example Slab Structure</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Production Range</th><th>Rate per Piece</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>0 – 100 pcs</td><td>₹ 0</td><td>Below target — no incentive</td></tr>
+        <tr><td>101 – 120 pcs</td><td>₹ 5 / pc</td><td>Slab 1 — entry incentive</td></tr>
+        <tr><td>121 – 150 pcs</td><td>₹ 8 / pc</td><td>Slab 2 — mid-tier incentive</td></tr>
+        <tr><td>151+ pcs</td><td>₹ 12 / pc</td><td>Slab 3 — top performer</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout hr">
+    <div class="callout-icon">🔗</div>
+    <div><strong>Automatic Calculation:</strong> Incentive amounts are auto-computed by the system using production slip data from the Production module. HR configures the rules; the Production module provides the quantities; the system does the math and adds the payout to that employee's monthly payroll.</div>
+  </div>
+</div>
+
+<!-- 9.6 Roles -->
+<div id="hr-roles">
+  <div class="h2">9.6 Roles & Permissions</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Role</th><th>HR Module Access</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Admin / Owner</strong></td><td>Full access — all sub-sections, payroll config, incentive rules, attendance override</td></tr>
+        <tr><td><strong>HR Personnel</strong></td><td>Full HR module access: employee management, attendance, leave approval, payroll processing, incentive configuration</td></tr>
+        <tr><td><strong>Finance</strong></td><td>Read-only payroll review; cannot modify salary structures or approve leaves</td></tr>
+        <tr><td><strong>Security</strong></td><td>Can view their attendance records; no payroll or leave access</td></tr>
+        <tr><td><strong>Other Roles</strong></td><td>No HR module access</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 9.7 Dependencies -->
+<div id="hr-deps">
+  <div class="h2">9.7 Cross-Module Dependencies</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Source</th><th>Target</th><th>Data Flow</th></tr></thead>
+      <tbody>
+        <tr><td>Security (Gate Attendance)</td><td><strong>HR Attendance</strong></td><td>Gate punch-in/out timestamps flow into HR attendance records. HR does not capture attendance independently.</td></tr>
+        <tr><td>Production (Production Slips)</td><td><strong>HR Incentives</strong></td><td>Quantities produced per employee per shift per operation feed incentive calculations.</td></tr>
+        <tr><td><strong>HR (Incentive Config)</strong></td><td>Production Module</td><td>Incentive slab rules configured in HR are applied by the Production module when computing payout.</td></tr>
+        <tr><td>Masters (Shift Master)</td><td><strong>HR Attendance</strong></td><td>Shift definitions define the planned working hours used to evaluate attendance thresholds.</td></tr>
+        <tr><td><strong>HR (Payroll)</strong></td><td>Finance (Payables)</td><td>Processed payroll creates salary payable entries in the Finance module.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════
+     MODULE 2: MACHINE MANAGEMENT
+══════════════════════════════════════════════════ -->
+<div class="module-section" id="mach-overview">
+  <div class="module-banner">
+    <div class="module-icon mach">⚙️</div>
+    <div class="module-title-wrap">
+      <div class="module-number mach">Module 08 · Machine Maintenance</div>
+      <div class="module-title">Machine Management</div>
+      <div class="module-desc">Preventive maintenance scheduling, breakdown tracking, spare parts inventory, and OEE monitoring for manufacturing equipment.</div>
+    </div>
+  </div>
+
+  <p>The Machine Management module ensures maximum equipment uptime through proactive preventive maintenance (PM) scheduling, rapid breakdown response, and spare parts inventory management. It also serves as the foundational source of machine data consumed by the Production module's OEE (Overall Equipment Effectiveness) dashboard.</p>
+
+  <div class="h3">Module Sub-Sections</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Section</th><th>Feature</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><strong>8.1</strong></td><td>Machine Master</td><td>Machine registration and PM schedule configuration per machine</td></tr>
+        <tr><td><strong>8.2</strong></td><td>Maintenance Schedule</td><td>List and calendar view of due and upcoming PM tasks with execution workflow</td></tr>
+        <tr><td><strong>8.3</strong></td><td>Breakdown Management</td><td>Report, track, and resolve machine breakdowns with downtime logging</td></tr>
+        <tr><td><strong>8.4</strong></td><td>Spare Parts Inventory</td><td>Stock of spare parts with low-stock alerts and machine linkage</td></tr>
+        <tr><td><strong>8.5</strong></td><td>OEE Integration</td><td>Machine data feeds the Production OEE dashboard</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 8.1 Machine Master -->
+<div id="mach-master">
+  <div class="h2">8.1 Machine Master</div>
+  <p>The Machine Master is the central registry of all manufacturing equipment. Every machine must be registered here before it can appear in maintenance schedules, production slips, or OEE reporting.</p>
+
+  <div class="req mach">
+    <div class="req-label mach">Functional Requirement</div>
+    <div class="req-title">Machine Registration</div>
+    <p>Each machine record captures:</p>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Machine Code</strong> — Unique identifier for the machine (e.g., CNC-001)</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Machine Name</strong> — Descriptive name (e.g., Horizontal CNC Lathe)</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Location</strong> — Shop floor location or bay designation</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Manufacturer</strong> — OEM name</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Model</strong> — Machine model number/name</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Technical Specifications</strong> — Capacity, power rating, and other relevant specs</div></div>
+    </div>
+  </div>
+
+  <div class="req mach">
+    <div class="req-label mach">Functional Requirement</div>
+    <div class="req-title">Preventive Maintenance (PM) Schedule Configuration</div>
+    <p>Each machine has one or more PM schedules configured directly within its master record:</p>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Frequency</strong> — Daily, Weekly, Monthly, Quarterly, or Annually</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Tasks Per Interval</strong> — Checklist of maintenance tasks to perform (e.g., "Lubricate spindle bearings", "Check coolant level")</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Estimated Duration</strong> — Time required to complete the maintenance tasks</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Required Spare Parts</strong> — Parts that need to be on hand for this PM (linked to Spare Parts Inventory)</div></div>
+    </div>
+    <p>Once configured, the system auto-generates scheduled tasks in the Maintenance Schedule section at the appropriate intervals.</p>
+  </div>
+
+  <div class="callout mach">
+    <div class="callout-icon">📌</div>
+    <div><strong>Master Integration:</strong> Machine records from this master are also referenced in the <strong>Masters Module (Section 11.3)</strong> and the Production module, ensuring a single source of truth for machine data across the application.</div>
+  </div>
+</div>
+
+<!-- 8.2 Maintenance Schedule -->
+<div id="mach-schedule">
+  <div class="h2">8.2 Maintenance Schedule</div>
+  <p>The operational heart of the maintenance module. Displays all due, upcoming, and historical preventive maintenance tasks and provides the workflow to execute them.</p>
+
+  <div class="req mach">
+    <div class="req-label mach">Functional Requirement</div>
+    <div class="req-title">Dual-View Maintenance Schedule</div>
+
+    <div class="h3">List View</div>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot mach"></div><div>Sortable and filterable list of all maintenance tasks</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div>Each task shows: Machine name/code, Task name, Scheduled date, Status</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div>Filter by: Machine, Status, Date range, Priority</div></div>
+    </div>
+
+    <div class="h3" style="margin-top:14px">Calendar View</div>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot mach"></div><div>Monthly calendar with visual density indicators showing maintenance load per day</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div>Tapping a date reveals all tasks scheduled for that day</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div>Useful for planning resource allocation and identifying overloaded days</div></div>
+    </div>
+  </div>
+
+  <div class="h3">Task Status Tracking</div>
+  <div class="status-grid">
+    <div class="status-item"><div class="status-dot" style="background:#60A5FA"></div>Pending</div>
+    <div class="status-item"><div class="status-dot" style="background:#FBBF24"></div>In Progress</div>
+    <div class="status-item"><div class="status-dot" style="background:#6EE7B7"></div>Completed</div>
+    <div class="status-item"><div class="status-dot" style="background:#F87171"></div>Overdue</div>
+  </div>
+
+  <div class="req mach">
+    <div class="req-label mach">Functional Requirement</div>
+    <div class="req-title">Maintenance Execution Workflow</div>
+    <p>When a maintenance technician opens a scheduled task and begins work:</p>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Start Maintenance</strong> — Marks status as In Progress; timestamps the start</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Record Observations</strong> — Free-text notes on findings, abnormalities, or conditions</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Log Replacement Parts</strong> — Select from Spare Parts Inventory; stock automatically decremented</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Mark Completion</strong> — Marks task as Completed; timestamps completion; calculates actual duration</div></div>
+    </div>
+    <p>Completed tasks are archived and visible in maintenance history per machine.</p>
+  </div>
+</div>
+
+<!-- 8.3 Breakdown Management -->
+<div id="mach-breakdown">
+  <div class="h2">8.3 Breakdown Management</div>
+  <p>Enables rapid reporting and tracking of unplanned machine stoppages. Breakdowns are the primary negative contributor to OEE Availability and must be tracked with precision for both resolution speed and root-cause analysis.</p>
+
+  <div class="req mach">
+    <div class="req-label mach">Functional Requirement</div>
+    <div class="req-title">Breakdown Report (New Breakdown)</div>
+    <p>When a machine breaks down, the operator or maintenance staff raises a breakdown report containing:</p>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Machine</strong> — Select from Machine Master</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Issue Type</strong> — Category of failure (Mechanical, Electrical, Hydraulic, Software, Other)</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Description</strong> — Detailed description of the symptom or failure</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Priority</strong> — <span class="badge red">Critical</span> <span class="badge amber">High</span> <span class="badge blue">Medium</span> <span class="badge" style="background:rgba(156,163,175,0.15);color:#9CA3AF">Low</span></div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Reported Time</strong> — Auto-stamped at submission</div></div>
+    </div>
+  </div>
+
+  <div class="h3">Active Breakdowns List</div>
+  <div class="bullets">
+    <div class="bl"><div class="bl-dot mach"></div><div>Real-time list of all open/in-progress breakdowns across the facility</div></div>
+    <div class="bl"><div class="bl-dot mach"></div><div><strong>Downtime Tracking</strong> — Live elapsed downtime counter from time of report</div></div>
+    <div class="bl"><div class="bl-dot mach"></div><div><strong>Assigned Team</strong> — Maintenance team or technician responsible for resolution</div></div>
+    <div class="bl"><div class="bl-dot mach"></div><div>Priority-sorted so critical breakdowns appear at the top</div></div>
+  </div>
+
+  <div class="h3">Breakdown Detail View</div>
+  <div class="bullets">
+    <div class="bl"><div class="bl-dot mach"></div><div>Machine name, location, issue description, issue type</div></div>
+    <div class="bl"><div class="bl-dot mach"></div><div>Reported time, total downtime duration (running counter if unresolved)</div></div>
+    <div class="bl"><div class="bl-dot mach"></div><div>Assigned maintenance team and technician</div></div>
+    <div class="bl"><div class="bl-dot mach"></div><div>Resolution notes — entered when closing the breakdown</div></div>
+    <div class="bl"><div class="bl-dot mach"></div><div>Parts used during repair — linked to spare parts inventory</div></div>
+    <div class="bl"><div class="bl-dot mach"></div><div><strong>Close Breakdown</strong> action — marks resolved, records resolution timestamp</div></div>
+  </div>
+
+  <div class="callout mach">
+    <div class="callout-icon">📊</div>
+    <div><strong>OEE Impact:</strong> Breakdown duration contributes directly to the <strong>Availability</strong> component of OEE for the affected machine. Closing a breakdown with accurate timestamps enables the Production module to compute correct Availability percentages.</div>
+  </div>
+</div>
+
+<!-- 8.4 Spare Parts -->
+<div id="mach-spares">
+  <div class="h2">8.4 Spare Parts Inventory</div>
+  <p>A dedicated inventory for machine spare parts, separate from the main goods inventory. Enables maintenance teams to verify part availability before scheduling maintenance and to replenish stock proactively.</p>
+
+  <div class="bullets">
+    <div class="bl"><div class="bl-dot mach"></div><div><strong>SKU / Part Code</strong> — Unique identifier for each spare part</div></div>
+    <div class="bl"><div class="bl-dot mach"></div><div><strong>Part Name & Description</strong> — What the part is and its specifications</div></div>
+    <div class="bl"><div class="bl-dot mach"></div><div><strong>Applicable Machines</strong> — Which machines this part is compatible with</div></div>
+    <div class="bl"><div class="bl-dot mach"></div><div><strong>Stock Quantity</strong> — Current quantity on hand</div></div>
+    <div class="bl"><div class="bl-dot mach"></div><div><strong>Reorder Level</strong> — Minimum quantity threshold before alert is triggered</div></div>
+    <div class="bl"><div class="bl-dot mach"></div><div><strong>Low-Stock Alerts</strong> — <span class="badge red">Critical</span> when below critical level, <span class="badge amber">Low</span> when approaching reorder level</div></div>
+  </div>
+
+  <div class="callout mach">
+    <div class="callout-icon">🔗</div>
+    <div><strong>Integration:</strong> When a maintenance task is executed (PM or breakdown repair) and parts are consumed, this inventory is automatically decremented. Parts required for PM tasks are pre-linked in the Machine Master PM configuration.</div>
+  </div>
+</div>
+
+<!-- 8.5 OEE Integration -->
+<div id="mach-oee">
+  <div class="h2">8.5 OEE Integration (Production Module)</div>
+  <p>Machine data registered in this module feeds directly into the Production module's OEE (Overall Equipment Effectiveness) dashboard. OEE is the primary equipment performance metric for manufacturing operations.</p>
+
+  <div class="req mach">
+    <div class="req-label mach">Reference: Production Module OEE Dashboard</div>
+    <div class="req-title">OEE = Availability × Performance × Quality</div>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Availability</strong> — (Planned time − Breakdown downtime) ÷ Planned time. Driven by Machine Master planned time and Breakdown Management downtime records.</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Performance</strong> — Actual production rate ÷ Ideal production rate. Driven by Production slip entries.</div></div>
+      <div class="bl"><div class="bl-dot mach"></div><div><strong>Quality</strong> — Good units ÷ Total units (after scrap/NC deduction). Driven by Scrap & NC entries.</div></div>
+    </div>
+
+    <div class="h3" style="margin-top:14px">OEE Colour Indicators</div>
+    <div class="status-grid">
+      <div class="status-item"><div class="status-dot" style="background:#6EE7B7"></div><span class="badge green">≥ 85%</span> World-class</div>
+      <div class="status-item"><div class="status-dot" style="background:#FBBF24"></div><span class="badge amber">60 – 84%</span> Needs improvement</div>
+      <div class="status-item"><div class="status-dot" style="background:#F87171"></div><span class="badge red">&lt; 60%</span> Critical</div>
+    </div>
+  </div>
+</div>
+
+<!-- 8.6 Roles -->
+<div id="mach-roles">
+  <div class="h2">8.6 Roles & Permissions</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Role</th><th>Machine Management Access</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Admin / Owner</strong></td><td>Full access — machine registration, PM config, breakdown management, spare parts, OEE view</td></tr>
+        <tr><td><strong>Maintenance Team</strong></td><td>Full access to Schedule (execute tasks), Breakdown Management (report & resolve), Spare Parts (view & consume); can view Machine Master</td></tr>
+        <tr><td><strong>Operations Manager</strong></td><td>Full read access to all sections; can view OEE; can create breakdown reports</td></tr>
+        <tr><td><strong>Other Roles</strong></td><td>No access to Machine Management module</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 8.7 Dependencies -->
+<div id="mach-deps">
+  <div class="h2">8.7 Cross-Module Dependencies</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Source</th><th>Target</th><th>Data Flow</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Machine Master</strong></td><td>Production (OEE)</td><td>All machine records from this master appear on the OEE dashboard</td></tr>
+        <tr><td><strong>Machine Master</strong></td><td>Masters Module</td><td>Machine Master data is also accessible from the centralised Masters module</td></tr>
+        <tr><td><strong>Breakdown Management</strong></td><td>Production (OEE)</td><td>Breakdown downtime durations feed into machine Availability calculations</td></tr>
+        <tr><td><strong>Spare Parts</strong></td><td>PM Schedule / Breakdown</td><td>Parts consumed during maintenance tasks are decremented from spare parts stock</td></tr>
+        <tr><td>Masters (Shift Master)</td><td><strong>Machine Schedule</strong></td><td>Shift timing defines the "planned time" window for each machine, used in PM scheduling and OEE Availability</td></tr>
+        <tr><td>Vendor Management (PO)</td><td><strong>Spare Parts</strong></td><td>Spare part replenishment can trigger a PO in the Vendor Management module</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════
+     MODULE 3: VISITOR MANAGEMENT
+══════════════════════════════════════════════════ -->
+<div class="module-section" id="vis-overview">
+  <div class="module-banner">
+    <div class="module-icon vis">🪪</div>
+    <div class="module-title-wrap">
+      <div class="module-number vis">Module V · Visitor Management</div>
+      <div class="module-title">Visitor Management</div>
+      <div class="module-desc">Pre-registration, gate check-in/check-out, QR-based self-registration, host notification, and visitor history tracking.</div>
+    </div>
+  </div>
+
+  <p>The Visitor Management module controls and records the entry of all external visitors to the facility. It supports advance visitor pre-registration by employees, walk-in visitor handling by security at the gate, QR-code-based self-registration, and a complete audit trail of all visits. Security personnel operate the gate-side verification, while employees (hosts) initiate pre-registrations and receive arrival notifications.</p>
+
+  <div class="h3">Module Sub-Sections</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Section</th><th>Feature</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><strong>V.1</strong></td><td>Today's Visitors</td><td>Real-time list of expected and arrived visitors for the current day</td></tr>
+        <tr><td><strong>V.2</strong></td><td>Pre-Registration</td><td>Advance registration of visitors by host employees before they arrive</td></tr>
+        <tr><td><strong>V.3</strong></td><td>Visit History</td><td>Searchable archive of all past visits with full details and timestamps</td></tr>
+        <tr><td><strong>V.4</strong></td><td>QR Self-Registration</td><td>Walk-in visitors scan a QR code and self-register via a web form</td></tr>
+        <tr><td><strong>V.5</strong></td><td>Security Integration</td><td>Gate-side verification, host notification, and access approval</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- V.1 Today's Visitors -->
+<div id="vis-today">
+  <div class="h2">V.1 Today's Visitors</div>
+  <p>The primary operational view for the Visitor Management module. Provides a real-time snapshot of all visitor activity for the current day, split between expected (pre-registered) and walk-in visitors.</p>
+
+  <div class="h3">Visitor Status Categories</div>
+  <div class="status-grid">
+    <div class="status-item"><div class="status-dot" style="background:#FBBF24"></div>Expected — Pre-registered, not yet arrived</div>
+    <div class="status-item"><div class="status-dot" style="background:#6EE7B7"></div>Checked In — Currently inside the facility</div>
+    <div class="status-item"><div class="status-dot" style="background:#9CA3AF"></div>Checked Out — Visit completed</div>
+    <div class="status-item"><div class="status-dot" style="background:#F472B6"></div>Walk-In — Unscheduled arrival</div>
+  </div>
+
+  <div class="h3">Visitor Card Information</div>
+  <div class="bullets">
+    <div class="bl"><div class="bl-dot vis"></div><div>Visitor name and company/organisation</div></div>
+    <div class="bl"><div class="bl-dot vis"></div><div>Purpose of visit</div></div>
+    <div class="bl"><div class="bl-dot vis"></div><div>Host employee name</div></div>
+    <div class="bl"><div class="bl-dot vis"></div><div>Expected arrival time (pre-registered) or actual arrival time (checked in)</div></div>
+    <div class="bl"><div class="bl-dot vis"></div><div>Current status badge</div></div>
+  </div>
+</div>
+
+<!-- V.2 Pre-Registration -->
+<div id="vis-prereg">
+  <div class="h2">V.2 Pre-Registration</div>
+  <p>Host employees pre-register visitors before they arrive at the facility. Pre-registration streamlines gate processing and enables security to be aware of expected visitors in advance.</p>
+
+  <div class="req vis">
+    <div class="req-label vis">Functional Requirement</div>
+    <div class="req-title">Visitor Pre-Registration Form</div>
+    <p>An employee (the host) fills in the following fields to register an upcoming visitor:</p>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot vis"></div><div><strong>Visitor Name</strong> — Full name of the expected visitor</div></div>
+      <div class="bl"><div class="bl-dot vis"></div><div><strong>Company / Organisation</strong> — Visitor's employer or affiliation</div></div>
+      <div class="bl"><div class="bl-dot vis"></div><div><strong>Phone Number</strong> — Visitor's contact number</div></div>
+      <div class="bl"><div class="bl-dot vis"></div><div><strong>Purpose of Visit</strong> — Meeting, Delivery, Audit, Vendor, Interview, etc.</div></div>
+      <div class="bl"><div class="bl-dot vis"></div><div><strong>Person to Meet (Host)</strong> — The registering employee is auto-populated as host; can be changed to register on behalf of a colleague</div></div>
+      <div class="bl"><div class="bl-dot vis"></div><div><strong>Expected Date & Time</strong> — When the visitor is expected to arrive</div></div>
+    </div>
+    <p>On submission, the visitor appears in Today's Visitors (if scheduled for today) and in the Security module's Visitor Verification screen as an expected visitor.</p>
+  </div>
+
+  <div class="callout vis">
+    <div class="callout-icon">🔔</div>
+    <div><strong>Notification Flow:</strong> When Security checks in a pre-registered visitor at the gate, an automatic notification is sent to the host employee informing them their visitor has arrived.</div>
+  </div>
+</div>
+
+<!-- V.3 Visit History -->
+<div id="vis-history">
+  <div class="h2">V.3 Visit History</div>
+  <p>A complete, searchable audit trail of all visitor activity — past and present. Provides accountability, security audit capability, and statistical reporting.</p>
+
+  <div class="bullets">
+    <div class="bl"><div class="bl-dot vis"></div><div>Searchable by visitor name, company, host name, or date range</div></div>
+    <div class="bl"><div class="bl-dot vis"></div><div>Each record shows: Visitor name, company, purpose, host, check-in time, check-out time, visit duration</div></div>
+    <div class="bl"><div class="bl-dot vis"></div><div>Tapping any record shows full visit detail including any security notes</div></div>
+    <div class="bl"><div class="bl-dot vis"></div><div>Filterable by visit type: Pre-registered, Walk-in, QR Self-Registered</div></div>
+    <div class="bl"><div class="bl-dot vis"></div><div>Export capability for compliance and audit reporting</div></div>
+  </div>
+</div>
+
+<!-- V.4 QR Self-Registration -->
+<div id="vis-qr">
+  <div class="h2">V.4 QR Code–Based Visitor Self-Registration</div>
+  <p>Designed to reduce security desk congestion for walk-in visitors. A QR code is displayed at the reception or printed and posted near the gate. Visitors scan it with their phone and complete a web form independently.</p>
+
+  <div class="req vis">
+    <div class="req-label vis">Functional Requirement</div>
+    <div class="req-title">QR Self-Registration Flow</div>
+
+    <div class="h3">Step 1 — QR Code Display</div>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot vis"></div><div>Security generates and displays a persistent QR code (on a screen or printed sign) at the facility entrance</div></div>
+      <div class="bl"><div class="bl-dot vis"></div><div>The QR code links to a mobile-optimised web registration form (no app required for the visitor)</div></div>
+    </div>
+
+    <div class="h3" style="margin-top:14px">Step 2 — Visitor Self-Registration Web Form</div>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot vis"></div><div><strong>Name</strong> — Visitor's full name</div></div>
+      <div class="bl"><div class="bl-dot vis"></div><div><strong>Company / Organisation</strong></div></div>
+      <div class="bl"><div class="bl-dot vis"></div><div><strong>Phone Number</strong></div></div>
+      <div class="bl"><div class="bl-dot vis"></div><div><strong>Purpose of Visit</strong></div></div>
+      <div class="bl"><div class="bl-dot vis"></div><div><strong>Person to Meet</strong> — Employee name / department</div></div>
+    </div>
+
+    <div class="h3" style="margin-top:14px">Step 3 — Host Approval</div>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot vis"></div><div>On form submission, the named host employee receives an <strong>in-app notification</strong></div></div>
+      <div class="bl"><div class="bl-dot vis"></div><div>Host can <span class="badge pink">Approve</span> or <span class="badge" style="background:rgba(248,113,113,0.15);color:#FCA5A5">Decline</span> the visit request</div></div>
+    </div>
+
+    <div class="h3" style="margin-top:14px">Step 4 — Security Notification</div>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot vis"></div><div>On host approval, security receives an alert to allow the visitor access</div></div>
+      <div class="bl"><div class="bl-dot vis"></div><div>Visitor appears in the Security module's Visitor Verification screen as an approved walk-in</div></div>
+    </div>
+  </div>
+
+  <div class="callout vis">
+    <div class="callout-icon">📱</div>
+    <div><strong>No App Required:</strong> The visitor's self-registration form is a standard web page — visitors do not need to download or install the Mobile ERP app. The entire visitor interaction happens through their phone's browser after scanning the QR code.</div>
+  </div>
+</div>
+
+<!-- V.5 Security Integration -->
+<div id="vis-security">
+  <div class="h2">V.5 Security Module Integration (Gate Verification)</div>
+  <p>The Security module's Visitor Verification screen is the gate-side complement to the Visitor Management module. Security personnel use it to check in visitors against pre-registrations and handle walk-ins.</p>
+
+  <div class="req vis">
+    <div class="req-label vis">Functional Requirement</div>
+    <div class="req-title">Visitor Gate Management (Security Section 5.3)</div>
+    <p>The Security Visitor Verification screen shows today's expected visitors (sourced from Visitor Management pre-registrations). Security can perform the following actions:</p>
+    <div class="bullets">
+      <div class="bl"><div class="bl-dot vis"></div><div><strong>View Full Details</strong> — Name, company, purpose, and host employee for each expected visitor</div></div>
+      <div class="bl"><div class="bl-dot vis"></div><div><strong>Verify & Check In</strong> — Marks visitor as Checked In; timestamps arrival; triggers host notification</div></div>
+      <div class="bl"><div class="bl-dot vis"></div><div><strong>Check Out</strong> — Marks visitor as Checked Out; timestamps departure; records total visit duration</div></div>
+      <div class="bl"><div class="bl-dot vis"></div><div><strong>Handle Walk-In Visitors</strong> — Manual entry for unannounced visitors not in the pre-registration list</div></div>
+    </div>
+  </div>
+
+  <div class="h3">Walk-in Handling via Security</div>
+  <div class="bullets">
+    <div class="bl"><div class="bl-dot vis"></div><div>Security can manually capture walk-in visitor details at the gate: name, company, phone, purpose, person to meet</div></div>
+    <div class="bl"><div class="bl-dot vis"></div><div>Host employee is notified and can approve remotely</div></div>
+    <div class="bl"><div class="bl-dot vis"></div><div>Walk-in visitors appear in the Visit History with type = "Walk-In"</div></div>
+  </div>
+</div>
+
+<!-- V.6 Roles -->
+<div id="vis-roles">
+  <div class="h2">V.6 Roles & Permissions</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Role</th><th>Visitor Management Access</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Admin / Owner</strong></td><td>Full access — all sections, history, QR management, configuration</td></tr>
+        <tr><td><strong>Security Personnel</strong></td><td>Visitor Verification (check-in/out), handle walk-ins, view today's expected visitors; cannot pre-register on behalf of others or view full history</td></tr>
+        <tr><td><strong>All Employees (Hosts)</strong></td><td>Pre-register their own visitors; receive arrival notifications; approve/reject QR self-registration requests directed to them</td></tr>
+        <tr><td><strong>HR Personnel</strong></td><td>Full read access to visitor history for compliance and audit purposes</td></tr>
+        <tr><td><strong>Other Roles</strong></td><td>Can pre-register visitors they are hosting; no access to others' visitor records or history</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- V.7 Dependencies -->
+<div id="vis-deps">
+  <div class="h2">V.7 Cross-Module Dependencies</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Source</th><th>Target</th><th>Data Flow</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Visitor Mgmt (Pre-Registration)</strong></td><td>Security (Visitor Verification)</td><td>Pre-registered visitors automatically populate the Security module's expected visitors list for gate verification</td></tr>
+        <tr><td>Security (Visitor Check-In)</td><td><strong>Visitor Mgmt (Today's Visitors)</strong></td><td>Check-in/check-out timestamps recorded by Security flow back to update visitor status in the Visitor Management module</td></tr>
+        <tr><td><strong>Visitor Mgmt (QR Registration)</strong></td><td>Host Employee (Notification)</td><td>On visitor QR submission, the named host receives an in-app push notification for approval</td></tr>
+        <tr><td>Host Approval</td><td><strong>Security (Gate)</strong></td><td>Host approval triggers Security notification to permit the walk-in visitor</td></tr>
+        <tr><td><strong>Visitor History</strong></td><td>Compliance / Audit</td><td>Complete visit log available for HR and Admin for facility safety and audit reporting</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+<!-- ─── GLOSSARY ─── -->
+<div class="module-section" id="glossary" style="border-top: 1px solid var(--border);">
+  <div class="h2" style="margin-top:0">Glossary</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:120px">Term</th><th>Definition</th></tr></thead>
+      <tbody>
+        <tr><td><strong>ASN</strong></td><td>Advance Shipping Notice — vendor notification of an upcoming delivery including item list and logistics details</td></tr>
+        <tr><td><strong>ESI</strong></td><td>Employee State Insurance — statutory health insurance deduction for eligible employees in India</td></tr>
+        <tr><td><strong>HRA</strong></td><td>House Rent Allowance — salary component provided toward employee housing costs</td></tr>
+        <tr><td><strong>IFSC</strong></td><td>Indian Financial System Code — unique identifier for a bank branch used in electronic transfers</td></tr>
+        <tr><td><strong>KPI</strong></td><td>Key Performance Indicator — measurable metric for evaluating performance against targets</td></tr>
+        <tr><td><strong>NC</strong></td><td>Non-Conformance — production output that does not meet quality specifications</td></tr>
+        <tr><td><strong>OEE</strong></td><td>Overall Equipment Effectiveness — Availability × Performance × Quality; primary machine productivity metric</td></tr>
+        <tr><td><strong>PF</strong></td><td>Provident Fund — statutory retirement savings deduction for employees in India</td></tr>
+        <tr><td><strong>PM</strong></td><td>Preventive Maintenance — scheduled upkeep performed to prevent breakdowns</td></tr>
+        <tr><td><strong>QR Code</strong></td><td>Quick Response Code — 2D barcode scannable by a smartphone camera to open a URL or action</td></tr>
+        <tr><td><strong>RBAC</strong></td><td>Role-Based Access Control — access permissions granted based on user role rather than individual</td></tr>
+        <tr><td><strong>SKU</strong></td><td>Stock Keeping Unit — unique code identifying a specific spare part or inventory item</td></tr>
+        <tr><td><strong>SME</strong></td><td>Small and Medium-sized Enterprise — the target customer segment for this application</td></tr>
+        <tr><td><strong>TDS</strong></td><td>Tax Deducted at Source — income tax withheld from salary by the employer before disbursement</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- END MARK -->
+<div class="end-mark">
+  — End of Document · Mobile ERP PRD v2.0 · Three-Module Edition —
+  <div class="end-tricolor">
+    <div class="etc" style="background:var(--hr-accent)"></div>
+    <div class="etc" style="background:var(--mach-accent)"></div>
+    <div class="etc" style="background:var(--vis-accent)"></div>
+  </div>
+</div>
+
+</div>
+</div>
+
+<script>
+// ─── SIDEBAR NAVIGATION ───
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('overlay');
+const menuBtn = document.getElementById('menuBtn');
+const navLinks = document.querySelectorAll('.nav-link');
+
+function toggleMenu() {
+  const isOpen = sidebar.classList.contains('open');
+  sidebar.classList.toggle('open');
+  overlay.classList.toggle('open');
+  menuBtn.classList.toggle('open');
+  document.body.style.overflow = isOpen ? '' : 'hidden';
+}
+
+function nav(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  // Close sidebar on mobile
+  if (window.innerWidth <= 900) {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('open');
+    menuBtn.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+  setTimeout(() => {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, window.innerWidth <= 900 ? 120 : 0);
+}
+
+// ─── ACTIVE NAV HIGHLIGHTING ───
+const sectionMap = [
+  { id: 'cover', link: 0 },
+  { id: 'hr-overview', group: 'hr' },
+  { id: 'hr-employees', group: 'hr' },
+  { id: 'hr-attendance', group: 'hr' },
+  { id: 'hr-leave', group: 'hr' },
+  { id: 'hr-payroll', group: 'hr' },
+  { id: 'hr-incentive', group: 'hr' },
+  { id: 'hr-roles', group: 'hr' },
+  { id: 'hr-deps', group: 'hr' },
+  { id: 'mach-overview', group: 'mach' },
+  { id: 'mach-master', group: 'mach' },
+  { id: 'mach-schedule', group: 'mach' },
+  { id: 'mach-breakdown', group: 'mach' },
+  { id: 'mach-spares', group: 'mach' },
+  { id: 'mach-oee', group: 'mach' },
+  { id: 'mach-roles', group: 'mach' },
+  { id: 'mach-deps', group: 'mach' },
+  { id: 'vis-overview', group: 'vis' },
+  { id: 'vis-today', group: 'vis' },
+  { id: 'vis-prereg', group: 'vis' },
+  { id: 'vis-history', group: 'vis' },
+  { id: 'vis-qr', group: 'vis' },
+  { id: 'vis-security', group: 'vis' },
+  { id: 'vis-roles', group: 'vis' },
+  { id: 'vis-deps', group: 'vis' },
+  { id: 'glossary', group: null },
+];
+
+function updateActive() {
+  let current = null;
+  for (const s of sectionMap) {
+    const el = document.getElementById(s.id);
+    if (el && el.getBoundingClientRect().top <= 120) {
+      current = s;
+    }
+  }
+  if (!current) return;
+
+  navLinks.forEach(link => {
+    link.classList.remove('active', 'hr-active', 'mach-active', 'vis-active');
+    const onclick = link.getAttribute('onclick');
+    if (!onclick) return;
+    const match = onclick.match(/nav\('([^']+)'\)/);
+    if (!match) return;
+    const navId = match[1];
+    if (navId === current.id) {
+      link.classList.add('active');
+      if (current.group === 'hr') link.classList.add('hr-active');
+      if (current.group === 'mach') link.classList.add('mach-active');
+      if (current.group === 'vis') link.classList.add('vis-active');
+    }
+  });
+}
+
+window.addEventListener('scroll', updateActive, { passive: true });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && sidebar.classList.contains('open')) toggleMenu();
+});
+updateActive();
+</script>
+</body>
+</html>

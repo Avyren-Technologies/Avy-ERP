@@ -1,0 +1,9 @@
+[submodule "avy-erp-backend"]
+	path = avy-erp-backend
+	url = https://github.com/Avyren-Technologies/Avy-ERP-Backend.git
+[submodule "mobile-app"]
+	path = mobile-app
+	url = https://github.com/Avyren-Technologies/Avy-ERP-Mobile.git
+[submodule "web-system-app"]
+	path = web-system-app
+	url = https://github.com/Avyren-Technologies/Avy-ERP-Electron-Web.git

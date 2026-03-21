@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>HRMS · Transactional Operations Redesign</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+/* ── THEME VARIABLES ── */
+[data-theme="dark"] {
+  --bg: #080c14;
+  --bg2: #0e1420;
+  --surface: #131d2e;
+  --card: #192338;
+  --card2: #1e2a40;
+  --border: #26354f;
+  --border2: #2e3f5c;
+  --text: #e4eaf5;
+  --text2: #8fa3c0;
+  --text3: #5a7090;
+  --accent: #3b82f6;
+  --accent-glow: rgba(59,130,246,0.18);
+  --green: #10b981;
+  --green-bg: rgba(16,185,129,0.12);
+  --amber: #f59e0b;
+  --amber-bg: rgba(245,158,11,0.12);
+  --rose: #f43f5e;
+  --rose-bg: rgba(244,63,94,0.12);
+  --violet: #8b5cf6;
+  --violet-bg: rgba(139,92,246,0.12);
+  --cyan: #06b6d4;
+  --cyan-bg: rgba(6,182,212,0.12);
+  --input-bg: #0e1420;
+  --input-border: #26354f;
+  --shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+[data-theme="light"] {
+  --bg: #f0f4fa;
+  --bg2: #e8eef8;
+  --surface: #ffffff;
+  --card: #ffffff;
+  --card2: #f8faff;
+  --border: #dce4f0;
+  --border2: #c8d5e8;
+  --text: #1a2540;
+  --text2: #4a6080;
+  --text3: #8a9bb5;
+  --accent: #2563eb;
+  --accent-glow: rgba(37,99,235,0.10);
+  --green: #059669;
+  --green-bg: rgba(5,150,105,0.08);
+  --amber: #d97706;
+  --amber-bg: rgba(217,119,6,0.08);
+  --rose: #e11d48;
+  --rose-bg: rgba(225,29,72,0.08);
+  --violet: #7c3aed;
+  --violet-bg: rgba(124,58,237,0.08);
+  --cyan: #0891b2;
+  --cyan-bg: rgba(8,145,178,0.08);
+  --input-bg: #f8faff;
+  --input-border: #dce4f0;
+  --shadow: 0 4px 24px rgba(0,0,0,0.08);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; transition: background 0.3s, color 0.3s; }
+
+/* ── HEADER ── */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: 0 24px; height: 58px;
+  display: flex; align-items: center; gap: 16px;
+  backdrop-filter: blur(12px);
+}
+.logo { font-size: 1.05rem; font-weight: 800; letter-spacing: -0.5px; white-space: nowrap; }
+.logo span { color: var(--accent); }
+.badge-pill { font-family: 'Fira Code', monospace; font-size: 0.65rem; padding: 3px 10px; border-radius: 20px; background: var(--accent-glow); color: var(--accent); border: 1px solid var(--accent); white-space: nowrap; }
+.badge-green { background: var(--green-bg); color: var(--green); border-color: var(--green); }
+.spacer { flex: 1; }
+
+/* Theme toggle */
+.theme-btn { display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 6px 14px; cursor: pointer; font-size: 0.78rem; font-weight: 600; color: var(--text2); transition: all 0.2s; }
+.theme-btn:hover { border-color: var(--accent); color: var(--accent); }
+.theme-icon { font-size: 1rem; }
+
+/* ── NAV TABS ── */
+.nav-wrap { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.nav-wrap::-webkit-scrollbar { display: none; }
+.nav-tab { display: flex; align-items: center; gap: 7px; padding: 12px 18px; font-size: 0.8rem; font-weight: 600; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.2s; }
+.nav-tab:hover { color: var(--text); background: var(--accent-glow); }
+.nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.nav-tab .tab-icon { font-size: 1rem; }
+.nav-tab .tab-badge { font-family: 'Fira Code', monospace; font-size: 0.6rem; background: var(--accent-glow); color: var(--accent); padding: 1px 6px; border-radius: 10px; }
+
+/* ── LAYOUT ── */
+.layout { display: flex; min-height: calc(100vh - 106px); }
+
+/* Sidebar */
+.sidebar { width: 240px; flex-shrink: 0; background: var(--bg2); border-right: 1px solid var(--border); padding: 20px 0; position: sticky; top: 106px; height: calc(100vh - 106px); overflow-y: auto; scrollbar-width: thin; }
+.sidebar-section { padding: 6px 16px; font-size: 0.65rem; font-weight: 700; letter-spacing: 1.2px; color: var(--text3); text-transform: uppercase; margin-top: 12px; }
+.sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 20px; font-size: 0.8rem; font-weight: 500; color: var(--text2); cursor: pointer; transition: all 0.15s; border-left: 3px solid transparent; }
+.sidebar-item:hover { color: var(--text); background: var(--accent-glow); }
+.sidebar-item.active { color: var(--accent); background: var(--accent-glow); border-left-color: var(--accent); font-weight: 600; }
+.sidebar-item .si-icon { font-size: 1rem; }
+.sidebar-item .si-count { margin-left: auto; font-family: 'Fira Code', monospace; font-size: 0.62rem; color: var(--text3); background: var(--surface); padding: 1px 6px; border-radius: 8px; }
+
+/* Main content */
+.main { flex: 1; padding: 28px; overflow: hidden; min-width: 0; }
+
+/* ── PAGE HEADER ── */
+.page-hdr { display: flex; align-items: flex-start; gap: 18px; padding: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 16px; margin-bottom: 24px; }
+.page-hdr-icon { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; flex-shrink: 0; }
+.page-hdr-body { flex: 1; min-width: 0; }
+.page-hdr-body h2 { font-size: 1.2rem; font-weight: 800; margin-bottom: 5px; }
+.page-hdr-body p { font-size: 0.82rem; color: var(--text2); line-height: 1.6; }
+.page-hdr-tags { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.ptag { font-size: 0.68rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+
+/* ── DUAL TAB (Flowchart | Form) ── */
+.dual-tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+.dual-tab { padding: 8px 20px; border-radius: 10px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1px solid var(--border); color: var(--text2); transition: all 0.2s; }
+.dual-tab:hover { border-color: var(--accent); color: var(--accent); }
+.dual-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ── FLOWCHART VIEW ── */
+.flow-view { display: none; }
+.flow-view.visible { display: block; animation: fadeIn 0.25s ease; }
+
+/* Pipeline flow */
+.pipeline { display: flex; align-items: center; flex-wrap: wrap; gap: 0; margin-bottom: 28px; padding: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow-x: auto; }
+.pipe-step { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.pipe-box { border-radius: 12px; padding: 12px 16px; text-align: center; min-width: 110px; font-size: 0.75rem; font-weight: 600; border: 1.5px solid; cursor: default; transition: transform 0.2s; position: relative; }
+.pipe-box:hover { transform: translateY(-2px); }
+.pipe-box .pb-num { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; border-radius: 50%; font-size: 0.6rem; font-weight: 700; display: flex; align-items: center; justify-content: center; font-family: 'Fira Code', monospace; }
+.pipe-box .pb-icon { font-size: 1.2rem; margin-bottom: 4px; }
+.pipe-box .pb-label { font-size: 0.72rem; font-weight: 600; }
+.pipe-box .pb-sub { font-size: 0.62rem; opacity: 0.7; margin-top: 2px; }
+.pipe-arrow { font-size: 1.2rem; color: var(--text3); margin: 0 6px; padding-bottom: 16px; }
+
+/* Sections grid */
+.sections-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.sec-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.sec-head { padding: 14px 18px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); }
+.sec-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.sec-head h3 { font-size: 0.85rem; font-weight: 700; flex: 1; }
+.sec-head .sc-tag { font-family: 'Fira Code', monospace; font-size: 0.6rem; color: var(--text3); }
+.sec-body { padding: 12px 18px; }
+.field-item { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.field-item:last-child { border-bottom: none; }
+.fi-icon { font-size: 0.9rem; margin-top: 2px; }
+.fi-body { flex: 1; min-width: 0; }
+.fi-name { font-size: 0.78rem; font-weight: 600; margin-bottom: 2px; }
+.fi-desc { font-size: 0.7rem; color: var(--text2); line-height: 1.5; }
+.fi-type { font-family: 'Fira Code', monospace; font-size: 0.62rem; color: var(--violet); background: var(--violet-bg); padding: 1px 7px; border-radius: 6px; flex-shrink: 0; margin-top: 3px; }
+
+/* UX callout */
+.ux-callout { background: var(--accent-glow); border: 1px solid var(--accent); border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; }
+.ux-callout h4 { font-size: 0.78rem; font-weight: 700; color: var(--accent); margin-bottom: 10px; }
+.ux-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.ux-item { font-size: 0.75rem; color: var(--text2); padding-left: 16px; position: relative; line-height: 1.5; }
+.ux-item::before { content: '→'; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+
+/* ── FORM VIEW ── */
+.form-view { display: none; }
+.form-view.visible { display: block; animation: fadeIn 0.25s ease; }
+
+.form-shell { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+.form-topbar { background: var(--card2); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; align-items: center; gap: 12px; }
+.form-topbar h3 { font-size: 0.9rem; font-weight: 700; flex: 1; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; border-radius: 9px; font-size: 0.78rem; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { opacity: 0.88; transform: translateY(-1px); }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text2); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+.btn-green { background: var(--green); color: #fff; }
+.btn-amber { background: var(--amber); color: #fff; }
+
+/* Progress steps */
+.prog-steps { display: flex; gap: 0; padding: 20px 24px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.prog-step { display: flex; align-items: center; gap: 0; }
+.ps-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; font-family: 'Fira Code', monospace; transition: all 0.2s; }
+.ps-dot.done { background: var(--green); color: #fff; }
+.ps-dot.active { background: var(--accent); color: #fff; box-shadow: 0 0 0 4px var(--accent-glow); }
+.ps-dot.todo { background: var(--card2); color: var(--text3); border: 2px solid var(--border); }
+.ps-label { font-size: 0.7rem; font-weight: 600; margin: 0 8px; color: var(--text2); white-space: nowrap; }
+.ps-label.active { color: var(--accent); }
+.ps-line { width: 30px; height: 2px; background: var(--border); flex-shrink: 0; }
+.ps-line.done { background: var(--green); }
+
+/* Form body */
+.form-body { padding: 24px; }
+.form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group label { font-size: 0.73rem; font-weight: 600; color: var(--text2); }
+.form-group .req { color: var(--rose); margin-left: 2px; }
+.form-input, .form-select, .form-textarea { background: var(--input-bg); border: 1.5px solid var(--input-border); border-radius: 9px; padding: 9px 13px; font-size: 0.8rem; color: var(--text); font-family: 'Plus Jakarta Sans', sans-serif; transition: border 0.2s; outline: none; width: 100%; }
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.form-textarea { resize: vertical; min-height: 80px; }
+.form-select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238fa3c0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+.form-hint { font-size: 0.67rem; color: var(--text3); margin-top: 2px; }
+.form-divider { font-size: 0.72rem; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; padding: 12px 0 8px; border-top: 1px solid var(--border); margin-top: 8px; }
+
+/* Smart tag chips */
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; cursor: pointer; border: 1.5px solid; transition: all 0.2s; }
+.chip-blue { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+.chip-green { border-color: var(--green); color: var(--green); background: var(--green-bg); }
+.chip-amber { border-color: var(--amber); color: var(--amber); background: var(--amber-bg); }
+.chip-rose { border-color: var(--rose); color: var(--rose); background: var(--rose-bg); }
+
+/* Status cards */
+.status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.stat-card { background: var(--card2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.stat-card .sc-val { font-size: 1.5rem; font-weight: 800; font-family: 'Fira Code', monospace; }
+.stat-card .sc-lbl { font-size: 0.7rem; color: var(--text2); margin-top: 2px; }
+
+/* Kanban board */
+.kanban { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.kb-col { background: var(--card2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.kb-head { padding: 10px 14px; font-size: 0.75rem; font-weight: 700; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.kb-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.kb-card { background: var(--card); border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; font-size: 0.75rem; }
+.kb-card .kc-name { font-weight: 600; margin-bottom: 3px; }
+.kb-card .kc-sub { color: var(--text2); font-size: 0.68rem; }
+.kb-count { font-family: 'Fira Code', monospace; font-size: 0.65rem; background: var(--surface); padding: 1px 7px; border-radius: 8px; }
+
+/* Payroll stepper */
+.payroll-steps { display: flex; flex-direction: column; gap: 10px; }
+.pay-step { display: flex; gap: 14px; align-items: flex-start; padding: 14px 18px; background: var(--card2); border: 1px solid var(--border); border-radius: 12px; cursor: pointer; transition: all 0.2s; }
+.pay-step:hover { border-color: var(--accent); background: var(--accent-glow); }
+.pay-step.done { border-color: var(--green); }
+.pay-step.active-step { border-color: var(--accent); background: var(--accent-glow); }
+.pay-step-num { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; flex-shrink: 0; font-family: 'Fira Code', monospace; }
+.pay-step-body { flex: 1; }
+.pay-step-title { font-size: 0.82rem; font-weight: 700; margin-bottom: 3px; }
+.pay-step-desc { font-size: 0.72rem; color: var(--text2); }
+.pay-step-action { align-self: center; }
+
+/* Table */
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.data-table th { text-align: left; padding: 10px 14px; font-size: 0.68rem; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px; background: var(--card2); border-bottom: 1px solid var(--border); }
+.data-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: var(--accent-glow); }
+
+/* Toggle row */
+.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.toggle-row:last-child { border-bottom: none; }
+.toggle-label { font-size: 0.8rem; font-weight: 500; }
+.toggle-desc { font-size: 0.7rem; color: var(--text2); }
+.toggle { width: 42px; height: 24px; border-radius: 12px; background: var(--border); position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
+.toggle.on { background: var(--accent); }
+.toggle::after { content: ''; position: absolute; width: 18px; height: 18px; border-radius: 50%; background: #fff; top: 3px; left: 3px; transition: transform 0.2s; }
+.toggle.on::after { transform: translateX(18px); }
+
+/* ── OVERVIEW PAGE ── */
+.overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 28px; }
+.ov-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; cursor: pointer; transition: all 0.25s; position: relative; overflow: hidden; }
+.ov-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--c, var(--accent)); }
+.ov-card:hover { transform: translateY(-3px); border-color: var(--c, var(--accent)); box-shadow: var(--shadow); }
+.ov-card .ov-icon { font-size: 1.8rem; margin-bottom: 10px; }
+.ov-card .ov-page { font-family: 'Fira Code', monospace; font-size: 0.65rem; color: var(--text3); margin-bottom: 4px; }
+.ov-card .ov-title { font-size: 0.88rem; font-weight: 700; margin-bottom: 4px; }
+.ov-card .ov-desc { font-size: 0.72rem; color: var(--text2); line-height: 1.5; }
+.ov-card .ov-meta { position: absolute; top: 14px; right: 14px; font-family: 'Fira Code', monospace; font-size: 0.62rem; color: var(--text3); background: var(--card2); padding: 2px 8px; border-radius: 8px; }
+.consolidation-table { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.ct-head { padding: 16px 20px; border-bottom: 1px solid var(--border); font-size: 0.85rem; font-weight: 700; }
+
+/* Animation */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.page-section { display: none; }
+.page-section.active { display: block; animation: fadeIn 0.3s ease; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .main { padding: 16px; }
+  .header { padding: 0 16px; }
+  .prog-steps { padding: 14px; }
+  .ps-label { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<div class="header">
+  <div class="logo">HRMS <span>Transactions</span></div>
+  <div class="badge-pill">28 screens → 6 smart pages</div>
+  <div class="badge-pill badge-green">Module 2</div>
+  <div class="spacer"></div>
+  <button class="theme-btn" onclick="toggleTheme()">
+    <span class="theme-icon" id="themeIcon">☀️</span>
+    <span id="themeLabel">Light Mode</span>
+  </button>
+</div>
+
+<!-- ── NAV TABS ── -->
+<div class="nav-wrap">
+  <div class="nav-tab active" onclick="showPage('overview', this)"><span class="tab-icon">📐</span> Overview</div>
+  <div class="nav-tab" onclick="showPage('p1', this)"><span class="tab-icon">🎯</span> Page 1 · Recruitment <span class="tab-badge">5→1</span></div>
+  <div class="nav-tab" onclick="showPage('p2', this)"><span class="tab-icon">👤</span> Page 2 · Employee Hub <span class="tab-badge">4→1</span></div>
+  <div class="nav-tab" onclick="showPage('p3', this)"><span class="tab-icon">💰</span> Page 3 · Payroll Run <span class="tab-badge">5→1</span></div>
+  <div class="nav-tab" onclick="showPage('p4', this)"><span class="tab-icon">📋</span> Page 4 · HR Operations <span class="tab-badge">5→1</span></div>
+  <div class="nav-tab" onclick="showPage('p5', this)"><span class="tab-icon">⭐</span> Page 5 · Performance <span class="tab-badge">6→1</span></div>
+  <div class="nav-tab" onclick="showPage('p6', this)"><span class="tab-icon">🚪</span> Page 6 · Separation <span class="tab-badge">3→1</span></div>
+</div>
+
+<div class="layout">
+
+<!-- ── SIDEBAR ── -->
+<div class="sidebar">
+  <div class="sidebar-section">Navigation</div>
+  <div class="sidebar-item active" onclick="showPage('overview', null)"><span class="si-icon">📐</span> Overview</div>
+  <div class="sidebar-section">Smart Pages</div>
+  <div class="sidebar-item" onclick="showPage('p1', null)"><span class="si-icon">🎯</span> Recruitment & ATS <span class="si-count">5→1</span></div>
+  <div class="sidebar-item" onclick="showPage('p2', null)"><span class="si-icon">👤</span> Employee Hub <span class="si-count">4→1</span></div>
+  <div class="sidebar-item" onclick="showPage('p3', null)"><span class="si-icon">💰</span> Payroll Run <span class="si-count">5→1</span></div>
+  <div class="sidebar-item" onclick="showPage('p4', null)"><span class="si-icon">📋</span> HR Operations <span class="si-count">5→1</span></div>
+  <div class="sidebar-item" onclick="showPage('p5', null)"><span class="si-icon">⭐</span> Performance <span class="si-count">6→1</span></div>
+  <div class="sidebar-item" onclick="showPage('p6', null)"><span class="si-icon">🚪</span> Exit & Separation <span class="si-count">3→1</span></div>
+  <div class="sidebar-section">Design Approach</div>
+  <div class="sidebar-item"><span class="si-icon">📱</span> Mobile-First</div>
+  <div class="sidebar-item"><span class="si-icon">🧩</span> Smart Sections</div>
+  <div class="sidebar-item"><span class="si-icon">⚡</span> Context-Aware</div>
+</div>
+
+<!-- ── MAIN CONTENT ── -->
+<div class="main">
+
+<!-- ══════════════ OVERVIEW ══════════════ -->
+<div id="page-overview" class="page-section active">
+
+  <div class="page-hdr">
+    <div class="page-hdr-icon" style="background:rgba(59,130,246,0.12)">📊</div>
+    <div class="page-hdr-body">
+      <h2>Transactional Operations — Smart Redesign</h2>
+      <p>28 original screens consolidated into 6 intuitive smart pages. Each page covers one complete workflow domain. Users find everything they need in one place — no hunting across menus. Mobile-first, self-explanatory, zero training required.</p>
+      <div class="page-hdr-tags">
+        <span class="ptag" style="background:var(--accent-glow);color:var(--accent)">28 → 6 pages (−79%)</span>
+        <span class="ptag" style="background:var(--green-bg);color:var(--green)">Mobile-First</span>
+        <span class="ptag" style="background:var(--violet-bg);color:var(--violet)">Smart Sections</span>
+        <span class="ptag" style="background:var(--amber-bg);color:var(--amber)">Context-Aware Forms</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="overview-grid">
+    <div class="ov-card" style="--c:#3b82f6" onclick="showPage('p1',null)">
+      <div class="ov-meta">5 → 1</div>
+      <div class="ov-icon">🎯</div>
+      <div class="ov-page">PAGE 01</div>
+      <div class="ov-title">Recruitment & ATS</div>
+      <div class="ov-desc">Job requisition, candidate pipeline, interviews, assessments & offer — one Kanban flow</div>
+    </div>
+    <div class="ov-card" style="--c:#10b981" onclick="showPage('p2',null)">
+      <div class="ov-meta">4 → 1</div>
+      <div class="ov-icon">👤</div>
+      <div class="ov-page">PAGE 02</div>
+      <div class="ov-title">Employee Hub</div>
+      <div class="ov-desc">New hire entry, onboarding checklist, probation, transfers & promotions in one place</div>
+    </div>
+    <div class="ov-card" style="--c:#f59e0b" onclick="showPage('p3',null)">
+      <div class="ov-meta">5 → 1</div>
+      <div class="ov-icon">💰</div>
+      <div class="ov-page">PAGE 03</div>
+      <div class="ov-title">Payroll Run</div>
+      <div class="ov-desc">Step-by-step payroll processor, exceptions, arrears, increments & F&F</div>
+    </div>
+    <div class="ov-card" style="--c:#f43f5e" onclick="showPage('p4',null)">
+      <div class="ov-meta">5 → 1</div>
+      <div class="ov-icon">📋</div>
+      <div class="ov-page">PAGE 04</div>
+      <div class="ov-title">HR Operations</div>
+      <div class="ov-desc">Attendance adjustments, leave overrides, bonus upload, loans & asset management</div>
+    </div>
+    <div class="ov-card" style="--c:#8b5cf6" onclick="showPage('p5',null)">
+      <div class="ov-meta">6 → 1</div>
+      <div class="ov-icon">⭐</div>
+      <div class="ov-page">PAGE 05</div>
+      <div class="ov-title">Performance</div>
+      <div class="ov-desc">Goals/OKRs, 360° feedback, appraisals, skill mapping, training & succession</div>
+    </div>
+    <div class="ov-card" style="--c:#06b6d4" onclick="showPage('p6',null)">
+      <div class="ov-meta">3 → 1</div>
+      <div class="ov-icon">🚪</div>
+      <div class="ov-page">PAGE 06</div>
+      <div class="ov-title">Exit & Separation</div>
+      <div class="ov-desc">Resignation, multi-dept clearance dashboard & payroll exception manager</div>
+    </div>
+  </div>
+
+  <div class="consolidation-table">
+    <div class="ct-head">🗜️ Consolidation Map — All 28 Original Screens</div>
+    <table class="data-table">
+      <thead><tr><th>Smart Page</th><th>Original TRN Screens</th><th>Before</th><th>After</th><th>Reduction</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Page 1 · Recruitment & ATS</strong></td><td style="color:var(--text2);font-size:0.72rem">TRN-001 Job Requisition, TRN-002 Candidate Entry, TRN-003 Interview Scheduler, TRN-004 Assessment Tracker, TRN-005 Offer Letter</td><td style="color:var(--rose);font-family:'Fira Code',monospace">5</td><td style="color:var(--green);font-family:'Fira Code',monospace">1</td><td><span class="chip chip-green">−4</span></td></tr>
+        <tr><td><strong>Page 2 · Employee Hub</strong></td><td style="color:var(--text2);font-size:0.72rem">TRN-010 Employee Master, TRN-006 Onboarding Checklist, TRN-007 Confirmation Tracking, TRN-008 Transfer/Promotion</td><td style="color:var(--rose);font-family:'Fira Code',monospace">4</td><td style="color:var(--green);font-family:'Fira Code',monospace">1</td><td><span class="chip chip-green">−3</span></td></tr>
+        <tr><td><strong>Page 3 · Payroll Run</strong></td><td style="color:var(--text2);font-size:0.72rem">TRN-016 Payroll Processor, TRN-017 Hold Salary, TRN-018 F&F Settlement, TRN-019 Arrear Pay, TRN-020 Salary Revision</td><td style="color:var(--rose);font-family:'Fira Code',monospace">5</td><td style="color:var(--green);font-family:'Fira Code',monospace">1</td><td><span class="chip chip-green">−4</span></td></tr>
+        <tr><td><strong>Page 4 · HR Operations</strong></td><td style="color:var(--text2);font-size:0.72rem">TRN-011 Attendance Adj, TRN-012 Leave Override, TRN-013 Bonus Upload, TRN-014 Loan/Advance, TRN-015 Asset Issuance</td><td style="color:var(--rose);font-family:'Fira Code',monospace">5</td><td style="color:var(--green);font-family:'Fira Code',monospace">1</td><td><span class="chip chip-green">−4</span></td></tr>
+        <tr><td><strong>Page 5 · Performance</strong></td><td style="color:var(--text2);font-size:0.72rem">TRN-021 Goal/OKR, TRN-022 360° Feedback, TRN-023 Appraisal Rating, TRN-024 Skill Mapping, TRN-025 Training Tracker, TRN-026 Succession</td><td style="color:var(--rose);font-family:'Fira Code',monospace">6</td><td style="color:var(--green);font-family:'Fira Code',monospace">1</td><td><span class="chip chip-green">−5</span></td></tr>
+        <tr><td><strong>Page 6 · Exit & Separation</strong></td><td style="color:var(--text2);font-size:0.72rem">TRN-009 Resignation/Exit Form, TRN-027 Separation Clearance Dashboard, TRN-028 Payroll Exception Manager</td><td style="color:var(--rose);font-family:'Fira Code',monospace">3</td><td style="color:var(--green);font-family:'Fira Code',monospace">1</td><td><span class="chip chip-green">−2</span></td></tr>
+        <tr style="font-weight:700"><td>TOTAL</td><td style="color:var(--text2)">All 28 TRN screens</td><td style="color:var(--rose);font-family:'Fira Code',monospace">28</td><td style="color:var(--green);font-family:'Fira Code',monospace">6</td><td><span class="chip chip-blue">−79%</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE 1: RECRUITMENT ══════════════ -->
+<div id="page-p1" class="page-section">
+  <div class="page-hdr">
+    <div class="page-hdr-icon" style="background:var(--accent-glow)">🎯</div>
+    <div class="page-hdr-body">
+      <h2>Page 1 — Recruitment & ATS</h2>
+      <p>All 5 recruitment screens merged into one Kanban-style hiring pipeline. Recruiters see every candidate's journey at a glance — from requisition to offer — without switching screens.</p>
+      <div class="page-hdr-tags">
+        <span class="ptag" style="background:var(--accent-glow);color:var(--accent)">Replaces TRN-001 to TRN-005</span>
+        <span class="ptag" style="background:var(--green-bg);color:var(--green)">HR Recruiter · Manager</span>
+      </div>
+    </div>
+  </div>
+  <div class="dual-tabs">
+    <div class="dual-tab active" onclick="switchDual(this,'flow-p1')">📐 Flowchart View</div>
+    <div class="dual-tab" onclick="switchDual(this,'form-p1')">📝 Live Form Preview</div>
+  </div>
+
+  <!-- FLOW VIEW -->
+  <div id="flow-p1" class="flow-view visible">
+    <div class="ux-callout">
+      <h4>💡 Smart UX Features</h4>
+      <div class="ux-grid">
+        <div class="ux-item">Kanban board — drag candidate cards across hiring stages</div>
+        <div class="ux-item">Resume parser auto-fills candidate profile from PDF upload</div>
+        <div class="ux-item">Interview panel calendar shows real-time availability of panelists</div>
+        <div class="ux-item">Google Meet / Teams link auto-generated on scheduling</div>
+        <div class="ux-item">Offer letter auto-fills CTC, role, joining date from system data</div>
+        <div class="ux-item">E-sign dispatch + acceptance tracking on same screen</div>
+        <div class="ux-item">Source tracking (LinkedIn/Naukri/Referral) with hire rate analytics</div>
+        <div class="ux-item">One-click Job Requisition → triggers multi-level approval workflow</div>
+      </div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:20px;">
+      <div style="font-size:0.75rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;">Hiring Pipeline Flow</div>
+      <div class="pipeline">
+        <div class="pipe-step">
+          <div class="pipe-box" style="border-color:var(--accent);background:var(--accent-glow)">
+            <div class="pb-num" style="background:var(--accent);color:#fff">1</div>
+            <div class="pb-icon">📋</div><div class="pb-label">Job Requisition</div><div class="pb-sub">JD + Budget</div>
+          </div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step">
+          <div class="pipe-box" style="border-color:var(--violet);background:var(--violet-bg)">
+            <div class="pb-num" style="background:var(--violet);color:#fff">2</div>
+            <div class="pb-icon">👤</div><div class="pb-label">Candidate</div><div class="pb-sub">Entry / Parse</div>
+          </div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step">
+          <div class="pipe-box" style="border-color:var(--amber);background:var(--amber-bg)">
+            <div class="pb-num" style="background:var(--amber);color:#fff">3</div>
+            <div class="pb-icon">📅</div><div class="pb-label">Interview</div><div class="pb-sub">Schedule + Link</div>
+          </div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step">
+          <div class="pipe-box" style="border-color:var(--cyan);background:var(--cyan-bg)">
+            <div class="pb-num" style="background:var(--cyan);color:#fff">4</div>
+            <div class="pb-icon">📊</div><div class="pb-label">Assessment</div><div class="pb-sub">Scores + Feedback</div>
+          </div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step">
+          <div class="pipe-box" style="border-color:var(--green);background:var(--green-bg)">
+            <div class="pb-num" style="background:var(--green);color:#fff">5</div>
+            <div class="pb-icon">✉️</div><div class="pb-label">Offer Letter</div><div class="pb-sub">E-sign + Accept</div>
+          </div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step">
+          <div class="pipe-box" style="border-color:var(--green);background:var(--green-bg)">
+            <div class="pb-num" style="background:var(--green);color:#fff">✓</div>
+            <div class="pb-icon">🎉</div><div class="pb-label">Hired!</div><div class="pb-sub">→ Onboarding</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="sections-grid">
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--accent)"></div><h3>Job Requisition</h3><span class="sc-tag">TRN-001</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">📋</div><div class="fi-body"><div class="fi-name">Job Title & JD</div><div class="fi-desc">Role title, department, grade, rich-text JD editor with template picker</div></div><div class="fi-type">Rich text</div></div>
+          <div class="field-item"><div class="fi-icon">🔢</div><div class="fi-body"><div class="fi-name">Positions & Budget</div><div class="fi-desc">Number of open positions, budgeted CTC range, target join date</div></div><div class="fi-type">Number</div></div>
+          <div class="field-item"><div class="fi-icon">✅</div><div class="fi-body"><div class="fi-name">Approval Trigger</div><div class="fi-desc">Auto-routes to configured approvers; status visible inline on same screen</div></div><div class="fi-type">Auto-workflow</div></div>
+        </div>
+      </div>
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--violet)"></div><h3>Candidate Profile</h3><span class="sc-tag">TRN-002</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">📄</div><div class="fi-body"><div class="fi-name">Resume Upload & Parse</div><div class="fi-desc">Upload PDF/DOCX — name, email, phone, skills auto-extracted instantly</div></div><div class="fi-type">File + AI parse</div></div>
+          <div class="field-item"><div class="fi-icon">🔗</div><div class="fi-body"><div class="fi-name">Source Tracking</div><div class="fi-desc">LinkedIn / Naukri / Referral / Walk-in; referral employee linkage</div></div><div class="fi-type">Dropdown</div></div>
+          <div class="field-item"><div class="fi-icon">🏷️</div><div class="fi-body"><div class="fi-name">Link to Requisition</div><div class="fi-desc">Tag candidate to open job requisition; shows remaining open positions</div></div><div class="fi-type">Search + Link</div></div>
+        </div>
+      </div>
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--amber)"></div><h3>Interview Scheduler</h3><span class="sc-tag">TRN-003</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">📅</div><div class="fi-body"><div class="fi-name">Round-wise Scheduling</div><div class="fi-desc">HR round / Technical / Final — each round has its own panel and date</div></div><div class="fi-type">Multi-step</div></div>
+          <div class="field-item"><div class="fi-icon">🎥</div><div class="fi-body"><div class="fi-name">Video Link Auto-Generate</div><div class="fi-desc">Google Meet / Teams / Zoom link created automatically on schedule</div></div><div class="fi-type">Auto-generate</div></div>
+          <div class="field-item"><div class="fi-icon">📧</div><div class="fi-body"><div class="fi-name">Invite Dispatch</div><div class="fi-desc">Email + SMS invite sent to candidate and all panelists in one click</div></div><div class="fi-type">Auto-send</div></div>
+        </div>
+      </div>
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--cyan)"></div><h3>Assessment & Offer</h3><span class="sc-tag">TRN-004 + TRN-005</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">📊</div><div class="fi-body"><div class="fi-name">Panel Feedback Form</div><div class="fi-desc">Per-criterion rating (Technical/Communication/Culture fit) with free text</div></div><div class="fi-type">Rating grid</div></div>
+          <div class="field-item"><div class="fi-icon">✉️</div><div class="fi-body"><div class="fi-name">Offer Letter Generator</div><div class="fi-desc">Auto-fills CTC, designation, joining date from requisition; e-sign dispatch</div></div><div class="fi-type">Template + E-sign</div></div>
+          <div class="field-item"><div class="fi-icon">✅</div><div class="fi-body"><div class="fi-name">Acceptance Tracking</div><div class="fi-desc">Accepted / Counter-offer / Declined status with timestamp and notes</div></div><div class="fi-type">Status tracker</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FORM VIEW -->
+  <div id="form-p1" class="form-view">
+    <div class="form-shell">
+      <div class="form-topbar">
+        <div style="font-size:0.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Recruitment Pipeline</div>
+        <h3>Senior Product Designer — 3 Open Positions</h3>
+        <button class="btn btn-outline">+ New Requisition</button>
+        <button class="btn btn-primary">📤 Post Job</button>
+      </div>
+      <!-- Status bar -->
+      <div style="padding:14px 20px;border-bottom:1px solid var(--border)">
+        <div class="status-grid" style="grid-template-columns:repeat(5,1fr)">
+          <div class="stat-card"><div class="sc-val" style="color:var(--accent)">12</div><div class="sc-lbl">Applied</div></div>
+          <div class="stat-card"><div class="sc-val" style="color:var(--violet)">7</div><div class="sc-lbl">Shortlisted</div></div>
+          <div class="stat-card"><div class="sc-val" style="color:var(--amber)">4</div><div class="sc-lbl">Interviewing</div></div>
+          <div class="stat-card"><div class="sc-val" style="color:var(--cyan)">2</div><div class="sc-lbl">Assessment</div></div>
+          <div class="stat-card"><div class="sc-val" style="color:var(--green)">1</div><div class="sc-lbl">Offer Sent</div></div>
+        </div>
+      </div>
+      <!-- Kanban -->
+      <div class="form-body">
+        <div style="font-size:0.75rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:14px">Candidate Pipeline Board</div>
+        <div class="kanban">
+          <div class="kb-col">
+            <div class="kb-head" style="color:var(--accent)">📥 Applied <span class="kb-count">3</span></div>
+            <div class="kb-body">
+              <div class="kb-card"><div class="kc-name">Priya Sharma</div><div class="kc-sub">8 yrs · LinkedIn · ₹18L</div></div>
+              <div class="kb-card"><div class="kc-name">Arjun Mehta</div><div class="kc-sub">6 yrs · Naukri · ₹14L</div></div>
+              <div class="kb-card" style="border:1.5px dashed var(--border);background:transparent;color:var(--text3);text-align:center;cursor:pointer">+ Add Candidate</div>
+            </div>
+          </div>
+          <div class="kb-col">
+            <div class="kb-head" style="color:var(--violet)">📞 HR Round <span class="kb-count">2</span></div>
+            <div class="kb-body">
+              <div class="kb-card"><div class="kc-name">Riya Nair</div><div class="kc-sub">Tomorrow 11am · Meet ✓</div></div>
+              <div class="kb-card"><div class="kc-name">Dev Kapoor</div><div class="kc-sub">Fri 3pm · Teams ✓</div></div>
+            </div>
+          </div>
+          <div class="kb-col">
+            <div class="kb-head" style="color:var(--amber)">🔧 Technical <span class="kb-count">1</span></div>
+            <div class="kb-body">
+              <div class="kb-card"><div class="kc-name">Sneha Iyer</div><div class="kc-sub">3 panelists · Score: 82%</div></div>
+            </div>
+          </div>
+          <div class="kb-col">
+            <div class="kb-head" style="color:var(--green)">✅ Offer <span class="kb-count">1</span></div>
+            <div class="kb-body">
+              <div class="kb-card" style="border-color:var(--green)"><div class="kc-name">Rahul Verma</div><div class="kc-sub">₹22L CTC · E-sign pending</div><div style="margin-top:6px"><button class="btn btn-green" style="padding:4px 10px;font-size:0.68rem">📧 Resend Offer</button></div></div>
+            </div>
+          </div>
+        </div>
+        <div style="height:16px"></div>
+        <div style="font-size:0.75rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">Quick Candidate Entry</div>
+        <div class="form-row">
+          <div class="form-group"><label>Candidate Name <span class="req">*</span></label><input class="form-input" placeholder="Full name" value=""/></div>
+          <div class="form-group"><label>Email <span class="req">*</span></label><input class="form-input" type="email" placeholder="candidate@email.com"/></div>
+          <div class="form-group"><label>Phone</label><input class="form-input" placeholder="+91 98765 43210"/></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Upload Resume</label><input class="form-input" type="file" accept=".pdf,.docx"/><div class="form-hint">PDF/DOCX — AI auto-fills profile fields</div></div>
+          <div class="form-group"><label>Source <span class="req">*</span></label><select class="form-select"><option>LinkedIn</option><option>Naukri</option><option>Referral</option><option>Walk-in</option><option>Company Website</option></select></div>
+          <div class="form-group"><label>Current CTC (₹ LPA)</label><input class="form-input" placeholder="e.g. 16" type="number"/></div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+          <button class="btn btn-outline">Save Draft</button>
+          <button class="btn btn-primary">Add to Pipeline →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE 2: EMPLOYEE HUB ══════════════ -->
+<div id="page-p2" class="page-section">
+  <div class="page-hdr">
+    <div class="page-hdr-icon" style="background:var(--green-bg)">👤</div>
+    <div class="page-hdr-body">
+      <h2>Page 2 — Employee Hub</h2>
+      <p>New hire creation, onboarding checklist, probation tracking, and transfers/promotions — all in one smart page with a tabbed layout. HR completes the full lifecycle entry without switching screens.</p>
+      <div class="page-hdr-tags">
+        <span class="ptag" style="background:var(--accent-glow);color:var(--accent)">Replaces TRN-006, 007, 008, 010</span>
+        <span class="ptag" style="background:var(--green-bg);color:var(--green)">HR Admin · Manager</span>
+      </div>
+    </div>
+  </div>
+  <div class="dual-tabs">
+    <div class="dual-tab active" onclick="switchDual(this,'flow-p2')">📐 Flowchart View</div>
+    <div class="dual-tab" onclick="switchDual(this,'form-p2')">📝 Live Form Preview</div>
+  </div>
+  <div id="flow-p2" class="flow-view visible">
+    <div class="ux-callout">
+      <h4>💡 Smart UX Features</h4>
+      <div class="ux-grid">
+        <div class="ux-item">New hire form has 6 smart tabs — saved progress auto-resumes if interrupted</div>
+        <div class="ux-item">Offer letter accepted → Employee ID auto-generated → Onboarding checklist auto-created</div>
+        <div class="ux-item">Onboarding tasks assigned to IT, Admin, HR automatically by department</div>
+        <div class="ux-item">Probation end date auto-calculated from joining date; reminder sent 30 days before</div>
+        <div class="ux-item">Transfer entry auto-generates transfer letter; updates reporting manager in org chart</div>
+        <div class="ux-item">Promotion wizard shows CTC redesign with grade band validation</div>
+        <div class="ux-item">All lifecycle events auto-logged in employee timeline view</div>
+      </div>
+    </div>
+    <div class="sections-grid">
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--green)"></div><h3>New Hire Entry (6 Tabs)</h3><span class="sc-tag">TRN-010</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">👤</div><div class="fi-body"><div class="fi-name">Tab 1: Personal Info</div><div class="fi-desc">Name, DOB, gender, Aadhaar, PAN, address, emergency contact</div></div><div class="fi-type">Form</div></div>
+          <div class="field-item"><div class="fi-icon">💼</div><div class="fi-body"><div class="fi-name">Tab 2: Professional</div><div class="fi-desc">Designation, department, grade, reporting manager, joining date, employee type</div></div><div class="fi-type">Form</div></div>
+          <div class="field-item"><div class="fi-icon">💰</div><div class="fi-body"><div class="fi-name">Tab 3: Salary & CTC</div><div class="fi-desc">Salary structure template auto-applies; CTC breakup preview; edit individual components</div></div><div class="fi-type">Auto-fill</div></div>
+          <div class="field-item"><div class="fi-icon">🏦</div><div class="fi-body"><div class="fi-name">Tab 4: Bank Details</div><div class="fi-desc">IFSC lookup auto-fills bank name; account number with confirmation field</div></div><div class="fi-type">IFSC lookup</div></div>
+          <div class="field-item"><div class="fi-icon">📎</div><div class="fi-body"><div class="fi-name">Tab 5: Documents</div><div class="fi-desc">Upload Aadhaar, PAN, photo, education certificates, previous offer letter</div></div><div class="fi-type">File upload</div></div>
+          <div class="field-item"><div class="fi-icon">🆘</div><div class="fi-body"><div class="fi-name">Tab 6: Emergency & Final</div><div class="fi-desc">Emergency contact; review all data; submit → Employee ID generated; onboarding triggered</div></div><div class="fi-type">Review + Submit</div></div>
+        </div>
+      </div>
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--accent)"></div><h3>Onboarding Checklist</h3><span class="sc-tag">TRN-006</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">✅</div><div class="fi-body"><div class="fi-name">Auto-Created Tasks</div><div class="fi-desc">IT setup, ID card, email creation, system access, induction schedule — auto-assigned to owners</div></div><div class="fi-type">Auto-generate</div></div>
+          <div class="field-item"><div class="fi-icon">📊</div><div class="fi-body"><div class="fi-name">Progress Tracker</div><div class="fi-desc">Visual progress bar per department; overdue tasks highlighted in red</div></div><div class="fi-type">Progress bar</div></div>
+          <div class="field-item"><div class="fi-icon">📱</div><div class="fi-body"><div class="fi-name">New Joiner Self-Service Steps</div><div class="fi-desc">New employee gets their own checklist view on ESS from Day 1</div></div><div class="fi-type">ESS linked</div></div>
+        </div>
+      </div>
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--amber)"></div><h3>Probation & Confirmation</h3><span class="sc-tag">TRN-007</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">📅</div><div class="fi-body"><div class="fi-name">Auto-Alert System</div><div class="fi-desc">Alert sent to manager 30 days before probation end; confirmation form auto-sent</div></div><div class="fi-type">Auto-trigger</div></div>
+          <div class="field-item"><div class="fi-icon">📋</div><div class="fi-body"><div class="fi-name">Manager Feedback Form</div><div class="fi-desc">Performance during probation rating; Confirm / Extend / Terminate decision</div></div><div class="fi-type">Rating + Decision</div></div>
+          <div class="field-item"><div class="fi-icon">✉️</div><div class="fi-body"><div class="fi-name">Confirmation Letter</div><div class="fi-desc">Auto-generated on confirmation decision; e-sign dispatch to employee</div></div><div class="fi-type">Auto-letter</div></div>
+        </div>
+      </div>
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--violet)"></div><h3>Transfer & Promotion</h3><span class="sc-tag">TRN-008</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">🔄</div><div class="fi-body"><div class="fi-name">Transfer Entry</div><div class="fi-desc">Change department, location, reporting manager; effective date; auto-updates org chart</div></div><div class="fi-type">Form + Auto-update</div></div>
+          <div class="field-item"><div class="fi-icon">⬆️</div><div class="fi-body"><div class="fi-name">Promotion Wizard</div><div class="fi-desc">New designation, grade, CTC revision; validates against grade band; revision letter auto-generated</div></div><div class="fi-type">Wizard</div></div>
+          <div class="field-item"><div class="fi-icon">📜</div><div class="fi-body"><div class="fi-name">Letter Generation</div><div class="fi-desc">Transfer / Promotion letter auto-generated and dispatched via e-sign</div></div><div class="fi-type">Auto-letter</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="form-p2" class="form-view">
+    <div class="form-shell">
+      <div class="form-topbar">
+        <h3>New Employee Entry</h3>
+        <button class="btn btn-outline">Import from Offer</button>
+        <button class="btn btn-primary">Save & Continue →</button>
+      </div>
+      <div class="prog-steps">
+        <div class="prog-step"><div class="ps-dot done">✓</div><div class="ps-label done">Personal</div><div class="ps-line done"></div></div>
+        <div class="prog-step"><div class="ps-dot active">2</div><div class="ps-label active">Professional</div><div class="ps-line"></div></div>
+        <div class="prog-step"><div class="ps-dot todo">3</div><div class="ps-label">Salary</div><div class="ps-line"></div></div>
+        <div class="prog-step"><div class="ps-dot todo">4</div><div class="ps-label">Bank</div><div class="ps-line"></div></div>
+        <div class="prog-step"><div class="ps-dot todo">5</div><div class="ps-label">Documents</div><div class="ps-line"></div></div>
+        <div class="prog-step"><div class="ps-dot todo">6</div><div class="ps-label">Review</div></div>
+      </div>
+      <div class="form-body">
+        <div class="form-divider">Professional Details</div>
+        <div class="form-row">
+          <div class="form-group"><label>Employee ID</label><input class="form-input" value="EMP-2026-0142" disabled style="opacity:0.6"/><div class="form-hint">Auto-generated on submission</div></div>
+          <div class="form-group"><label>Joining Date <span class="req">*</span></label><input class="form-input" type="date" value="2026-03-15"/></div>
+          <div class="form-group"><label>Employee Type <span class="req">*</span></label><select class="form-select"><option>Permanent</option><option>Contractual</option><option>Intern</option></select></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Department <span class="req">*</span></label><select class="form-select"><option>Product Design</option><option>Engineering</option><option>HR</option><option>Finance</option></select></div>
+          <div class="form-group"><label>Designation <span class="req">*</span></label><select class="form-select"><option>Senior Product Designer</option><option>Product Designer</option></select></div>
+          <div class="form-group"><label>Grade / Band <span class="req">*</span></label><select class="form-select"><option>L4 — Senior</option><option>L3 — Mid</option></select></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Reporting Manager <span class="req">*</span></label><input class="form-input" placeholder="Search by name or ID..." value="Vikram Nair (VP Design)"/></div>
+          <div class="form-group"><label>Work Location <span class="req">*</span></label><select class="form-select"><option>Bangalore HQ</option><option>Mumbai Office</option><option>Remote</option></select></div>
+          <div class="form-group"><label>Shift</label><select class="form-select"><option>General (9am–6pm)</option><option>Morning (8am–5pm)</option></select></div>
+        </div>
+        <div class="form-divider">Probation Setup (Auto from Config)</div>
+        <div class="form-row">
+          <div class="form-group"><label>Probation Period</label><input class="form-input" value="3 months" disabled style="opacity:0.6"/><div class="form-hint">Set in Configuration → Page 2</div></div>
+          <div class="form-group"><label>Probation End Date</label><input class="form-input" value="2026-06-14" disabled style="opacity:0.6"/><div class="form-hint">Auto-calculated from joining date</div></div>
+          <div class="form-group"><label>Confirmation Reminder</label><input class="form-input" value="30 days before (2026-05-15)" disabled style="opacity:0.6"/></div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px">
+          <button class="btn btn-outline">← Back</button>
+          <button class="btn btn-primary">Save & Next: Salary →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE 3: PAYROLL ══════════════ -->
+<div id="page-p3" class="page-section">
+  <div class="page-hdr">
+    <div class="page-hdr-icon" style="background:var(--amber-bg)">💰</div>
+    <div class="page-hdr-body">
+      <h2>Page 3 — Payroll Run</h2>
+      <p>Monthly payroll as a guided 6-step wizard. Each step must be completed before proceeding. Exceptions surface automatically. Arrears, increments, holds, and F&F settlement are sub-sections within the same page — not separate screens.</p>
+      <div class="page-hdr-tags">
+        <span class="ptag" style="background:var(--accent-glow);color:var(--accent)">Replaces TRN-016 to TRN-020</span>
+        <span class="ptag" style="background:var(--amber-bg);color:var(--amber)">Payroll Admin</span>
+      </div>
+    </div>
+  </div>
+  <div class="dual-tabs">
+    <div class="dual-tab active" onclick="switchDual(this,'flow-p3')">📐 Flowchart View</div>
+    <div class="dual-tab" onclick="switchDual(this,'form-p3')">📝 Live Form Preview</div>
+  </div>
+  <div id="flow-p3" class="flow-view visible">
+    <div class="ux-callout">
+      <h4>💡 Smart UX Features</h4>
+      <div class="ux-grid">
+        <div class="ux-item">6-step wizard — can't skip steps; each step shows count of items needing attention</div>
+        <div class="ux-item">Exceptions auto-detected: LOP mismatches, new hires, salary holds flagged in red</div>
+        <div class="ux-item">Variance report auto-compares this month vs last month; flags >10% changes</div>
+        <div class="ux-item">Bank transfer file auto-generated in HDFC/ICICI/SBI/Axis format after approval</div>
+        <div class="ux-item">Increment wizard: enter new CTC → system auto-calculates revised component breakup</div>
+        <div class="ux-item">F&F auto-computes: notice recovery + leave encashment + gratuity + TDS on F&F</div>
+        <div class="ux-item">Arrear entry: pick effective past date → system auto-spreads across months with TDS</div>
+      </div>
+    </div>
+    <div class="sections-grid">
+      <div class="sec-card" style="grid-column:1/-1">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--amber)"></div><h3>Monthly Payroll — 6-Step Wizard</h3><span class="sc-tag">TRN-016</span></div>
+        <div class="sec-body">
+          <div class="payroll-steps">
+            <div class="pay-step done"><div class="pay-step-num" style="background:var(--green);color:#fff">✓</div><div class="pay-step-body"><div class="pay-step-title">Step 1 — Lock Attendance</div><div class="pay-step-desc">Freeze attendance data for the month; unresolved exceptions shown; manual overrides allowed</div></div></div>
+            <div class="pay-step active-step"><div class="pay-step-num" style="background:var(--accent);color:#fff">2</div><div class="pay-step-body"><div class="pay-step-title">Step 2 — Review Exceptions</div><div class="pay-step-desc">3 exceptions found: 2 LOP mismatches, 1 new hire missed — accept or override each</div></div><div class="pay-step-action"><button class="btn btn-amber">Review 3</button></div></div>
+            <div class="pay-step"><div class="pay-step-num" style="background:var(--card2);color:var(--text3);border:2px solid var(--border)">3</div><div class="pay-step-body"><div class="pay-step-title">Step 3 — Compute Salaries</div><div class="pay-step-desc">Run computation for all 342 employees; preview gross/net/deductions before finalising</div></div></div>
+            <div class="pay-step"><div class="pay-step-num" style="background:var(--card2);color:var(--text3);border:2px solid var(--border)">4</div><div class="pay-step-body"><div class="pay-step-title">Step 4 — Statutory Deductions</div><div class="pay-step-desc">PF, ESI, PT, TDS auto-computed; ECR file and Form 24Q data ready for review</div></div></div>
+            <div class="pay-step"><div class="pay-step-num" style="background:var(--card2);color:var(--text3);border:2px solid var(--border)">5</div><div class="pay-step-body"><div class="pay-step-title">Step 5 — Manager Approval</div><div class="pay-step-desc">Send for CFO / Finance approval; approval chain from configuration auto-applied</div></div></div>
+            <div class="pay-step"><div class="pay-step-num" style="background:var(--card2);color:var(--text3);border:2px solid var(--border)">6</div><div class="pay-step-body"><div class="pay-step-title">Step 6 — Disburse & Archive</div><div class="pay-step-desc">Bank file push → payslips auto-generated → emailed to all employees</div></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--rose)"></div><h3>Salary Hold & Arrears</h3><span class="sc-tag">TRN-017 + TRN-019</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">⏸️</div><div class="fi-body"><div class="fi-name">Hold Salary</div><div class="fi-desc">Search employee; enter reason + authorisation; auto-release on next cycle or manual trigger</div></div><div class="fi-type">Search + Reason</div></div>
+          <div class="field-item"><div class="fi-icon">↩️</div><div class="fi-body"><div class="fi-name">Arrear Entry</div><div class="fi-desc">Pick effective past date → arrear auto-computed month-by-month with TDS recalculation</div></div><div class="fi-type">Date + Auto-calc</div></div>
+        </div>
+      </div>
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--violet)"></div><h3>Increment & F&F</h3><span class="sc-tag">TRN-018 + TRN-020</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">⬆️</div><div class="fi-body"><div class="fi-name">Salary Revision</div><div class="fi-desc">Individual or bulk increment; new CTC → component breakup auto-redesigned; revision letter generated</div></div><div class="fi-type">Wizard</div></div>
+          <div class="field-item"><div class="fi-icon">🏁</div><div class="fi-body"><div class="fi-name">F&F Settlement</div><div class="fi-desc">Auto-computes: notice recovery, leave encashment, gratuity, pending reimbursements, TDS; settlement letter</div></div><div class="fi-type">Auto-compute</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="form-p3" class="form-view">
+    <div class="form-shell">
+      <div class="form-topbar">
+        <h3>March 2026 Payroll Run — 342 Employees</h3>
+        <span class="chip chip-amber">Step 2 of 6 · Exceptions</span>
+        <button class="btn btn-primary">Resolve & Continue →</button>
+      </div>
+      <div class="form-body">
+        <div class="status-grid">
+          <div class="stat-card"><div class="sc-val" style="color:var(--green)">339</div><div class="sc-lbl">Ready</div></div>
+          <div class="stat-card"><div class="sc-val" style="color:var(--rose)">3</div><div class="sc-lbl">Exceptions</div></div>
+          <div class="stat-card"><div class="sc-val" style="color:var(--amber)">₹2.8Cr</div><div class="sc-lbl">Est. Gross</div></div>
+          <div class="stat-card"><div class="sc-val" style="color:var(--cyan)">₹38.2L</div><div class="sc-lbl">Est. PF+ESI</div></div>
+        </div>
+        <div class="form-divider">⚠️ Payroll Exceptions — Requires Your Action</div>
+        <table class="data-table">
+          <thead><tr><th>Employee</th><th>Issue</th><th>Impact</th><th>Action</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Amit Singh</strong><br><span style="font-size:0.68rem;color:var(--text2)">EMP-2024-0089 · Engineering</span></td><td><span class="chip chip-rose" style="font-size:0.68rem">LOP Mismatch</span><br><span style="font-size:0.7rem;color:var(--text2)">Biometric: 22 days · HR: 20 days</span></td><td style="color:var(--rose)">−₹4,800</td><td><button class="btn btn-outline" style="font-size:0.68rem;padding:5px 10px">Accept Biometric</button></td></tr>
+            <tr><td><strong>Priya Iyer</strong><br><span style="font-size:0.68rem;color:var(--text2)">EMP-2026-0141 · Product · Joined Mar 10</span></td><td><span class="chip chip-amber" style="font-size:0.68rem">New Hire — Partial Month</span><br><span style="font-size:0.7rem;color:var(--text2)">18 days payable; system showing 0</span></td><td style="color:var(--amber)">+₹62,400</td><td><button class="btn btn-green" style="font-size:0.68rem;padding:5px 10px">✓ Include</button></td></tr>
+            <tr><td><strong>Rajan Patel</strong><br><span style="font-size:0.68rem;color:var(--text2)">EMP-2023-0055 · Finance</span></td><td><span class="chip chip-rose" style="font-size:0.68rem">Salary Hold Active</span><br><span style="font-size:0.7rem;color:var(--text2)">Hold placed by HR on 01-Mar-2026</span></td><td style="color:var(--rose)">−₹1,24,000</td><td><button class="btn btn-outline" style="font-size:0.68rem;padding:5px 10px">Keep Hold</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE 4: HR OPERATIONS ══════════════ -->
+<div id="page-p4" class="page-section">
+  <div class="page-hdr">
+    <div class="page-hdr-icon" style="background:var(--rose-bg)">📋</div>
+    <div class="page-hdr-body">
+      <h2>Page 4 — HR Operations</h2>
+      <p>Day-to-day HR admin tasks — attendance corrections, leave overrides, bonus uploads, loan processing, and asset issuance — all in one tabbed operations page. Quick-action cards replace 5 separate menus.</p>
+      <div class="page-hdr-tags">
+        <span class="ptag" style="background:var(--accent-glow);color:var(--accent)">Replaces TRN-011 to TRN-015</span>
+        <span class="ptag" style="background:var(--rose-bg);color:var(--rose)">HR Admin · IT · Finance</span>
+      </div>
+    </div>
+  </div>
+  <div class="dual-tabs">
+    <div class="dual-tab active" onclick="switchDual(this,'flow-p4')">📐 Flowchart View</div>
+    <div class="dual-tab" onclick="switchDual(this,'form-p4')">📝 Live Form Preview</div>
+  </div>
+  <div id="flow-p4" class="flow-view visible">
+    <div class="ux-callout">
+      <h4>💡 Smart UX Features</h4>
+      <div class="ux-grid">
+        <div class="ux-item">Quick action cards — one click opens inline form, no page navigation</div>
+        <div class="ux-item">Attendance override auto-logs: who changed, what changed, when, why</div>
+        <div class="ux-item">Leave override reflects in ESS immediately; employee gets push notification</div>
+        <div class="ux-item">Bonus upload: paste Excel data → validation errors highlighted row-by-row</div>
+        <div class="ux-item">Loan EMI auto-linked to payroll; employee sees deduction in next payslip</div>
+        <div class="ux-item">Asset issuance: e-sign acknowledgment sent to employee mobile; return tracked</div>
+      </div>
+    </div>
+    <div class="sections-grid">
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--rose)"></div><h3>Attendance Adjustment</h3><span class="sc-tag">TRN-011</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">🔍</div><div class="fi-body"><div class="fi-name">Search Employee</div><div class="fi-desc">Search by name or ID; shows current month attendance calendar with punch data</div></div><div class="fi-type">Search + Calendar</div></div>
+          <div class="field-item"><div class="fi-icon">✏️</div><div class="fi-body"><div class="fi-name">Override Punch</div><div class="fi-desc">Click any date → edit in/out time; reason mandatory; auto-creates audit log entry</div></div><div class="fi-type">Click-to-edit</div></div>
+          <div class="field-item"><div class="fi-icon">📊</div><div class="fi-body"><div class="fi-name">Payroll Impact Preview</div><div class="fi-desc">Shows LOP change and salary impact before saving the override</div></div><div class="fi-type">Live preview</div></div>
+        </div>
+      </div>
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--cyan)"></div><h3>Leave Override & Bonus Upload</h3><span class="sc-tag">TRN-012 + TRN-013</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">🌴</div><div class="fi-body"><div class="fi-name">Leave Balance Override</div><div class="fi-desc">Search employee → select leave type → credit or debit days → reason → ESS updates instantly</div></div><div class="fi-type">Form</div></div>
+          <div class="field-item"><div class="fi-icon">🎁</div><div class="fi-body"><div class="fi-name">Bonus Bulk Upload</div><div class="fi-desc">Download template → fill amounts → upload → validation screen shows errors row-by-row</div></div><div class="fi-type">Excel upload</div></div>
+          <div class="field-item"><div class="fi-icon">✅</div><div class="fi-body"><div class="fi-name">Approval Before Merge</div><div class="fi-desc">Bonus batch sent for Finance approval; merges into payroll only after approval</div></div><div class="fi-type">Approval gate</div></div>
+        </div>
+      </div>
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--amber)"></div><h3>Loans & Asset Management</h3><span class="sc-tag">TRN-014 + TRN-015</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">💳</div><div class="fi-body"><div class="fi-name">Loan Application & Approval</div><div class="fi-desc">Employee / HR raises request; Finance reviews; disbursement date; EMI schedule auto-generated</div></div><div class="fi-type">Form + Approval</div></div>
+          <div class="field-item"><div class="fi-icon">💻</div><div class="fi-body"><div class="fi-name">Asset Issuance</div><div class="fi-desc">Select asset type; enter serial number; condition notes; e-sign acknowledgment sent to employee</div></div><div class="fi-type">Form + E-sign</div></div>
+          <div class="field-item"><div class="fi-icon">↩️</div><div class="fi-body"><div class="fi-name">Asset Return</div><div class="fi-desc">Mark returned; condition on return; auto-removed from exit clearance checklist</div></div><div class="fi-type">Return log</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="form-p4" class="form-view">
+    <div class="form-shell">
+      <div class="form-topbar"><h3>HR Operations</h3><span style="color:var(--text2);font-size:0.8rem">Quick-action centre for daily HR tasks</span></div>
+      <div class="form-body">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px">
+          <div style="background:var(--rose-bg);border:1px solid var(--rose);border-radius:12px;padding:16px;cursor:pointer;text-align:center"><div style="font-size:1.4rem;margin-bottom:6px">📅</div><div style="font-size:0.78rem;font-weight:700;color:var(--rose)">Attendance Override</div></div>
+          <div style="background:var(--cyan-bg);border:1px solid var(--cyan);border-radius:12px;padding:16px;cursor:pointer;text-align:center"><div style="font-size:1.4rem;margin-bottom:6px">🌴</div><div style="font-size:0.78rem;font-weight:700;color:var(--cyan)">Leave Override</div></div>
+          <div style="background:var(--green-bg);border:1px solid var(--green);border-radius:12px;padding:16px;cursor:pointer;text-align:center"><div style="font-size:1.4rem;margin-bottom:6px">🎁</div><div style="font-size:0.78rem;font-weight:700;color:var(--green)">Bonus Upload</div></div>
+          <div style="background:var(--amber-bg);border:1px solid var(--amber);border-radius:12px;padding:16px;cursor:pointer;text-align:center"><div style="font-size:1.4rem;margin-bottom:6px">💳</div><div style="font-size:0.78rem;font-weight:700;color:var(--amber)">Process Loan</div></div>
+          <div style="background:var(--violet-bg);border:1px solid var(--violet);border-radius:12px;padding:16px;cursor:pointer;text-align:center"><div style="font-size:1.4rem;margin-bottom:6px">💻</div><div style="font-size:0.78rem;font-weight:700;color:var(--violet)">Issue Asset</div></div>
+        </div>
+        <div class="form-divider">Attendance Adjustment — Quick Form</div>
+        <div class="form-row">
+          <div class="form-group"><label>Employee <span class="req">*</span></label><input class="form-input" value="Amit Singh — EMP-2024-0089"/></div>
+          <div class="form-group"><label>Date <span class="req">*</span></label><input class="form-input" type="date" value="2026-03-12"/></div>
+          <div class="form-group"><label>Corrected In Time</label><input class="form-input" type="time" value="09:15"/></div>
+          <div class="form-group"><label>Corrected Out Time</label><input class="form-input" type="time" value="18:30"/></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="grid-column:1/-1"><label>Reason for Override <span class="req">*</span></label><textarea class="form-textarea" placeholder="e.g. Biometric device malfunction on this date — confirmed by IT team">Biometric device malfunction confirmed by IT — actual attendance verified from access card log.</textarea></div>
+        </div>
+        <div style="background:var(--amber-bg);border:1px solid var(--amber);border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:0.78rem;color:var(--amber)">
+          ⚠️ Payroll Impact: This change will reduce LOP by 1 day → <strong>+₹4,800</strong> added to March payroll
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-outline">Cancel</button>
+          <button class="btn btn-primary">✓ Save Override</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE 5: PERFORMANCE ══════════════ -->
+<div id="page-p5" class="page-section">
+  <div class="page-hdr">
+    <div class="page-hdr-icon" style="background:var(--violet-bg)">⭐</div>
+    <div class="page-hdr-body">
+      <h2>Page 5 — Performance Management</h2>
+      <p>Goals, 360° feedback, appraisal ratings, skill mapping, training, and succession planning — all in one performance hub. The appraisal cycle is a guided flow; managers see the full picture without switching screens.</p>
+      <div class="page-hdr-tags">
+        <span class="ptag" style="background:var(--accent-glow);color:var(--accent)">Replaces TRN-021 to TRN-026</span>
+        <span class="ptag" style="background:var(--violet-bg);color:var(--violet)">Manager · HR · Employee</span>
+      </div>
+    </div>
+  </div>
+  <div class="dual-tabs">
+    <div class="dual-tab active" onclick="switchDual(this,'flow-p5')">📐 Flowchart View</div>
+    <div class="dual-tab" onclick="switchDual(this,'form-p5')">📝 Live Form Preview</div>
+  </div>
+  <div id="flow-p5" class="flow-view visible">
+    <div class="ux-callout">
+      <h4>💡 Smart UX Features</h4>
+      <div class="ux-grid">
+        <div class="ux-item">Appraisal cycle dashboard shows % completion per department in real-time</div>
+        <div class="ux-item">Goals cascade from company → department → individual automatically</div>
+        <div class="ux-item">360° feedback is anonymous — rater identity hidden from rated employee</div>
+        <div class="ux-item">Bell-curve calibration view shows distribution before final rating lock</div>
+        <div class="ux-item">Skill gap heatmap shows team's weakest skills vs role requirements</div>
+        <div class="ux-item">Training nominations auto-populate from skill gap analysis with one click</div>
+        <div class="ux-item">Succession bench shows readiness: Ready Now / 1 Year / 2 Years per critical role</div>
+      </div>
+    </div>
+    <div class="sections-grid">
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--violet)"></div><h3>Goals / OKR Setting</h3><span class="sc-tag">TRN-021</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">🎯</div><div class="fi-body"><div class="fi-name">SMART Goal Creation</div><div class="fi-desc">Goal title, description, KPIs, weightage %; mid-year edit window configurable</div></div><div class="fi-type">Form</div></div>
+          <div class="field-item"><div class="fi-icon">⬇️</div><div class="fi-body"><div class="fi-name">Auto-Cascade</div><div class="fi-desc">Company OKRs cascade to department → individual with one click; alignment visible</div></div><div class="fi-type">Auto-cascade</div></div>
+        </div>
+      </div>
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--accent)"></div><h3>360° Feedback & Appraisal</h3><span class="sc-tag">TRN-022 + TRN-023</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">🔄</div><div class="fi-body"><div class="fi-name">Anonymous Rater Selection</div><div class="fi-desc">Employee nominates peers; HR approves rater list; anonymous feedback collection</div></div><div class="fi-type">Multi-select</div></div>
+          <div class="field-item"><div class="fi-icon">📊</div><div class="fi-body"><div class="fi-name">Final Rating + Bell Curve</div><div class="fi-desc">Manager assigns final rating; calibration view shows bell-curve distribution; HR approval</div></div><div class="fi-type">Rating + Chart</div></div>
+          <div class="field-item"><div class="fi-icon">⬆️</div><div class="fi-body"><div class="fi-name">Promotion Recommendation</div><div class="fi-desc">Manager recommends promotion/increment inline; triggers salary revision workflow</div></div><div class="fi-type">Recommendation</div></div>
+        </div>
+      </div>
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--green)"></div><h3>Skills, Training & Succession</h3><span class="sc-tag">TRN-024, 025, 026</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">🗺️</div><div class="fi-body"><div class="fi-name">Skill Mapping</div><div class="fi-desc">Proficiency level per skill (1–5); gap vs role requirement highlighted; learning plan auto-suggested</div></div><div class="fi-type">Rating grid</div></div>
+          <div class="field-item"><div class="fi-icon">🎓</div><div class="fi-body"><div class="fi-name">Training Nomination</div><div class="fi-desc">Nominate from skill-gap list; attendance marking; assessment scores; certificate upload</div></div><div class="fi-type">Nomination</div></div>
+          <div class="field-item"><div class="fi-icon">👑</div><div class="fi-body"><div class="fi-name">Succession Planning</div><div class="fi-desc">Critical role → successor list with readiness: Ready Now / 1yr / 2yr; development plan</div></div><div class="fi-type">Bench view</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="form-p5" class="form-view">
+    <div class="form-shell">
+      <div class="form-topbar"><h3>Appraisal Cycle 2025–26 · Engineering Department</h3><span class="chip chip-amber">In Progress — 68% Complete</span></div>
+      <div class="form-body">
+        <div class="status-grid">
+          <div class="stat-card"><div class="sc-val" style="color:var(--green)">34</div><div class="sc-lbl">Ratings Done</div></div>
+          <div class="stat-card"><div class="sc-val" style="color:var(--amber)">12</div><div class="sc-lbl">Pending</div></div>
+          <div class="stat-card"><div class="sc-val" style="color:var(--rose)">4</div><div class="sc-lbl">Overdue</div></div>
+          <div class="stat-card"><div class="sc-val" style="color:var(--violet)">50</div><div class="sc-lbl">Total Team</div></div>
+        </div>
+        <div class="form-divider">Rate Employee — Sneha Iyer (Senior Engineer)</div>
+        <div class="form-row">
+          <div class="form-group"><label>Goal Achievement (KRA)</label><select class="form-select"><option>5 — Exceptional</option><option selected>4 — Exceeds Expectations</option><option>3 — Meets Expectations</option></select></div>
+          <div class="form-group"><label>Competency Rating</label><select class="form-select"><option>5 — Exceptional</option><option selected>4 — Exceeds</option><option>3 — Meets</option></select></div>
+          <div class="form-group"><label>Final Rating (Weighted)</label><input class="form-input" value="4.2 / 5.0" disabled style="color:var(--green);font-weight:700"/><div class="form-hint">Auto-calculated: 70% KRA + 30% Competency</div></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="grid-column:1/-1"><label>Manager Comments</label><textarea class="form-textarea" placeholder="Strengths, areas for growth, development recommendations...">Sneha has consistently exceeded expectations in Q3 and Q4. Strong ownership of the payments module. Recommend for Senior Lead promotion in FY27.</textarea></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Promotion Recommended?</label>
+            <div style="display:flex;gap:10px;margin-top:4px">
+              <div class="chip chip-green" style="cursor:pointer">✓ Yes — Promote</div>
+              <div class="chip chip-rose" style="cursor:pointer">✗ Not Now</div>
+            </div>
+          </div>
+          <div class="form-group"><label>Increment Recommendation</label><select class="form-select"><option>15–20% (High Performer)</option><option>10–15% (Good Performer)</option></select></div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+          <button class="btn btn-outline">Save Draft</button>
+          <button class="btn btn-primary">Submit Rating →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE 6: SEPARATION ══════════════ -->
+<div id="page-p6" class="page-section">
+  <div class="page-hdr">
+    <div class="page-hdr-icon" style="background:var(--cyan-bg)">🚪</div>
+    <div class="page-hdr-body">
+      <h2>Page 6 — Exit & Separation</h2>
+      <p>Resignation, multi-department clearance, and payroll exception management — consolidated into one exit command centre. HR sees every exiting employee's status at a glance. F&F is triggered automatically when all clearances are done.</p>
+      <div class="page-hdr-tags">
+        <span class="ptag" style="background:var(--accent-glow);color:var(--accent)">Replaces TRN-009, TRN-027, TRN-028</span>
+        <span class="ptag" style="background:var(--cyan-bg);color:var(--cyan)">HR · IT · Finance · Admin</span>
+      </div>
+    </div>
+  </div>
+  <div class="dual-tabs">
+    <div class="dual-tab active" onclick="switchDual(this,'flow-p6')">📐 Flowchart View</div>
+    <div class="dual-tab" onclick="switchDual(this,'form-p6')">📝 Live Form Preview</div>
+  </div>
+  <div id="flow-p6" class="flow-view visible">
+    <div class="ux-callout">
+      <h4>💡 Smart UX Features</h4>
+      <div class="ux-grid">
+        <div class="ux-item">Resignation form calculates notice period automatically from config</div>
+        <div class="ux-item">Exit interview questions configurable; submitted online before last day</div>
+        <div class="ux-item">Clearance dashboard shows all departments in one grid — no chasing emails</div>
+        <div class="ux-item">F&F button activates only when all department clearances are ✓ signed off</div>
+        <div class="ux-item">Payroll exceptions auto-surface before each payroll run — not discovered after</div>
+        <div class="ux-item">Exception accept/override creates audit trail automatically</div>
+      </div>
+    </div>
+    <div class="sections-grid">
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--cyan)"></div><h3>Resignation & Exit Form</h3><span class="sc-tag">TRN-009</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">📝</div><div class="fi-body"><div class="fi-name">Resignation Capture</div><div class="fi-desc">Last working day; resignation reason; notice period auto-calculated; can be raised by employee from ESS</div></div><div class="fi-type">Form</div></div>
+          <div class="field-item"><div class="fi-icon">🎤</div><div class="fi-body"><div class="fi-name">Exit Interview</div><div class="fi-desc">Configurable questionnaire; submitted online; responses visible to HR only</div></div><div class="fi-type">Survey</div></div>
+          <div class="field-item"><div class="fi-icon">⚡</div><div class="fi-body"><div class="fi-name">Auto-Trigger Clearance</div><div class="fi-desc">On resignation acceptance, clearance tasks auto-assigned to IT, Admin, Finance, HR, Manager</div></div><div class="fi-type">Auto-trigger</div></div>
+        </div>
+      </div>
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--rose)"></div><h3>Clearance Dashboard</h3><span class="sc-tag">TRN-027</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">📊</div><div class="fi-body"><div class="fi-name">Multi-Dept Grid View</div><div class="fi-desc">All exiting employees as rows; departments as columns; ✓/✗/⏳ status per cell</div></div><div class="fi-type">Grid dashboard</div></div>
+          <div class="field-item"><div class="fi-icon">🔒</div><div class="fi-body"><div class="fi-name">F&F Gate</div><div class="fi-desc">F&F processing button locked until all departments mark clearance ✓; one outstanding = locked</div></div><div class="fi-type">Approval gate</div></div>
+          <div class="field-item"><div class="fi-icon">🔔</div><div class="fi-body"><div class="fi-name">Auto-Reminder</div><div class="fi-desc">Pending clearance owners get daily reminder 5 days before last working day</div></div><div class="fi-type">Auto-reminder</div></div>
+        </div>
+      </div>
+      <div class="sec-card">
+        <div class="sec-head"><div class="sec-dot" style="background:var(--amber)"></div><h3>Payroll Exception Manager</h3><span class="sc-tag">TRN-028</span></div>
+        <div class="sec-body">
+          <div class="field-item"><div class="fi-icon">⚠️</div><div class="fi-body"><div class="fi-name">Auto-Detected Exceptions</div><div class="fi-desc">LOP mismatches, missed new hires, salary holds, arrears — auto-listed before each payroll run</div></div><div class="fi-type">Auto-detect</div></div>
+          <div class="field-item"><div class="fi-icon">✅</div><div class="fi-body"><div class="fi-name">Accept / Override</div><div class="fi-desc">Each exception has Accept or Override option; reason mandatory; audit trail auto-created</div></div><div class="fi-type">Decision + Audit</div></div>
+          <div class="field-item"><div class="fi-icon">📧</div><div class="fi-body"><div class="fi-name">Exception Report</div><div class="fi-desc">Summary emailed to Payroll Admin and Finance Manager before payroll is processed</div></div><div class="fi-type">Auto-email</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="form-p6" class="form-view">
+    <div class="form-shell">
+      <div class="form-topbar"><h3>Exit & Clearance Dashboard</h3><span style="color:var(--text2);font-size:0.8rem">3 employees exiting this month</span></div>
+      <div class="form-body">
+        <div class="form-divider">Clearance Status — March 2026 Exits</div>
+        <table class="data-table">
+          <thead><tr><th>Employee</th><th>Last Day</th><th>IT</th><th>Admin</th><th>Finance</th><th>HR</th><th>Manager</th><th>F&F</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Rahul Gupta</strong><br><span style="font-size:0.68rem;color:var(--text2)">Engineering · 5 yrs</span></td>
+              <td style="font-size:0.75rem">Mar 15</td>
+              <td><span style="color:var(--green);font-size:1rem">✓</span></td>
+              <td><span style="color:var(--green);font-size:1rem">✓</span></td>
+              <td><span style="color:var(--green);font-size:1rem">✓</span></td>
+              <td><span style="color:var(--green);font-size:1rem">✓</span></td>
+              <td><span style="color:var(--green);font-size:1rem">✓</span></td>
+              <td><button class="btn btn-green" style="padding:4px 12px;font-size:0.7rem">Process F&F</button></td>
+            </tr>
+            <tr>
+              <td><strong>Meera Pillai</strong><br><span style="font-size:0.68rem;color:var(--text2)">Marketing · 2 yrs</span></td>
+              <td style="font-size:0.75rem">Mar 22</td>
+              <td><span style="color:var(--green);font-size:1rem">✓</span></td>
+              <td><span style="color:var(--amber);font-size:1rem">⏳</span></td>
+              <td><span style="color:var(--green);font-size:1rem">✓</span></td>
+              <td><span style="color:var(--green);font-size:1rem">✓</span></td>
+              <td><span style="color:var(--rose);font-size:1rem">✗</span></td>
+              <td><button class="btn btn-outline" style="padding:4px 12px;font-size:0.7rem;opacity:0.5" disabled>Pending 2</button></td>
+            </tr>
+            <tr>
+              <td><strong>Sanjay Rao</strong><br><span style="font-size:0.68rem;color:var(--text2)">Finance · 8 yrs</span></td>
+              <td style="font-size:0.75rem">Mar 31</td>
+              <td><span style="color:var(--amber);font-size:1rem">⏳</span></td>
+              <td><span style="color:var(--amber);font-size:1rem">⏳</span></td>
+              <td><span style="color:var(--amber);font-size:1rem">⏳</span></td>
+              <td><span style="color:var(--amber);font-size:1rem">⏳</span></td>
+              <td><span style="color:var(--amber);font-size:1rem">⏳</span></td>
+              <td><button class="btn btn-outline" style="padding:4px 12px;font-size:0.7rem;opacity:0.5" disabled>Pending 5</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="height:16px"></div>
+        <div class="form-divider">Quick Resignation Entry</div>
+        <div class="form-row">
+          <div class="form-group"><label>Employee <span class="req">*</span></label><input class="form-input" placeholder="Search name or ID..."/></div>
+          <div class="form-group"><label>Resignation Date <span class="req">*</span></label><input class="form-input" type="date"/></div>
+          <div class="form-group"><label>Last Working Day</label><input class="form-input" placeholder="Auto-calculated" disabled style="opacity:0.6"/><div class="form-hint">Based on notice period in config</div></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Reason</label><select class="form-select"><option>Better Opportunity</option><option>Personal Reasons</option><option>Higher Studies</option><option>Relocation</option><option>Other</option></select></div>
+          <div class="form-group"><label>Notice Waiver?</label>
+            <div style="margin-top:8px;display:flex;align-items:center;gap:10px">
+              <div class="toggle" onclick="this.classList.toggle('on')"></div>
+              <span style="font-size:0.78rem;color:var(--text2)">Waive notice period</span>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+          <button class="btn btn-outline">Cancel</button>
+          <button class="btn btn-primary">Accept Resignation & Trigger Clearance →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- end main -->
+</div><!-- end layout -->
+
+<script>
+// Theme toggle
+function toggleTheme() {
+  const html = document.documentElement;
+  const icon = document.getElementById('themeIcon');
+  const label = document.getElementById('themeLabel');
+  if (html.getAttribute('data-theme') === 'dark') {
+    html.setAttribute('data-theme', 'light');
+    icon.textContent = '🌙';
+    label.textContent = 'Dark Mode';
+  } else {
+    html.setAttribute('data-theme', 'dark');
+    icon.textContent = '☀️';
+    label.textContent = 'Light Mode';
+  }
+}
+
+// Page navigation
+function showPage(pageId, clickedTab) {
+  document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + pageId).classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(s => s.classList.remove('active'));
+  if (clickedTab) {
+    clickedTab.classList.add('active');
+  } else {
+    // sync nav and sidebar
+    const navTabs = document.querySelectorAll('.nav-tab');
+    const pages = ['overview','p1','p2','p3','p4','p5','p6'];
+    const idx = pages.indexOf(pageId);
+    if (idx >= 0 && navTabs[idx]) navTabs[idx].classList.add('active');
+    const sideItems = document.querySelectorAll('.sidebar-item');
+    if (sideItems[idx]) sideItems[idx].classList.add('active');
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// Dual tab (Flowchart / Form)
+function switchDual(btn, targetId) {
+  const parent = btn.closest('.page-section');
+  parent.querySelectorAll('.dual-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  parent.querySelectorAll('.flow-view, .form-view').forEach(v => v.classList.remove('visible'));
+  const target = document.getElementById(targetId);
+  if (target) target.classList.add('visible');
+}
+</script>
+</body>
+</html>
