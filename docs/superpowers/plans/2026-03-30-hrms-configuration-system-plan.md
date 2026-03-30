@@ -10,6 +10,15 @@
 
 **Design Spec:** `docs/superpowers/specs/2026-03-30-hrms-configuration-system-design.md`
 
+**Key Constraints:**
+- **No migrations/fallbacks:** Project is pre-production. Direct schema replacement — no legacy code, no backwards compatibility layers, no deprecated field preservation.
+- **Web-first, mobile mirrors:** Build each screen on web first, then mobile copies the exact same field structure. Never build web and mobile in parallel (consistency risk).
+- **Idempotent seeder:** Config seeding uses upsert pattern — safe to re-run.
+- **Transaction wrapping:** All multi-model writes wrapped in `$transaction`.
+- **Failure strategy:** Redis failures fall through to DB reads. Missing configs auto-seed. Resolver failures return safe defaults + log error.
+- **Observability:** Structured logging at policy resolution, status determination, and enforcement checkpoints.
+- **Timezone-aware:** All attendance date/time calculations use `company.timezone` from CompanySettings. Never use server-local time.
+
 ---
 
 ## File Structure
@@ -25,8 +34,8 @@
 | `avy-erp-backend/src/shared/services/punch-validator.service.ts` | Punch sequence validation |
 | `avy-erp-backend/src/shared/middleware/config-enforcement.middleware.ts` | Module + ESS enforcement middleware |
 | `avy-erp-backend/src/shared/services/config-seeder.service.ts` | Company creation config seeding |
-| `avy-erp-backend/prisma/migrations/XXXXXX_hrms_config_redesign/migration.sql` | Schema migration |
-| `avy-erp-backend/scripts/migrate-config-data.ts` | Data migration from JSON blobs |
+| `avy-erp-backend/src/shared/utils/timezone.ts` | Timezone-aware date/time helpers |
+| `avy-erp-backend/src/shared/utils/config-cache.ts` | Config cache helpers with Redis fallback + auto-seed |
 
 ### Modified Files (Backend)
 
@@ -195,7 +204,7 @@ git commit -m "feat: add CompanySettings, SystemControls, ShiftBreak, OvertimeRe
 
 - [ ] **Step 1: Enhance CompanyShift**
 
-Rename `fromTime` → `startTime`, `toTime` → `endTime`. Add: `shiftType` (ShiftType enum, default DAY), `isCrossDay` (Boolean, default false), nullable policy override fields (`gracePeriodMinutes`, `earlyExitToleranceMinutes`, `halfDayThresholdHours`, `fullDayThresholdHours`, `maxLateCheckInMinutes`, `minWorkingHoursForOT`), capture overrides (`requireSelfie`, `requireGPS`, `allowedSources`), behavior fields (`autoClockOutMinutes`). Add `breaks ShiftBreak[]` relation. Keep `downtimeSlots` temporarily (removed in Phase 6).
+Rename `fromTime` → `startTime`, `toTime` → `endTime`. Remove `downtimeSlots` (replaced by ShiftBreak model). Add: `shiftType` (ShiftType enum, default DAY), `isCrossDay` (Boolean, default false), nullable policy override fields (`gracePeriodMinutes`, `earlyExitToleranceMinutes`, `halfDayThresholdHours`, `fullDayThresholdHours`, `maxLateCheckInMinutes`, `minWorkingHoursForOT`), capture overrides (`requireSelfie`, `requireGPS`, `allowedSources`), behavior fields (`autoClockOutMinutes`). Add `breaks ShiftBreak[]` relation.
 
 - [ ] **Step 2: Enhance AttendanceRule**
 
@@ -213,22 +222,25 @@ Add: `allowedDevices DeviceType[]`, `requireSelfie Boolean?`, `requireLiveLocati
 
 Remove: `loginMethod`, `passwordMinLength`, `passwordComplexity`, `sessionTimeoutMinutes`, `mfaRequired`. Add: `downloadPayslips`, `viewSalaryStructure`, `leaveCancellation`, `viewShiftSchedule`, `shiftSwapRequest`, `wfhRequest`, `viewOrgChart`, `announcementBoard`, MSS fields (`mssViewTeam`, `mssApproveLeave`, `mssApproveAttendance`, `mssViewTeamAttendance`), mobile fields (`mobileOfflinePunch`, `mobileSyncRetryMinutes`, `mobileLocationAccuracy`). Add `createdBy`/`updatedBy`.
 
-- [ ] **Step 6: Enhance AttendanceRecord**
+- [ ] **Step 6: Remove deprecated JSON fields from Company and CompanyShift**
+
+Remove from Company model: `preferences Json?`, `systemControls Json?` (replaced by CompanySettings and SystemControls models). Remove from CompanyShift: `downtimeSlots Json?` (replaced by ShiftBreak). No backwards compatibility needed — project is pre-production.
+
+- [ ] **Step 7: Enhance AttendanceRecord**
 
 Add resolved snapshot fields: `appliedGracePeriodMinutes`, `appliedFullDayThresholdHours`, `appliedHalfDayThresholdHours`, `appliedBreakDeductionMinutes`, `appliedPunchMode`, `appliedLateDeduction`, `appliedEarlyExitDeduction`, `resolutionTrace Json?`, `evaluationContext Json?`, `finalStatusReason String?`. Add `overtimeRequest OvertimeRequest?` relation. Add `@@index([companyId, status])`.
 
-- [ ] **Step 7: Verify full schema**
+- [ ] **Step 8: Verify full schema**
 
 Run: `cd avy-erp-backend && pnpm db:generate`
 Expected: Success
 
-- [ ] **Step 8: Run migration**
+- [ ] **Step 9: Push schema to database**
 
-Run: `cd avy-erp-backend && pnpm db:migrate`
-Migration name: `hrms_config_redesign`
-Expected: Migration applied successfully
+Run: `cd avy-erp-backend && npx prisma db push`
+Expected: Schema pushed successfully (direct replacement, no migration files needed in dev)
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 git add prisma/
@@ -252,6 +264,22 @@ Define `SYSTEM_DEFAULTS` constant per design spec Appendix A. Include all fallba
 
 Implement `seedCompanyConfigs(companyId, industryType?)` per design spec Appendix C. Seeds all 5 config models: CompanySettings, SystemControls, AttendanceRule, OvertimeRule, ESSConfig. Include industry templates for MANUFACTURING, IT, RETAIL, HEALTHCARE.
 
+**Must be idempotent:** Use `prisma.$transaction` wrapping all 5 upserts. Each uses `upsert` with `where: { companyId }` — safe to re-run without duplicating data.
+
+```typescript
+async function seedCompanyConfigs(companyId: string, industryType?: string) {
+  const defaults = getIndustryDefaults(industryType);
+  await platformPrisma.$transaction([
+    platformPrisma.companySettings.upsert({ where: { companyId }, create: { companyId, ...defaults.settings }, update: {} }),
+    platformPrisma.systemControls.upsert({ where: { companyId }, create: { companyId, ...defaults.controls }, update: {} }),
+    platformPrisma.attendanceRule.upsert({ where: { companyId }, create: { companyId, ...defaults.attendanceRules }, update: {} }),
+    platformPrisma.overtimeRule.upsert({ where: { companyId }, create: { companyId, ...defaults.overtimeRules }, update: {} }),
+    platformPrisma.eSSConfig.upsert({ where: { companyId }, create: { companyId, ...defaults.essConfig }, update: {} }),
+  ]);
+  logger.info({ companyId, industryType }, 'Company configs seeded successfully');
+}
+```
+
 - [ ] **Step 3: Integrate seeder into tenant onboarding**
 
 In `tenant.service.ts`, find the company creation method and add `await seedCompanyConfigs(company.id, company.businessType)` after company record is created.
@@ -265,27 +293,65 @@ git commit -m "feat: add config seeder with industry templates for company creat
 
 ---
 
-### Task 5: Data Migration Script
+### Task 5: Timezone Utility & Failure Strategy Helpers
 
 **Files:**
-- Create: `avy-erp-backend/scripts/migrate-config-data.ts`
+- Create: `avy-erp-backend/src/shared/utils/timezone.ts`
+- Create: `avy-erp-backend/src/shared/utils/config-cache.ts`
 
-- [ ] **Step 1: Write migration script**
+- [ ] **Step 1: Create timezone utility**
 
-Script migrates:
-1. `Company.preferences` JSON → `CompanySettings` rows (field mapping per spec Section 4.1)
-2. `Company.systemControls` JSON → `SystemControls` rows (field mapping per spec Section 4.2)
-3. `CompanyShift.downtimeSlots` JSON → `ShiftBreak` rows
-4. Set `CompanyShift.startTime` = `fromTime`, `endTime` = `toTime` for all existing shifts
-5. Detect cross-day shifts (toTime < fromTime numerically) and set `isCrossDay = true`
+All attendance date/time calculations must use the company timezone, never server-local time. Create helpers:
+```typescript
+import { DateTime } from 'luxon';
 
-Include dry-run mode (`DRY_RUN=true` env var) that logs changes without writing.
+export function nowInCompanyTimezone(timezone: string): DateTime {
+  return DateTime.now().setZone(timezone);
+}
 
-- [ ] **Step 2: Commit**
+export function parseInCompanyTimezone(dateStr: string, timeStr: string, timezone: string): DateTime {
+  return DateTime.fromFormat(`${dateStr} ${timeStr}`, 'yyyy-MM-dd HH:mm', { zone: timezone });
+}
+
+export function getAttendanceDateForShift(punchTime: DateTime, shift: { isCrossDay: boolean }, timezone: string): string {
+  // Cross-day rule: attendance date = shift start date
+  // Non-cross-day: use dayBoundaryTime from AttendanceRule
+  // Returns ISO date string (YYYY-MM-DD)
+}
+```
+
+- [ ] **Step 2: Create config cache helpers with failure strategy**
+
+Wraps Redis cache reads with DB fallback + auto-seed:
+```typescript
+export async function getCachedSystemControls(companyId: string): Promise<SystemControls> {
+  try {
+    const cached = await redis.get(`config:system-controls:${companyId}`);
+    if (cached) return JSON.parse(cached);
+  } catch (err) {
+    logger.warn({ companyId, error: err.message }, 'Redis read failed for system-controls, falling through to DB');
+  }
+
+  let controls = await prisma.systemControls.findUnique({ where: { companyId } });
+  if (!controls) {
+    logger.info({ companyId }, 'SystemControls missing, auto-seeding defaults');
+    controls = await prisma.systemControls.create({ data: { companyId } });
+  }
+
+  try {
+    await redis.set(`config:system-controls:${companyId}`, JSON.stringify(controls), 'EX', 1800);
+  } catch { /* cache write failure is non-fatal */ }
+
+  return controls;
+}
+// Same pattern for: getCachedAttendanceRules, getCachedOvertimeRules, getCachedESSConfig, getCachedShift, getCachedLocation, getCachedShiftBreaks
+```
+
+- [ ] **Step 3: Commit**
 
 ```bash
-git add scripts/migrate-config-data.ts
-git commit -m "feat: add data migration script for JSON blob to typed model migration"
+git add src/shared/utils/timezone.ts src/shared/utils/config-cache.ts
+git commit -m "feat: add timezone utility and config cache helpers with Redis fallback strategy"
 ```
 
 ---
@@ -304,7 +370,14 @@ Per design spec Section 6.5. Accepts companyId + EvaluationContext. Returns `{ p
 - Constraint fields: location → shift → attendanceRules → SYSTEM_DEFAULTS
 - Calculate break deduction minutes from ShiftBreak records
 
-Uses Redis-cached config lookups.
+Uses config-cache helpers (Task 5) for Redis-cached lookups with DB fallback.
+
+**Failure strategy:** If resolver fails entirely (DB down), throw with descriptive error — do NOT silently return defaults (attendance record must not be created with incorrect data).
+
+**Observability:** Log at INFO level after resolution:
+```typescript
+logger.info({ companyId, shiftId: context.shiftId, resolvedPolicy: policy, trace }, 'Policy resolved for attendance');
+```
 
 - [ ] **Step 2: Commit**
 
@@ -350,10 +423,15 @@ Per design spec Section 7. Pure function taking punch data, shift info, resolved
 Implements the complete 10-step logic flow from spec Section 7 including:
 - No punch → HOLIDAY / WEEK_OFF / ABSENT
 - Missing punch-out → INCOMPLETE (Appendix B.3)
-- Cross-day handling (Appendix B.1)
+- Cross-day handling (Appendix B.1) — use timezone utility from Task 5
 - Exception handling (holiday/leave/weekoff late suppression)
 - Day classification (full-day/half-day/LOP)
 - Deduction calculation
+
+**Observability:** Log at INFO level after status resolution:
+```typescript
+logger.info({ employeeId, date, status: result.status, reason: result.finalStatusReason }, 'Attendance status resolved');
+```
 
 - [ ] **Step 2: Commit**
 
@@ -967,46 +1045,21 @@ git commit -m "feat: remove Feature Toggles from web and mobile apps"
 
 ---
 
-### Task 26: Final Schema Cleanup
-
-**Files:**
-- Modify: `avy-erp-backend/prisma/schema.prisma`
-
-- [ ] **Step 1: Remove deprecated JSON fields**
-
-Remove from Company model: `preferences Json?`, `systemControls Json?`.
-Remove from CompanyShift model: `downtimeSlots Json?`, `fromTime`, `toTime` (replaced by `startTime`, `endTime` in Task 3).
-
-- [ ] **Step 2: Run final migration**
-
-Run: `cd avy-erp-backend && pnpm db:migrate`
-Migration name: `cleanup_deprecated_json_fields`
-
-- [ ] **Step 3: Final build verification**
-
-Run: `cd avy-erp-backend && pnpm build`
-Expected: No TS errors
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add prisma/
-git commit -m "feat: remove deprecated JSON fields (preferences, systemControls, downtimeSlots)"
-```
-
 ---
 
 ## Summary
 
 | Phase | Tasks | Scope |
 |-------|-------|-------|
-| **Phase 1: Schema & Data** | Tasks 1-5 | Prisma models, enums, migrations, seeding, data migration |
+| **Phase 1: Schema & Data** | Tasks 1-5 | Prisma models, enums, seeding, timezone/cache utilities |
 | **Phase 2: Enforcement Engine** | Tasks 6-9 | Policy resolver, location validator, status resolver, middleware |
 | **Phase 3: Backend APIs** | Tasks 10-17 | All config APIs updated, enforcement integrated, payroll updated |
 | **Phase 4: Web Frontend** | Tasks 18-20 | API types, hooks, 6 screen rewrites |
-| **Phase 5: Mobile Frontend** | Tasks 21-23 | API types, hooks, 6 screen rewrites |
-| **Phase 6: Cleanup** | Tasks 24-26 | Feature Toggle removal, JSON field cleanup |
+| **Phase 5: Mobile Frontend** | Tasks 21-23 | API types, hooks, 6 screen rewrites (mirrors web exactly) |
+| **Phase 6: Cleanup** | Tasks 24-25 | Feature Toggle removal (backend + frontend) |
 
-**Total: 26 tasks across 6 phases.**
+**Total: 25 tasks across 6 phases.**
 
-Each phase produces a working system — Phase 1+2+3 gives you a fully functional backend. Phase 4 and 5 can run in parallel. Phase 6 is cleanup after both frontends are aligned.
+Each phase produces a working system. Phase 1+2+3 = fully functional backend. Phase 4 must complete before Phase 5 (web-first, mobile mirrors). Phase 6 is cleanup after both frontends aligned.
+
+**Execution order for frontend:** Build web screen → verify → then mobile mirrors the same structure. Never build web and mobile screens in parallel.
