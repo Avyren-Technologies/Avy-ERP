@@ -236,6 +236,7 @@ enum AttendanceStatus {
   HALF_DAY
   LATE
   EARLY_EXIT
+  INCOMPLETE    // punch-in exists but punch-out missing (not yet resolved)
   HOLIDAY
   WEEK_OFF
   ON_LEAVE
@@ -318,6 +319,8 @@ model CompanySettings {
   eSignIntegration        Boolean @default(false)
 
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy String?  // userId
+  updatedBy String?  // userId
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -378,6 +381,8 @@ model SystemControls {
   auditLogRetentionDays Int @default(365) // range: 30-730
 
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy String?  // userId
+  updatedBy String?  // userId
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -567,6 +572,8 @@ model AttendanceRule {
   missingPunchAlert Boolean @default(true)
 
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy String?  // userId
+  updatedBy String?  // userId
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -624,6 +631,8 @@ model OvertimeRule {
 
   company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   overtimeRequests OvertimeRequest[]
+  createdBy        String?           // userId
+  updatedBy        String?           // userId
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
@@ -739,6 +748,8 @@ model ESSConfig {
   mobileLocationAccuracy LocationAccuracy @default(HIGH)
 
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy String?  // userId
+  updatedBy String?  // userId
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -822,7 +833,7 @@ model AttendanceRecord {
 
   @@unique([employeeId, date])
   @@index([companyId, date])
-  @@index([employeeId, date])
+  @@index([companyId, status])
   @@map("attendance_records")
 }
 ```
@@ -1690,7 +1701,220 @@ export const SYSTEM_DEFAULTS = {
   punchTimeRounding: 'NONE',
   punchTimeRoundingDirection: 'NEAREST',
   breakDeductionMinutes: 0,
+  autoMarkAbsentIfNoPunch: true,
+  minimumOtMinutes: 30,
 } as const;
 ```
 
 These are compile-time constants. They are the absolute last resort and should rarely be reached since `AttendanceRule` always has defaults.
+
+---
+
+## Appendix: Edge Case Rules
+
+### B.1 Cross-Day Attendance Date Rule
+
+When a night shift spans midnight, which calendar date does the attendance belong to?
+
+```
+RULE:
+  If shift.isCrossDay = true:
+    attendanceDate = date of shift START (the date the employee began working)
+  Else:
+    attendanceDate = calendar date based on dayBoundaryTime
+```
+
+**Example:**
+- Night shift: 22:00 → 06:00, employee punches in at 22:15 on March 30
+- Attendance record date = **March 30** (shift start date)
+- The 06:00 punch-out on March 31 is still part of the March 30 record
+
+This rule is deterministic and avoids ambiguity. The `dayBoundaryTime` field is only used for non-cross-day shifts where punch times might straddle midnight (e.g., a late clock-out at 00:15 for a day shift ending at 23:30).
+
+### B.2 Punch Sequence Validation
+
+Before processing, validate the punch sequence based on the configured `punchMode`:
+
+```typescript
+function validatePunchSequence(
+  punches: Array<{ time: Date; direction: 'IN' | 'OUT' | 'UNKNOWN' }>,
+  mode: PunchMode
+): { valid: boolean; resolvedIn: Date | null; resolvedOut: Date | null; reason?: string } {
+
+  switch (mode) {
+    case 'FIRST_LAST':
+      // First punch = IN, last punch = OUT, ignore everything in between
+      return {
+        valid: true,
+        resolvedIn: punches[0]?.time ?? null,
+        resolvedOut: punches.length > 1 ? punches[punches.length - 1].time : null,
+      };
+
+    case 'EVERY_PAIR':
+      // Enforce alternating IN/OUT sequence
+      // If sequence is invalid (IN→IN or OUT→OUT), flag for regularization
+      // Sum durations of all valid pairs
+      // Return total as workedMinutes
+      break;
+
+    case 'SHIFT_BASED':
+      // Match punches to assigned shift window
+      // Closest punch to shift start = IN
+      // Closest punch to shift end = OUT
+      break;
+  }
+}
+```
+
+**Invalid sequence handling:** Do not reject — mark as `INCOMPLETE` and flag for regularization. The system should be forgiving of biometric/device errors.
+
+### B.3 Missing Punch (INCOMPLETE Status)
+
+When `punchIn` exists but `punchOut` is missing at end of day:
+
+```
+RULE:
+  1. If shift.autoClockOutMinutes is set:
+     → Auto-generate punchOut = shiftEnd + autoClockOutMinutes
+     → Set source = 'MANUAL' (system-generated)
+     → Mark status based on auto-generated record
+
+  2. If autoClockOut not configured:
+     → Set status = INCOMPLETE
+     → Trigger missingPunchAlert (if enabled)
+     → Record remains INCOMPLETE until:
+       a) Employee clocks out (late punch-out)
+       b) Employee submits regularization request
+       c) Admin manually resolves
+       d) autoAbsentAfterDays threshold reached → flip to ABSENT
+```
+
+### B.4 Holiday + Work + OT Resolution
+
+When an employee works on a declared holiday:
+
+```
+RULE:
+  1. Attendance status = HOLIDAY (base status preserved)
+  2. workedHours calculated normally from punches
+  3. OT calculated using holidayMultiplier (or weekdayMultiplier if holiday multiplier is null)
+  4. Late/early flags are suppressed (ignoreLateOnHoliday = true by default)
+  5. OvertimeRequest created with multiplierSource = HOLIDAY
+```
+
+Same logic applies for `WEEK_OFF` — use weekendMultiplier for OT.
+
+### B.5 Payroll Lock Enforcement
+
+When `systemControls.payrollLock = true`:
+
+```
+RULE:
+  Block all modifications to:
+  → AttendanceRecords with date in a LOCKED payroll period
+  → PayrollEntries in APPROVED or DISBURSED status
+  → OvertimeRequests linked to locked attendance records
+
+  Allow:
+  → Viewing/reading locked data
+  → Creating records for CURRENT (unlocked) period
+```
+
+Enforcement via service-level check:
+
+```typescript
+async function validatePayrollNotLocked(companyId: string, date: Date) {
+  const controls = await getCachedSystemControls(companyId);
+  if (!controls.payrollLock) return; // lock feature disabled
+
+  const lockedRun = await findPayrollRunForDate(companyId, date);
+  if (lockedRun && ['APPROVED', 'DISBURSED', 'ARCHIVED'].includes(lockedRun.status)) {
+    throw ApiError.forbidden(`Payroll period is locked (${lockedRun.status}). Cannot modify attendance for ${date}.`);
+  }
+}
+```
+
+---
+
+## Appendix: Company Creation Config Seeding
+
+### C.1 Mandatory Seeding on Company Creation
+
+When a new company is created (via tenant onboarding), ALL configuration models must be seeded with defaults. `SYSTEM_DEFAULTS` is a fallback only — seeded DB values are the primary runtime source.
+
+```typescript
+async function seedCompanyConfigs(companyId: string, industryType?: string) {
+  const defaults = getIndustryDefaults(industryType);
+
+  await Promise.all([
+    prisma.companySettings.create({
+      data: { companyId, ...defaults.settings }
+    }),
+    prisma.systemControls.create({
+      data: { companyId, ...defaults.controls }
+    }),
+    prisma.attendanceRule.create({
+      data: { companyId, ...defaults.attendanceRules }
+    }),
+    prisma.overtimeRule.create({
+      data: { companyId, ...defaults.overtimeRules }
+    }),
+    prisma.eSSConfig.create({
+      data: { companyId, ...defaults.essConfig }
+    }),
+  ]);
+}
+```
+
+### C.2 Industry-Based Templates (Optional Enhancement)
+
+Predefined templates based on company industry type:
+
+| Industry | Attendance | OT | Shifts | Security |
+|----------|-----------|-----|--------|----------|
+| **Manufacturing** | Strict geo-fencing, biometric required, FIRST_LAST punch | Holiday 2x, enforceCaps=true | Multi-shift with cross-day | MFA optional |
+| **IT/Services** | Flexible, GPS optional, FIRST_LAST punch | Standard 1.5x, no caps | Single day shift, flexible | MFA recommended |
+| **Retail** | Geo-fencing, mobile GPS, SHIFT_BASED punch | Weekend 1.5x, holiday 2x | Rotating shifts | Standard |
+| **Healthcare** | Strict, biometric+GPS, SHIFT_BASED punch | Night 2x, holiday 2.5x | Cross-day shifts | MFA required |
+
+Templates are suggestions — all values are editable after creation.
+
+---
+
+## Appendix: Cache Versioning
+
+### D.1 Version-Safe Cache Keys
+
+To prevent stale cache reads after config updates, include a version component:
+
+```typescript
+function buildCacheKey(prefix: string, id: string, updatedAt: Date): string {
+  const version = updatedAt.getTime();
+  return `${prefix}:${id}:v${version}`;
+}
+
+// Usage:
+const key = buildCacheKey('config:attendance-rules', companyId, rules.updatedAt);
+```
+
+**Alternative (simpler):** On every config update, explicitly delete the cache key. The next read will populate fresh data. This is the existing pattern and is sufficient for the update frequency of config data (rare updates, frequent reads).
+
+**Recommendation:** Keep the existing invalidation-on-write pattern. Config updates are rare (daily at most), so version-keyed caching adds complexity without proportional benefit. Reserve version-keyed caching for high-frequency data if needed later.
+
+---
+
+## Appendix: Audit Fields
+
+### E.1 createdBy / updatedBy on Config Models
+
+All configuration models should track who made changes:
+
+```prisma
+// Add to: CompanySettings, SystemControls, AttendanceRule, OvertimeRule, ESSConfig
+createdBy String?  // userId of creator
+updatedBy String?  // userId of last modifier
+```
+
+These fields are populated from `req.user.id` in the controller layer. They enable audit trail queries like "who disabled MFA?" or "who changed the grace period?"
+
+For `AttendanceRecord`, the existing `regularizedBy` field already serves this purpose for regularization. The record creator is tracked via `source` (MANUAL implies admin, BIOMETRIC/MOBILE_GPS implies employee).
