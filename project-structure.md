@@ -102,10 +102,6 @@
 │   │   │   │   ├── dashboard.controller.ts
 │   │   │   │   ├── dashboard.routes.ts
 │   │   │   │   └── dashboard.service.ts
-│   │   │   ├── feature-toggle
-│   │   │   │   ├── feature-toggle.controller.ts
-│   │   │   │   ├── feature-toggle.routes.ts
-│   │   │   │   └── feature-toggle.service.ts
 │   │   │   ├── rbac
 │   │   │   │   ├── __tests__
 │   │   │   │   │   └── rbac.service.test.ts
@@ -237,7 +233,6 @@
 │   │   │   ├── constants
 │   │   │   │   ├── __tests__
 │   │   │   │   │   └── permissions.test.ts
-│   │   │   │   ├── feature-toggles.ts
 │   │   │   │   ├── index.ts
 │   │   │   │   └── permissions.ts
 │   │   │   ├── errors
@@ -480,7 +475,6 @@
 │   │   │   │   │   ├── billing.tsx
 │   │   │   │   │   ├── contacts.tsx
 │   │   │   │   │   ├── controls.tsx
-│   │   │   │   │   ├── feature-toggles.tsx
 │   │   │   │   │   ├── hr
 │   │   │   │   │   │   ├── _layout.tsx
 │   │   │   │   │   │   ├── appraisal-cycles.tsx
@@ -691,7 +685,6 @@
 │   │   │   │   ├── company-settings-screen.tsx
 │   │   │   │   ├── contact-management-screen.tsx
 │   │   │   │   ├── dashboard-screen.tsx
-│   │   │   │   ├── feature-toggle-screen.tsx
 │   │   │   │   ├── hr
 │   │   │   │   │   ├── appraisal-cycles-screen.tsx
 │   │   │   │   │   ├── approval-request-screen.tsx
@@ -974,7 +967,6 @@
     │   │   │   ├── CompanyProfileScreen.tsx
     │   │   │   ├── CompanySettingsScreen.tsx
     │   │   │   ├── ContactManagementScreen.tsx
-    │   │   │   ├── FeatureToggleScreen.tsx
     │   │   │   ├── IOTReasonManagementScreen.tsx
     │   │   │   ├── LocationManagementScreen.tsx
     │   │   │   ├── MyInvoicesScreen.tsx

@@ -82,7 +82,7 @@ methodName = asyncHandler(async (req: Request, res: Response) => {
 5. `/modules/catalogue` (auth, no tenant)
 6. `/tenants/:tenantId/*` (tenant-scoped)
 7. Auth + tenant required modules: `/hr`, `/production`, `/inventory`, etc.
-8. `/rbac`, `/feature-toggles`, `/company/*`, `/company/support/*`
+8. `/rbac`, `/company/*`, `/company/support/*`
 
 ### Permission System (Dynamic RBAC)
 - **Permissions**: `module:action` format (e.g., `hr:read`, `company:configure`)
