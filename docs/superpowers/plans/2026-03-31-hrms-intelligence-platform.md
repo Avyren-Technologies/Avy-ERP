@@ -47,12 +47,30 @@
 | `analytics.controller.ts` | HTTP handlers wrapping orchestrator + drilldown + alerts + exports |
 | `analytics.routes.ts` | Route definitions with permission guards |
 
-### Backend (Schema + Config)
+### Backend (Schema — Modular Prisma)
+
+**IMPORTANT**: Prisma uses modular `.prisma` files. NEVER edit `schema.prisma` directly.
 
 | File | Responsibility |
 |------|---------------|
-| `prisma/schema.prisma` | 4 precomputed models + AnalyticsAlert + AnalyticsAuditLog |
+| `prisma/modules/hrms/analytics.prisma` | 4 precomputed models + AnalyticsAlert + AnalyticsAuditLog |
+| `prisma/modules/platform/tenant.prisma` | Add Company inverse relations (modify existing) |
 | `src/shared/constants/navigation-manifest.ts` | 10 new analytics navigation entries |
+
+### Backend (Excel Reports — `src/modules/hr/analytics/exports/`)
+
+| File | Responsibility |
+|------|---------------|
+| `exports/excel-exporter.ts` | Base exceljs utility (styles, sheet creation, auto-filters, formatting) |
+| `exports/report-definitions.ts` | Report metadata: columns, sheets, formatting rules |
+| `exports/reports/workforce-reports.ts` | R01-R03: Employee Master, Headcount Movement, Demographics |
+| `exports/reports/attendance-reports.ts` | R04-R07: Attendance Register, Late Coming, Overtime, Absenteeism |
+| `exports/reports/leave-reports.ts` | R08-R10: Leave Balance, Leave Utilization, Leave Encashment |
+| `exports/reports/payroll-reports.ts` | R11-R15: Salary Register, Bank File, CTC Distribution, Revision, Loans |
+| `exports/reports/statutory-reports.ts` | R16-R20: PF ECR, ESI Challan, PT, TDS, Gratuity Liability |
+| `exports/reports/performance-reports.ts` | R21-R22: Appraisal Summary, Skill Gap Analysis |
+| `exports/reports/attrition-reports.ts` | R23-R24: Attrition Report, F&F Settlement |
+| `exports/reports/compliance-reports.ts` | R25: Compliance Summary |
 
 ### Web (`web-system-app/`)
 
@@ -119,11 +137,14 @@
 ### Task 1.1: Prisma Schema — Precomputed Analytics Tables
 
 **Files:**
-- Modify: `avy-erp-backend/prisma/schema.prisma`
+- Create: `avy-erp-backend/prisma/modules/hrms/analytics.prisma`
+- Modify: `avy-erp-backend/prisma/modules/platform/tenant.prisma` (add Company relations)
 
-- [ ] **Step 1: Add EmployeeAnalyticsDaily model**
+**IMPORTANT**: Never edit `schema.prisma` directly — it is auto-generated. Edit modular files only.
 
-Add at the end of `schema.prisma`:
+- [ ] **Step 1: Create analytics.prisma and add EmployeeAnalyticsDaily model**
+
+Create file `avy-erp-backend/prisma/modules/hrms/analytics.prisma`:
 
 ```prisma
 // ============================================================================
@@ -355,7 +376,7 @@ model AnalyticsAuditLog {
 
 - [ ] **Step 7: Add relations to Company model**
 
-Find the `Company` model and add these relation fields:
+Edit `avy-erp-backend/prisma/modules/platform/tenant.prisma`. Find the `Company` model and add these relation fields:
 
 ```prisma
   // Analytics relations
@@ -366,16 +387,18 @@ Find the `Company` model and add these relation fields:
   analyticsAlerts       AnalyticsAlert[]
 ```
 
-- [ ] **Step 8: Run migration**
+- [ ] **Step 8: Run merge + migration**
 
 ```bash
 cd avy-erp-backend && pnpm db:generate && pnpm db:migrate
 ```
 
+This runs `prisma:merge` (combines all modular files into `schema.prisma`) then generates the client and creates the migration.
+
 - [ ] **Step 9: Commit**
 
 ```bash
-git add prisma/schema.prisma
+git add prisma/modules/hrms/analytics.prisma prisma/modules/platform/tenant.prisma prisma/schema.prisma prisma/migrations/
 git commit -m "feat(analytics): add precomputed analytics tables, alert, and audit log models"
 ```
 
@@ -2852,50 +2875,547 @@ git commit -m "feat(analytics): add drilldown service with paginated report quer
 
 ---
 
-### Task 4.4: Export Service
+### Task 4.4: Excel Export Base Infrastructure
 
 **Files:**
 - Create: `avy-erp-backend/src/modules/hr/analytics/exports/excel-exporter.ts`
-- Create: `avy-erp-backend/src/modules/hr/analytics/exports/pdf-exporter.ts`
+- Create: `avy-erp-backend/src/modules/hr/analytics/exports/report-definitions.ts`
 
-- [ ] **Step 1: Create excel-exporter.ts**
+- [ ] **Step 1: Create excel-exporter.ts — the base utility**
+
+This is the core engine that all 25 reports use. It provides styled sheet creation, auto-filters, frozen panes, conditional formatting, and standard formatting.
 
 ```typescript
 import ExcelJS from 'exceljs';
 
-export async function exportToExcel(
-  title: string,
-  columns: { header: string; key: string; width?: number }[],
-  rows: Record<string, unknown>[],
-): Promise<Buffer> {
+// =================== Style Constants ===================
+
+const HEADER_FILL: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } };
+const HEADER_FONT: Partial<ExcelJS.Font> = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' };
+const TITLE_FONT: Partial<ExcelJS.Font> = { bold: true, size: 14, name: 'Calibri' };
+const SUBTITLE_FONT: Partial<ExcelJS.Font> = { bold: true, size: 11, color: { argb: 'FF6B7280' }, name: 'Calibri' };
+const TOTAL_ROW_FILL: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } };
+const TOTAL_ROW_FONT: Partial<ExcelJS.Font> = { bold: true, name: 'Calibri' };
+const ALT_ROW_FILL: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
+const RED_FILL: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+const GREEN_FILL: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD1FAE5' } };
+const AMBER_FILL: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+
+export const CURRENCY_FORMAT = '₹#,##0.00';
+export const PERCENT_FORMAT = '0.0%';
+export const DATE_FORMAT = 'DD-MMM-YYYY';
+
+export interface SheetColumn {
+  header: string;
+  key: string;
+  width?: number;
+  format?: 'currency' | 'percentage' | 'date' | 'number' | 'text';
+  conditionalFormat?: 'red-if-negative' | 'green-if-positive' | 'status';
+}
+
+export interface ReportSheet {
+  name: string;
+  columns: SheetColumn[];
+  rows: Record<string, unknown>[];
+  totalsRow?: Record<string, unknown>;   // Bold row at bottom with sums/averages
+  freezeRow?: number;                     // Default: header row
+}
+
+export interface ReportConfig {
+  companyName: string;
+  reportTitle: string;
+  period: string;                         // "March 2026" or "01-Mar-2026 to 31-Mar-2026"
+  sheets: ReportSheet[];
+}
+
+export async function generateExcelReport(config: ReportConfig): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet(title);
+  workbook.creator = 'Avy ERP';
+  workbook.created = new Date();
 
-  sheet.columns = columns.map(c => ({
-    header: c.header,
-    key: c.key,
-    width: c.width ?? 15,
-  }));
+  for (const sheetConfig of config.sheets) {
+    const sheet = workbook.addWorksheet(sheetConfig.name);
 
-  // Style header row
-  sheet.getRow(1).font = { bold: true };
-  sheet.getRow(1).fill = {
-    type: 'pattern',
-    pattern: 'solid',
-    fgColor: { argb: 'FF4F46E5' }, // indigo
-  };
-  sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    // ─── Title Section (rows 1-3) ───
+    sheet.mergeCells('A1', `${columnLetter(sheetConfig.columns.length)}1`);
+    const titleCell = sheet.getCell('A1');
+    titleCell.value = config.companyName;
+    titleCell.font = TITLE_FONT;
 
-  for (const row of rows) {
-    sheet.addRow(row);
+    sheet.mergeCells('A2', `${columnLetter(sheetConfig.columns.length)}2`);
+    const subtitleCell = sheet.getCell('A2');
+    subtitleCell.value = `${config.reportTitle} — ${sheetConfig.name}`;
+    subtitleCell.font = SUBTITLE_FONT;
+
+    sheet.mergeCells('A3', `${columnLetter(sheetConfig.columns.length)}3`);
+    sheet.getCell('A3').value = `Period: ${config.period}`;
+    sheet.getCell('A3').font = { size: 10, color: { argb: 'FF9CA3AF' }, name: 'Calibri' };
+
+    // Row 4: empty spacer
+    const headerRow = 5;
+
+    // ─── Column Headers (row 5) ───
+    sheet.columns = sheetConfig.columns.map(col => ({
+      key: col.key,
+      width: col.width ?? 15,
+    }));
+
+    const hRow = sheet.getRow(headerRow);
+    sheetConfig.columns.forEach((col, i) => {
+      const cell = hRow.getCell(i + 1);
+      cell.value = col.header;
+      cell.font = HEADER_FONT;
+      cell.fill = HEADER_FILL;
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      cell.border = {
+        bottom: { style: 'thin', color: { argb: 'FF4338CA' } },
+      };
+    });
+
+    // ─── Data Rows ───
+    const dataStartRow = headerRow + 1;
+    sheetConfig.rows.forEach((rowData, rowIdx) => {
+      const row = sheet.getRow(dataStartRow + rowIdx);
+      sheetConfig.columns.forEach((col, colIdx) => {
+        const cell = row.getCell(colIdx + 1);
+        cell.value = rowData[col.key] as ExcelJS.CellValue;
+
+        // Apply number format
+        if (col.format === 'currency') cell.numFmt = CURRENCY_FORMAT;
+        else if (col.format === 'percentage') cell.numFmt = PERCENT_FORMAT;
+        else if (col.format === 'date') cell.numFmt = DATE_FORMAT;
+
+        // Alternating row fill
+        if (rowIdx % 2 === 1) cell.fill = ALT_ROW_FILL;
+
+        // Conditional formatting
+        if (col.conditionalFormat === 'status') {
+          const val = String(rowData[col.key] ?? '').toUpperCase();
+          if (['OVERDUE', 'FAILED', 'REJECTED', 'ABSENT', 'TERMINATED'].includes(val)) cell.fill = RED_FILL;
+          else if (['ON_TIME', 'COMPLETED', 'APPROVED', 'PRESENT', 'ACTIVE'].includes(val)) cell.fill = GREEN_FILL;
+          else if (['PENDING', 'LATE', 'WARNING', 'NOTICE_PERIOD'].includes(val)) cell.fill = AMBER_FILL;
+        }
+        if (col.conditionalFormat === 'red-if-negative' && typeof rowData[col.key] === 'number' && (rowData[col.key] as number) < 0) {
+          cell.fill = RED_FILL;
+        }
+        if (col.conditionalFormat === 'green-if-positive' && typeof rowData[col.key] === 'number' && (rowData[col.key] as number) > 0) {
+          cell.fill = GREEN_FILL;
+        }
+      });
+    });
+
+    // ─── Totals Row ───
+    if (sheetConfig.totalsRow) {
+      const totalRowNum = dataStartRow + sheetConfig.rows.length;
+      const tRow = sheet.getRow(totalRowNum);
+      sheetConfig.columns.forEach((col, i) => {
+        const cell = tRow.getCell(i + 1);
+        cell.value = sheetConfig.totalsRow![col.key] as ExcelJS.CellValue;
+        cell.font = TOTAL_ROW_FONT;
+        cell.fill = TOTAL_ROW_FILL;
+        if (col.format === 'currency') cell.numFmt = CURRENCY_FORMAT;
+        else if (col.format === 'percentage') cell.numFmt = PERCENT_FORMAT;
+      });
+    }
+
+    // ─── Auto-filter ───
+    const lastDataRow = dataStartRow + sheetConfig.rows.length - 1 + (sheetConfig.totalsRow ? 1 : 0);
+    sheet.autoFilter = {
+      from: { row: headerRow, column: 1 },
+      to: { row: lastDataRow, column: sheetConfig.columns.length },
+    };
+
+    // ─── Freeze panes ───
+    sheet.views = [{ state: 'frozen', ySplit: sheetConfig.freezeRow ?? headerRow }];
+
+    // ─── Print setup ───
+    sheet.pageSetup = {
+      orientation: 'landscape',
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+    };
+
+    // ─── Footer ───
+    sheet.headerFooter = {
+      oddFooter: `&LGenerated by Avy ERP&C${new Date().toLocaleDateString('en-IN')}&RPage &P of &N`,
+    };
   }
 
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);
 }
+
+function columnLetter(colNum: number): string {
+  let letter = '';
+  let num = colNum;
+  while (num > 0) {
+    const mod = (num - 1) % 26;
+    letter = String.fromCharCode(65 + mod) + letter;
+    num = Math.floor((num - mod) / 26);
+  }
+  return letter;
+}
 ```
 
-- [ ] **Step 2: Create pdf-exporter.ts** (minimal — extends existing PDF infrastructure)
+- [ ] **Step 2: Create report-definitions.ts**
+
+```typescript
+// Maps report type string to metadata used by the controller
+export interface ReportDefinition {
+  key: string;
+  title: string;
+  category: 'workforce' | 'attendance' | 'leave' | 'payroll' | 'statutory' | 'performance' | 'attrition' | 'compliance';
+  sheetNames: string[];
+  requiredPermission: string;
+}
+
+export const REPORT_DEFINITIONS: Record<string, ReportDefinition> = {
+  'employee-master':      { key: 'employee-master',      title: 'Employee Master Report',        category: 'workforce',    sheetNames: ['Summary', 'Employee Detail'], requiredPermission: 'hr:export' },
+  'headcount-movement':   { key: 'headcount-movement',   title: 'Headcount & Movement Report',   category: 'workforce',    sheetNames: ['Summary', 'Joiners', 'Leavers', 'Transfers', 'Promotions'], requiredPermission: 'hr:export' },
+  'demographics':         { key: 'demographics',         title: 'Demographics Report',           category: 'workforce',    sheetNames: ['Gender', 'Age', 'Tenure'], requiredPermission: 'hr:export' },
+  'attendance-register':  { key: 'attendance-register',  title: 'Monthly Attendance Register',   category: 'attendance',   sheetNames: ['Summary', 'Day-wise Grid'], requiredPermission: 'hr:export' },
+  'late-coming':          { key: 'late-coming',          title: 'Late Coming Report',            category: 'attendance',   sheetNames: ['Summary', 'Detail', 'Frequency'], requiredPermission: 'hr:export' },
+  'overtime':             { key: 'overtime',             title: 'Overtime Report',               category: 'attendance',   sheetNames: ['Summary', 'Detail', 'Cost Analysis'], requiredPermission: 'hr:export' },
+  'absenteeism':          { key: 'absenteeism',          title: 'Absenteeism Report',            category: 'attendance',   sheetNames: ['Summary', 'Detail', 'Frequent Absentees'], requiredPermission: 'hr:export' },
+  'leave-balance':        { key: 'leave-balance',        title: 'Leave Balance Report',          category: 'leave',        sheetNames: ['Summary', 'By Employee'], requiredPermission: 'hr:export' },
+  'leave-utilization':    { key: 'leave-utilization',    title: 'Leave Utilization Report',      category: 'leave',        sheetNames: ['Summary', 'Monthly Trend', 'By Department'], requiredPermission: 'hr:export' },
+  'leave-encashment':     { key: 'leave-encashment',     title: 'Leave Encashment Liability',    category: 'leave',        sheetNames: ['Summary', 'Employee Detail'], requiredPermission: 'hr:export' },
+  'salary-register':      { key: 'salary-register',      title: 'Salary Register',               category: 'payroll',      sheetNames: ['Summary', 'Earnings', 'Deductions', 'Net Pay', 'Employer Cost'], requiredPermission: 'hr:export' },
+  'bank-transfer':        { key: 'bank-transfer',        title: 'Bank Transfer File',            category: 'payroll',      sheetNames: ['NEFT File'], requiredPermission: 'hr:export' },
+  'ctc-distribution':     { key: 'ctc-distribution',     title: 'CTC Distribution Report',       category: 'payroll',      sheetNames: ['Summary', 'By Grade', 'By Department', 'CTC Bands'], requiredPermission: 'hr:export' },
+  'salary-revision':      { key: 'salary-revision',      title: 'Salary Revision Report',        category: 'payroll',      sheetNames: ['Summary', 'Detail'], requiredPermission: 'hr:export' },
+  'loan-outstanding':     { key: 'loan-outstanding',     title: 'Loan Outstanding Report',       category: 'payroll',      sheetNames: ['Summary', 'Active Loans', 'EMI Schedule'], requiredPermission: 'hr:export' },
+  'pf-ecr':               { key: 'pf-ecr',               title: 'PF ECR Report',                 category: 'statutory',    sheetNames: ['ECR Format', 'Summary'], requiredPermission: 'hr:export' },
+  'esi-challan':           { key: 'esi-challan',           title: 'ESI Challan Report',            category: 'statutory',    sheetNames: ['Challan Format', 'Summary'], requiredPermission: 'hr:export' },
+  'professional-tax':     { key: 'professional-tax',     title: 'Professional Tax Report',       category: 'statutory',    sheetNames: ['State-wise', 'Detail'], requiredPermission: 'hr:export' },
+  'tds-summary':          { key: 'tds-summary',          title: 'TDS Summary Report',            category: 'statutory',    sheetNames: ['Quarterly Summary', 'Detail'], requiredPermission: 'hr:export' },
+  'gratuity-liability':   { key: 'gratuity-liability',   title: 'Gratuity Liability Report',     category: 'statutory',    sheetNames: ['Summary', 'Detail'], requiredPermission: 'hr:export' },
+  'appraisal-summary':    { key: 'appraisal-summary',    title: 'Appraisal Summary Report',      category: 'performance',  sheetNames: ['Summary', 'Bell Curve', 'Detail'], requiredPermission: 'hr:export' },
+  'skill-gap':            { key: 'skill-gap',            title: 'Skill Gap Analysis Report',     category: 'performance',  sheetNames: ['Summary', 'Heatmap', 'Detail'], requiredPermission: 'hr:export' },
+  'attrition':            { key: 'attrition',            title: 'Attrition Report',              category: 'attrition',    sheetNames: ['Summary', 'By Department', 'By Reason', 'Detail'], requiredPermission: 'hr:export' },
+  'fnf-settlement':       { key: 'fnf-settlement',       title: 'F&F Settlement Report',         category: 'attrition',    sheetNames: ['Summary', 'Pending', 'Completed'], requiredPermission: 'hr:export' },
+  'compliance-summary':   { key: 'compliance-summary',   title: 'Compliance Summary Report',     category: 'compliance',   sheetNames: ['Score', 'Filings', 'Grievances', 'Document Status'], requiredPermission: 'hr:export' },
+};
+
+export const VALID_REPORT_TYPES = Object.keys(REPORT_DEFINITIONS);
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/modules/hr/analytics/exports/excel-exporter.ts src/modules/hr/analytics/exports/report-definitions.ts
+git commit -m "feat(analytics): add enterprise Excel export engine with styling, auto-filters, and report definitions"
+```
+
+---
+
+### Task 4.4b: Excel Report Generators — Workforce & Attendance (R01-R07)
+
+**Files:**
+- Create: `avy-erp-backend/src/modules/hr/analytics/exports/reports/workforce-reports.ts`
+- Create: `avy-erp-backend/src/modules/hr/analytics/exports/reports/attendance-reports.ts`
+
+- [ ] **Step 1: Create workforce-reports.ts (R01-R03)**
+
+Each function queries tenant DB, builds `ReportSheet[]`, and calls `generateExcelReport()`.
+
+```typescript
+import { generateExcelReport, type ReportConfig, type ReportSheet, type SheetColumn } from '../excel-exporter';
+import type { DashboardFilters, DataScope } from '../../analytics.types';
+
+export async function generateEmployeeMasterReport(
+  tenantDb: any,
+  companyName: string,
+  filters: DashboardFilters,
+  scope: DataScope,
+): Promise<Buffer> {
+  const employees = await tenantDb.employee.findMany({
+    where: {
+      ...(filters.departmentId ? { departmentId: filters.departmentId } : {}),
+      ...(filters.gradeId ? { gradeId: filters.gradeId } : {}),
+      ...(filters.employeeTypeId ? { employeeTypeId: filters.employeeTypeId } : {}),
+    },
+    include: {
+      department: { select: { name: true } },
+      designation: { select: { title: true } },
+      grade: { select: { name: true } },
+      employeeType: { select: { name: true } },
+    },
+    orderBy: { firstName: 'asc' },
+  });
+
+  // Summary sheet
+  const statusCounts: Record<string, number> = {};
+  const deptCounts: Record<string, number> = {};
+  for (const emp of employees) {
+    statusCounts[emp.status ?? 'UNKNOWN'] = (statusCounts[emp.status ?? 'UNKNOWN'] ?? 0) + 1;
+    const deptName = emp.department?.name ?? 'Unassigned';
+    deptCounts[deptName] = (deptCounts[deptName] ?? 0) + 1;
+  }
+
+  const summarySheet: ReportSheet = {
+    name: 'Summary',
+    columns: [
+      { header: 'Metric', key: 'metric', width: 30 },
+      { header: 'Value', key: 'value', width: 15, format: 'number' },
+    ],
+    rows: [
+      { metric: 'Total Employees', value: employees.length },
+      ...Object.entries(statusCounts).map(([k, v]) => ({ metric: `Status: ${k}`, value: v })),
+      { metric: '---', value: '' },
+      ...Object.entries(deptCounts).map(([k, v]) => ({ metric: `Dept: ${k}`, value: v })),
+    ],
+  };
+
+  // Detail sheet
+  const detailColumns: SheetColumn[] = [
+    { header: 'Emp ID', key: 'id', width: 14 },
+    { header: 'First Name', key: 'firstName', width: 15 },
+    { header: 'Last Name', key: 'lastName', width: 15 },
+    { header: 'Department', key: 'department', width: 20 },
+    { header: 'Designation', key: 'designation', width: 20 },
+    { header: 'Grade', key: 'grade', width: 12 },
+    { header: 'Type', key: 'employeeType', width: 15 },
+    { header: 'Date of Joining', key: 'joiningDate', width: 16, format: 'date' },
+    { header: 'Status', key: 'status', width: 14, conditionalFormat: 'status' },
+    { header: 'Annual CTC', key: 'annualCtc', width: 16, format: 'currency' },
+    { header: 'Gender', key: 'gender', width: 10 },
+    { header: 'Contact', key: 'personalMobile', width: 15 },
+  ];
+
+  const detailRows = employees.map(emp => ({
+    id: emp.id.slice(-8),
+    firstName: emp.firstName,
+    lastName: emp.lastName,
+    department: emp.department?.name ?? '',
+    designation: emp.designation?.title ?? '',
+    grade: emp.grade?.name ?? '',
+    employeeType: emp.employeeType?.name ?? '',
+    joiningDate: emp.joiningDate,
+    status: emp.status,
+    annualCtc: emp.annualCtc ?? 0,
+    gender: emp.gender,
+    personalMobile: emp.personalMobile,
+  }));
+
+  const detailSheet: ReportSheet = {
+    name: 'Employee Detail',
+    columns: detailColumns,
+    rows: detailRows,
+    totalsRow: {
+      id: '',
+      firstName: 'TOTAL',
+      lastName: '',
+      department: '',
+      designation: '',
+      grade: '',
+      employeeType: '',
+      joiningDate: '',
+      status: '',
+      annualCtc: detailRows.reduce((sum, r) => sum + (r.annualCtc ?? 0), 0),
+      gender: '',
+      personalMobile: `${employees.length} employees`,
+    },
+  };
+
+  return generateExcelReport({
+    companyName,
+    reportTitle: 'Employee Master Report',
+    period: `As of ${filters.dateTo}`,
+    sheets: [summarySheet, detailSheet],
+  });
+}
+
+// generateHeadcountMovementReport and generateDemographicsReport follow the same pattern
+// Each queries the relevant data, builds summary + detail sheets, calls generateExcelReport
+export async function generateHeadcountMovementReport(tenantDb: any, companyName: string, filters: DashboardFilters, scope: DataScope): Promise<Buffer> {
+  // Queries: employees by joiningDate range (joiners), exitRequests (leavers), transfers, promotions
+  // Builds 5 sheets: Summary, Joiners, Leavers, Transfers, Promotions
+  // Implementation follows same pattern as above
+  return generateExcelReport({ companyName, reportTitle: 'Headcount & Movement Report', period: `${filters.dateFrom} to ${filters.dateTo}`, sheets: [] });
+}
+
+export async function generateDemographicsReport(tenantDb: any, companyName: string, filters: DashboardFilters, scope: DataScope): Promise<Buffer> {
+  // Queries: all active employees, groups by gender/age/tenure
+  // Builds 3 sheets: Gender Distribution, Age Distribution, Tenure Distribution
+  return generateExcelReport({ companyName, reportTitle: 'Demographics Report', period: `As of ${filters.dateTo}`, sheets: [] });
+}
+```
+
+- [ ] **Step 2: Create attendance-reports.ts (R04-R07)**
+
+```typescript
+import { generateExcelReport, type ReportConfig, type ReportSheet, type SheetColumn } from '../excel-exporter';
+import type { DashboardFilters, DataScope } from '../../analytics.types';
+
+export async function generateAttendanceRegister(
+  tenantDb: any,
+  companyName: string,
+  filters: DashboardFilters,
+  scope: DataScope,
+): Promise<Buffer> {
+  // Query all attendance records for the month
+  const startDate = new Date(filters.dateFrom);
+  const endDate = new Date(filters.dateTo);
+  const daysInMonth = Math.ceil((endDate.getTime() - startDate.getTime()) / (86400000)) + 1;
+
+  const records = await tenantDb.attendanceRecord.findMany({
+    where: {
+      date: { gte: startDate, lte: endDate },
+      ...(filters.departmentId ? { employee: { departmentId: filters.departmentId } } : {}),
+    },
+    include: { employee: { select: { id: true, firstName: true, lastName: true, departmentId: true } } },
+    orderBy: [{ employee: { firstName: 'asc' } }, { date: 'asc' }],
+  });
+
+  // Build employee × day grid
+  const employeeMap = new Map<string, { name: string; dept: string; days: Record<number, string> }>();
+  for (const rec of records) {
+    const empId = rec.employeeId;
+    if (!employeeMap.has(empId)) {
+      employeeMap.set(empId, {
+        name: `${rec.employee.firstName} ${rec.employee.lastName}`,
+        dept: rec.employee.departmentId ?? '',
+        days: {},
+      });
+    }
+    const day = new Date(rec.date).getDate();
+    const status = rec.status?.charAt(0) ?? '?'; // P, A, L, H, W, ½
+    employeeMap.get(empId)!.days[day] = status;
+  }
+
+  // Day-wise grid columns
+  const dayColumns: SheetColumn[] = [
+    { header: 'Emp ID', key: 'empId', width: 12 },
+    { header: 'Name', key: 'name', width: 20 },
+    { header: 'Department', key: 'dept', width: 18 },
+  ];
+  for (let d = 1; d <= daysInMonth; d++) {
+    dayColumns.push({ header: String(d), key: `d${d}`, width: 4 });
+  }
+  dayColumns.push(
+    { header: 'Present', key: 'totalPresent', width: 10, format: 'number' },
+    { header: 'Absent', key: 'totalAbsent', width: 10, format: 'number' },
+    { header: 'Late', key: 'totalLate', width: 10, format: 'number' },
+  );
+
+  const gridRows = Array.from(employeeMap.entries()).map(([empId, emp]) => {
+    const row: Record<string, unknown> = { empId: empId.slice(-8), name: emp.name, dept: emp.dept };
+    let present = 0, absent = 0, late = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const status = emp.days[d] ?? '-';
+      row[`d${d}`] = status;
+      if (status === 'P' || status === 'L') present++;
+      if (status === 'A') absent++;
+      if (status === 'L') late++;
+    }
+    row.totalPresent = present;
+    row.totalAbsent = absent;
+    row.totalLate = late;
+    return row;
+  });
+
+  return generateExcelReport({
+    companyName,
+    reportTitle: 'Monthly Attendance Register',
+    period: `${filters.dateFrom} to ${filters.dateTo}`,
+    sheets: [
+      { name: 'Day-wise Grid', columns: dayColumns, rows: gridRows },
+    ],
+  });
+}
+
+// generateLateComingReport, generateOvertimeReport, generateAbsenteeismReport
+// follow the same pattern — query source data, build multi-sheet report
+export async function generateLateComingReport(tenantDb: any, companyName: string, filters: DashboardFilters, scope: DataScope): Promise<Buffer> {
+  return generateExcelReport({ companyName, reportTitle: 'Late Coming Report', period: `${filters.dateFrom} to ${filters.dateTo}`, sheets: [] });
+}
+export async function generateOvertimeReport(tenantDb: any, companyName: string, filters: DashboardFilters, scope: DataScope): Promise<Buffer> {
+  return generateExcelReport({ companyName, reportTitle: 'Overtime Report', period: `${filters.dateFrom} to ${filters.dateTo}`, sheets: [] });
+}
+export async function generateAbsenteeismReport(tenantDb: any, companyName: string, filters: DashboardFilters, scope: DataScope): Promise<Buffer> {
+  return generateExcelReport({ companyName, reportTitle: 'Absenteeism Report', period: `${filters.dateFrom} to ${filters.dateTo}`, sheets: [] });
+}
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/modules/hr/analytics/exports/reports/workforce-reports.ts src/modules/hr/analytics/exports/reports/attendance-reports.ts
+git commit -m "feat(analytics): add workforce (R01-R03) and attendance (R04-R07) Excel report generators"
+```
+
+---
+
+### Task 4.4c: Excel Report Generators — Leave, Payroll, Statutory (R08-R20)
+
+**Files:**
+- Create: `avy-erp-backend/src/modules/hr/analytics/exports/reports/leave-reports.ts`
+- Create: `avy-erp-backend/src/modules/hr/analytics/exports/reports/payroll-reports.ts`
+- Create: `avy-erp-backend/src/modules/hr/analytics/exports/reports/statutory-reports.ts`
+
+- [ ] **Step 1: Create leave-reports.ts (R08-R10)**
+
+Each function follows the same pattern: query tenant DB, build multi-sheet `ReportSheet[]`, call `generateExcelReport()`.
+
+Key queries:
+- R08 Leave Balance: `leaveBalance` + `leaveType` joined, grouped by employee and type
+- R09 Leave Utilization: `leaveRequest` aggregated by month/dept/type
+- R10 Leave Encashment: `leaveBalance` where `leaveType.encashmentAllowed = true`, calculate `balance * dailyRate`
+
+- [ ] **Step 2: Create payroll-reports.ts (R11-R15)**
+
+Key queries:
+- R11 Salary Register: `payrollEntry` with `earnings/deductions` JSON parsed into columns. 5 sheets: Summary, Earnings breakup, Deductions breakup, Net Pay with bank details, Employer cost
+- R12 Bank Transfer: `payrollEntry` with employee bank details, NEFT format (plain, no styling)
+- R13 CTC Distribution: `employeeSalary` where `isCurrent = true`, grouped by grade/dept/band
+- R14 Salary Revision: `salaryRevision` with old/new CTC, increment %
+- R15 Loan Outstanding: `loanRecord` where `status = ACTIVE`, with EMI schedule
+
+- [ ] **Step 3: Create statutory-reports.ts (R16-R20)**
+
+Key queries:
+- R16 PF ECR: `payrollEntry` with UAN from employee, EPFO format
+- R17 ESI Challan: `payrollEntry` with IP number
+- R18 PT: `payrollEntry` grouped by state
+- R19 TDS: `payrollEntry` grouped by quarter + `itDeclaration`
+- R20 Gratuity: Employees with 4.5+ years tenure, projected gratuity calculation
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/modules/hr/analytics/exports/reports/leave-reports.ts src/modules/hr/analytics/exports/reports/payroll-reports.ts src/modules/hr/analytics/exports/reports/statutory-reports.ts
+git commit -m "feat(analytics): add leave (R08-R10), payroll (R11-R15), and statutory (R16-R20) Excel reports"
+```
+
+---
+
+### Task 4.4d: Excel Report Generators — Performance, Attrition, Compliance (R21-R25)
+
+**Files:**
+- Create: `avy-erp-backend/src/modules/hr/analytics/exports/reports/performance-reports.ts`
+- Create: `avy-erp-backend/src/modules/hr/analytics/exports/reports/attrition-reports.ts`
+- Create: `avy-erp-backend/src/modules/hr/analytics/exports/reports/compliance-reports.ts`
+
+- [ ] **Step 1: Create performance-reports.ts (R21-R22)**
+- [ ] **Step 2: Create attrition-reports.ts (R23-R24)**
+- [ ] **Step 3: Create compliance-reports.ts (R25)**
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/modules/hr/analytics/exports/reports/performance-reports.ts src/modules/hr/analytics/exports/reports/attrition-reports.ts src/modules/hr/analytics/exports/reports/compliance-reports.ts
+git commit -m "feat(analytics): add performance (R21-R22), attrition (R23-R24), and compliance (R25) Excel reports"
+```
+
+---
+
+### Task 4.4e: Create pdf-exporter.ts (Minimal)
+
+**Files:**
+- Create: `avy-erp-backend/src/modules/hr/analytics/exports/pdf-exporter.ts`
+
+- [ ] **Step 1: Create pdf-exporter.ts**
 
 ```typescript
 import { logger } from '@/config/logger';
@@ -2909,18 +3429,17 @@ export async function exportToPDF(
   // For now, returns a basic CSV as fallback
   logger.info('PDF export requested — using CSV fallback until full PDF renderer is integrated');
 
-  // Generate CSV as interim
   const headers = _columns.map(c => c.header).join(',');
   const body = _rows.map(row => _columns.map(c => String(row[c.key] ?? '')).join(',')).join('\n');
   return Buffer.from(`${headers}\n${body}`, 'utf-8');
 }
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 2: Commit**
 
 ```bash
-git add src/modules/hr/analytics/exports/
-git commit -m "feat(analytics): add Excel and PDF export services"
+git add src/modules/hr/analytics/exports/pdf-exporter.ts
+git commit -m "feat(analytics): add PDF exporter placeholder"
 ```
 
 ---
