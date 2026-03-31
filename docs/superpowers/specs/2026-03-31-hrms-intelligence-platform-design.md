@@ -26,22 +26,30 @@ This spec designs a production-grade HR Intelligence Platform that transforms ra
 │                    PRESENTATION LAYER                    │
 │  9 Dashboards (Web: ECharts + Mobile: Victory Native)   │
 │  Global filters, cross-navigation, zero-data UX         │
+│  Feature flags for phased rollout                        │
 ├─────────────────────────────────────────────────────────┤
 │               DASHBOARD ORCHESTRATOR LAYER               │
 │  dashboard-orchestrator.service.ts                       │
 │  - Combines parallel analytics + insights + alerts       │
-│  - Applies filters once, structures response for UI      │
+│  - Promise.allSettled (soft-fail, partial data)          │
 │  - Permission-aware metric filtering                     │
+│  - Observability logging (load times, errors)            │
+├─────────────────────────────────────────────────────────┤
+│                  FILTER NORMALIZER LAYER                 │
+│  filters-normalizer.ts                                   │
+│  - Default application, range validation                 │
+│  - Timezone conversion (company → UTC)                   │
+│  - Limit capping, DB-safe formatting                     │
 ├─────────────────────────────────────────────────────────┤
 │                    ANALYTICS LAYER                       │
-│  analytics.service.ts + report-aggregator.service.ts     │
+│  analytics.service.ts + drilldown.service.ts             │
 │  - Queries precomputed tables                            │
 │  - Role-based data scoping (reportAccessResolver)        │
 │  - Drilldown query API                                   │
 │  - Tag-based cache invalidation                          │
 ├─────────────────────────────────────────────────────────┤
 │                   INTELLIGENCE LAYER                     │
-│  insights-engine.service.ts                              │
+│  insights-engine.service.ts (with insight prioritization)│
 │  ├── rules/    (threshold-based text insights)           │
 │  ├── scoring/  (attrition risk, manager effectiveness)   │
 │  └── anomaly/  (deviation detection)                     │
@@ -338,15 +346,16 @@ src/modules/hr/analytics/
 ├── analytics.routes.ts
 ├── analytics.validators.ts
 ├── analytics.types.ts
+├── filters-normalizer.ts              ← NEW: default application, range validation, timezone, limit capping
 ├── services/
 │   ├── dashboard-orchestrator.service.ts
 │   ├── analytics.service.ts
-│   ├── report-aggregator.service.ts
+│   ├── drilldown.service.ts           ← renamed from report-aggregator (aligns with UI concept)
 │   ├── report-access.service.ts
 │   ├── analytics-cron.service.ts
 │   └── analytics-audit.service.ts
 ├── insights/
-│   ├── insights-engine.service.ts
+│   ├── insights-engine.service.ts     ← includes insight prioritization (rankInsights)
 │   ├── rules/
 │   │   ├── attrition.rules.ts
 │   │   ├── attendance.rules.ts
@@ -394,11 +403,13 @@ class DashboardOrchestratorService {
 ```
 
 **Internal pattern** (every method follows this):
-1. Call `reportAccess.resolveScope(userId, role, dashboard)` to get data boundaries
-2. Fire parallel queries: `Promise.all([analytics queries, insights, alerts])`
-3. Call `reportAccess.filterMetrics(response, permissions)` to strip unauthorized metrics
-4. Log to `AnalyticsAuditLog`
-5. Return structured response matching the standard dashboard layout
+1. Normalize filters via `filtersNormalizer.normalize(filters, companyTimezone)` — applies defaults, validates ranges, converts to UTC, caps limits
+2. Call `reportAccess.resolveScope(userId, role, dashboard)` to get data boundaries
+3. Fire parallel queries via **`Promise.allSettled`** (soft-fail — partial data on individual query failure)
+4. For rejected promises: log error, replace with fallback (`null` section + `"Some metrics unavailable"` insight)
+5. Call `reportAccess.filterMetrics(response, permissions)` to strip unauthorized metrics
+6. Log to `AnalyticsAuditLog` + emit observability metric (`dashboard_load_time_ms`, `dashboard_errors`)
+7. Return structured response matching the standard dashboard layout
 
 ### 4.3 Analytics Service
 
@@ -652,14 +663,14 @@ class AlertService {
 | `flight_risk` | HIGH | High-performer risk score > 70 |
 | `probation_expiry` | LOW | Probation ending within 7 days, no review |
 
-### 4.7 Report Aggregator Service
+### 4.7 Drilldown Service
 
-**File**: `services/report-aggregator.service.ts`
+**File**: `services/drilldown.service.ts`
 
 Handles on-demand detailed reports with export capability. These are the drilldown tables behind each dashboard.
 
 ```typescript
-class ReportAggregatorService {
+class DrilldownService {
   // Workforce
   getEmployeeDirectory(filters, scope, pagination): Promise<PaginatedReport>
   getTenureReport(filters, scope, pagination): Promise<PaginatedReport>
@@ -740,7 +751,216 @@ class AnalyticsAuditService {
 }
 ```
 
-### 4.10 Caching Strategy
+### 4.10 Filter Normalizer
+
+**File**: `filters-normalizer.ts`
+
+Sits between the controller and all services. Every analytics query passes through this before reaching the analytics/drilldown layer.
+
+```typescript
+class FiltersNormalizer {
+  normalize(raw: RawDashboardFilters, companyTimezone: string): NormalizedFilters {
+    return {
+      dateFrom: raw.dateFrom ?? startOfMonth(companyTimezone),  // default: 1st of current month
+      dateTo: raw.dateTo ?? today(companyTimezone),             // default: today
+      departmentId: raw.departmentId ?? undefined,
+      locationId: raw.locationId ?? undefined,
+      gradeId: raw.gradeId ?? undefined,
+      employeeTypeId: raw.employeeTypeId ?? undefined,
+      page: Math.max(raw.page ?? 1, 1),
+      limit: Math.min(Math.max(raw.limit ?? 20, 1), 100),      // cap at 100
+      sortBy: raw.sortBy ?? 'createdAt',
+      sortOrder: raw.sortOrder === 'asc' ? 'asc' : 'desc',
+      search: raw.search?.trim().slice(0, 200) ?? undefined,    // cap search length
+    }
+  }
+}
+```
+
+**Responsibilities**:
+- Apply sensible defaults (date range, pagination)
+- Validate ranges (dateFrom < dateTo, page >= 1)
+- Cap limits to prevent expensive queries (max 100 rows per page)
+- Convert dates from company timezone to UTC for DB queries
+- Sanitize search input (trim, length cap)
+- Strip unknown filter keys
+
+### 4.11 Timezone Strategy
+
+All analytics are computed and displayed in the **company's timezone**.
+
+**Rule**: Dates are stored normalized (UTC) in the database. All computation and display converts to the company's configured timezone.
+
+The `Company` model already has timezone support. The filter normalizer converts all incoming date filters from company timezone to UTC before querying. The orchestrator converts all outgoing dates from UTC back to company timezone before returning to the frontend.
+
+**Impact on cron jobs**: Each cron job iterates tenants and computes analytics relative to each company's timezone. "End of day" for a company in `Asia/Kolkata` (UTC+5:30) is different from one in `America/New_York` (UTC-5).
+
+### 4.12 Data Completeness Flags
+
+The dashboard response `meta` includes completeness indicators so the UI can show appropriate warnings.
+
+```typescript
+meta: {
+  lastComputedAt: string
+  version: number
+  filtersApplied: DashboardFilters
+  scope: 'full_org' | 'team' | 'personal'
+  dataCompleteness: {
+    attendanceComplete: boolean  // all attendance marked for the period
+    payrollComplete: boolean     // payroll run approved for the month
+    appraisalComplete: boolean   // appraisal cycle closed
+    exitInterviewsComplete: boolean
+  }
+}
+```
+
+**UI behavior**: When a completeness flag is `false`, show a non-blocking banner:
+- "Payroll data incomplete for March — payroll run not yet approved"
+- "Attendance data partial — 12 employees have unmarked days"
+
+This builds trust with users and prevents confusion about seemingly low numbers.
+
+### 4.13 Insight Prioritization
+
+The insights engine generates many insights per dashboard. Before returning, insights are ranked and capped.
+
+```typescript
+// Inside insights-engine.service.ts
+rankInsights(insights: Insight[]): Insight[] {
+  return insights
+    .sort((a, b) => {
+      const severityOrder = { critical: 0, warning: 1, info: 2, positive: 3 }
+      if (severityOrder[a.category] !== severityOrder[b.category]) {
+        return severityOrder[a.category] - severityOrder[b.category]
+      }
+      return Math.abs(b.changePercent ?? 0) - Math.abs(a.changePercent ?? 0)
+    })
+    .slice(0, 5)  // max 5 insights per dashboard
+}
+```
+
+**Rules**:
+- Critical insights always surface first
+- Within same severity, highest magnitude change wins
+- Max 5 insights per dashboard (prevents UI overload)
+- Executive Overview gets top 3-5 cross-module insights (most critical across all dashboards)
+
+### 4.14 Drilldown Consistency Contract
+
+Every KPI card MUST have a corresponding drilldown. This is enforced at the type level.
+
+```typescript
+interface KPICard {
+  key: string              // e.g., "attrition_rate"
+  label: string
+  value: number | string
+  format: 'number' | 'currency' | 'percentage' | 'text'
+  drilldownType: string    // REQUIRED — must match a drilldown endpoint type
+  trend?: { ... }
+}
+```
+
+**Contract**: `KPI.drilldownType` MUST exist as a valid `type` parameter on the drilldown endpoint for that dashboard. No dead clicks. The frontend uses this to wire KPI tap/click → drilldown navigation automatically.
+
+### 4.15 Observability
+
+All analytics services emit structured logs for monitoring and debugging.
+
+```typescript
+// dashboard-orchestrator.service.ts
+logger.info('analytics_dashboard_loaded', {
+  dashboard: 'executive',
+  companyId,
+  userId,
+  loadTimeMs: Date.now() - startTime,
+  queriesSucceeded: settled.filter(s => s.status === 'fulfilled').length,
+  queriesFailed: settled.filter(s => s.status === 'rejected').length,
+})
+
+// On failure
+logger.error('analytics_query_failed', {
+  dashboard: 'attendance',
+  query: 'getAttendanceSummary',
+  error: err.message,
+  companyId,
+  filters,
+})
+
+// Cron jobs
+logger.info('analytics_cron_completed', {
+  table: 'EmployeeAnalyticsDaily',
+  companiesProcessed: count,
+  durationMs,
+  errors: errorCount,
+})
+```
+
+**Metrics to track** (for future Datadog/Prometheus integration):
+- `analytics.dashboard.load_time` — histogram per dashboard
+- `analytics.dashboard.error_rate` — counter per dashboard
+- `analytics.cron.duration` — histogram per table
+- `analytics.export.count` — counter per format
+- `analytics.cache.hit_rate` — gauge per dashboard
+
+### 4.16 Feature Flags
+
+Dashboards are behind feature flags for phased rollout and per-company control.
+
+```typescript
+const ANALYTICS_FEATURE_FLAGS = {
+  enableAnalytics: true,               // master kill switch
+  enableExecutiveDashboard: true,
+  enableWorkforceDashboard: true,
+  enableAttendanceDashboard: true,
+  enableLeaveDashboard: true,
+  enablePayrollDashboard: true,
+  enableComplianceDashboard: true,
+  enablePerformanceDashboard: true,
+  enableRecruitmentDashboard: true,
+  enableAttritionDashboard: true,
+  enableExcelExport: true,
+  enablePDFExport: true,
+  enableAsyncExport: false,            // future phase
+  enableScheduledReports: false,       // future phase
+} as const
+```
+
+**Implementation**: Feature flags are stored in the company's system controls (existing `SystemControl` model). The orchestrator checks `enableAnalytics` + `enable{Dashboard}Dashboard` before processing. Disabled dashboards return 404 with a clear message.
+
+**Phased rollout plan**: Enable dashboards in implementation phase order — Foundation dashboards first (Executive, Workforce, Attendance), then progressively enable others.
+
+### 4.17 Export Rate Limiting & Async Mode
+
+**Rate limiting**: Max 20 exports per user per hour. Enforced via Redis counter (`export_rate:{userId}`).
+
+```typescript
+// In analytics.controller.ts export handler
+const key = `export_rate:${userId}`
+const count = await redis.incr(key)
+if (count === 1) await redis.expire(key, 3600)
+if (count > 20) throw ApiError.tooManyRequests('Export limit reached. Max 20 per hour.')
+```
+
+**Async export mode** (future phase — flag `enableAsyncExport`):
+
+```
+POST /analytics/export/async    → returns { jobId, status: 'QUEUED' }
+GET  /analytics/export/status/:jobId → returns { status: 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED', downloadUrl? }
+```
+
+For large datasets (>10,000 rows), the sync endpoint automatically redirects to async mode. The job runs in background, generates the file, stores it temporarily, and notifies the user via the existing notification system.
+
+### 4.18 Schema Evolution Strategy
+
+**Rules for precomputed table changes**:
+1. **Never break existing fields** — only add new fields as nullable
+2. **Version field tracks computation logic** — increment `version` only when the computation algorithm changes (not for schema additions)
+3. **Backward compatibility**: The orchestrator must handle both old and new versions gracefully during migration windows
+4. **Migration pattern**: Add nullable field → deploy new cron logic → backfill existing rows → make non-null (if needed)
+
+This ensures zero-downtime deployments and prevents dashboard breakage during schema migrations.
+
+### 4.19 Caching Strategy
 
 **Pattern**: Tag-based invalidation over Redis.
 
@@ -840,9 +1060,9 @@ interface DashboardResponse<T> {
   success: true
   data: {
     kpis: KPICard[]                // Section A: top-level metrics
-    trends: TrendSeries[]          // Section B: time-series data
-    distributions: Distribution[]  // Section C: categorical breakdowns
-    insights: Insight[]            // Section D: intelligence panel
+    trends: TrendSeries[]          // Section B: time-series data (null if query failed — soft-fail)
+    distributions: Distribution[]  // Section C: categorical breakdowns (null if query failed)
+    insights: Insight[]            // Section D: intelligence panel (max 5, ranked)
     alerts: AnalyticsAlert[]       // Active alerts for this dashboard
     drilldownTypes: string[]       // Available drilldown options
     meta: {
@@ -850,19 +1070,27 @@ interface DashboardResponse<T> {
       version: number
       filtersApplied: DashboardFilters
       scope: 'full_org' | 'team' | 'personal'
+      dataCompleteness: {          // Flags for incomplete data warnings
+        attendanceComplete: boolean
+        payrollComplete: boolean
+        appraisalComplete: boolean
+        exitInterviewsComplete: boolean
+      }
+      partialFailures?: string[]   // List of sections that failed to load (soft-fail)
     }
   }
 }
 
 interface KPICard {
-  key: string           // unique identifier
-  label: string         // "Headcount"
+  key: string              // unique identifier
+  label: string            // "Headcount"
   value: number | string
   format: 'number' | 'currency' | 'percentage' | 'text'
+  drilldownType: string    // REQUIRED — must match a valid drilldown type (no dead clicks)
   trend?: {
     direction: 'up' | 'down' | 'neutral'
     changePercent: number
-    comparedTo: string  // "vs last month"
+    comparedTo: string     // "vs last month"
   }
 }
 
@@ -1158,12 +1386,24 @@ Detection: If `lastComputedAt` is null or `meta.version` is 0, render zero-data 
 
 1. User clicks export button on drilldown table
 2. Frontend calls `GET /analytics/export/:reportType?format=excel&...filters`
-3. Backend: `report-aggregator.service.ts` fetches data with same filters + scope
-4. Backend: `excel-exporter.ts` or `pdf-exporter.ts` generates file
-5. Response: file buffer with `Content-Disposition: attachment` header
-6. Audit log entry created
+3. **Rate limit check**: Max 20 exports per user per hour (Redis counter)
+4. Backend: `drilldown.service.ts` fetches data with same filters + scope
+5. Backend: `excel-exporter.ts` or `pdf-exporter.ts` generates file
+6. Response: file buffer with `Content-Disposition: attachment` header
+7. Audit log entry created
 
-### 8.3 Scheduled Reports (Future Phase)
+### 8.3 Async Export (Future Phase — behind `enableAsyncExport` flag)
+
+For large datasets (>10,000 rows), sync export automatically redirects to async:
+
+```
+POST /analytics/export/async    → { jobId, status: 'QUEUED' }
+GET  /analytics/export/status/:id → { status, downloadUrl? }
+```
+
+Job runs in background → generates file → stores temporarily → notifies user via existing notification system.
+
+### 8.4 Scheduled Reports (Future Phase — behind `enableScheduledReports` flag)
 
 Extend existing `NotificationRule` model to support scheduled report delivery:
 - Weekly/monthly digest emails to company admin
@@ -1227,16 +1467,20 @@ Implemented by `reportAccess.filterMetrics()` which strips unauthorized fields f
 
 | Category | Scope | Examples |
 |----------|-------|---------|
+| **Unit: Filter normalizer** | Defaults, validation, timezone conversion | Missing dateFrom defaults to month start, limit capped at 100, timezone conversion correctness |
 | **Unit: Cron populators** | Each precomputed table populator | Verify correct aggregation from source tables |
 | **Unit: Rule engine** | Each rule file | Verify threshold triggers, insight text generation |
 | **Unit: Scoring engine** | Each scoring function | Verify weighted score calculation, edge cases |
 | **Unit: Anomaly detection** | Detector functions | Verify z-score calculation, threshold classification |
-| **Integration: Orchestrator** | Dashboard endpoints | Verify parallel query composition, filter application |
-| **Integration: Access control** | Role-based scoping | Verify data isolation per role |
-| **Integration: Multi-tenant** | Cross-tenant isolation | **Critical**: Verify Company A cannot see Company B data |
-| **Edge cases** | All services | Empty data (new company), partial months, single employee, zero attendance |
-| **Accuracy** | Report aggregator | Compare aggregated results against raw query results |
-| **Performance** | Dashboard endpoints | Load test with realistic data volumes (1000+ employees) |
+| **Unit: Insight prioritization** | rankInsights function | Critical > warning > info ordering, max 5 cap, magnitude tiebreaker |
+| **Integration: Orchestrator** | Dashboard endpoints | Verify parallel query composition, soft-fail (Promise.allSettled), partial data response |
+| **Integration: Access control** | Role-based scoping | Verify data isolation per role, Finance cannot see performance data |
+| **Integration: Multi-tenant** | Cross-tenant isolation | **Critical**: Verify Company A cannot see Company B data — automated test for every query method |
+| **Integration: Export rate limit** | Rate limiter | Verify 21st export in 1 hour returns 429 |
+| **Edge cases** | All services | Empty data (new company), partial months, single employee, zero attendance, missing timezone |
+| **Accuracy** | Drilldown service | Compare aggregated results against raw query results |
+| **Performance** | Dashboard endpoints | Load test with realistic data volumes (1000+ employees), target: <2s dashboard, <1s drilldown |
+| **Observability** | Logger output | Verify structured logs emitted for dashboard loads, cron runs, errors |
 
 ### 10.2 Frontend Tests
 
@@ -1252,52 +1496,65 @@ Implemented by `reportAccess.filterMetrics()` which strips unauthorized fields f
 
 ## 11. Implementation Phases
 
-### Phase 1: Foundation (Backend Data Layer)
+### Phase 1: Foundation (Backend Data Layer + Infrastructure)
 - Prisma schema: 4 precomputed tables + Alert + AuditLog models
 - Migration + generate
-- Analytics cron service (all 4 populators)
-- Report access service
+- Filter normalizer (`filters-normalizer.ts`)
+- Report access service (role scoping, multi-tenant isolation)
 - Analytics audit service
-- Redis tag-based caching
+- Redis tag-based caching infrastructure
+- Feature flag definitions in system controls
+- Install `exceljs` dependency
 
-### Phase 2: Intelligence Engine (Backend)
+### Phase 2: Cron & Precomputation (Backend)
+- Analytics cron service (all 4 populators)
+- Timezone-aware computation per company
+- Version management + 90-day retention cleanup
+- Data completeness flag computation
+- Observability logging for cron jobs
+
+### Phase 3: Intelligence Engine (Backend)
 - Rule engine (all 6 rule files)
 - Scoring engine (attrition, manager, productivity, compliance)
 - Anomaly detection
-- Alert service
+- Insight prioritization (rankInsights — max 5 per dashboard)
+- Alert service (stateful, with deduplication and expiration)
 - Insights engine orchestrator
 
-### Phase 3: Analytics & Orchestrator (Backend)
+### Phase 4: Analytics & Orchestrator (Backend)
 - Analytics service (all query methods)
-- Dashboard orchestrator (all 9 dashboards)
-- Report aggregator (all drilldown reports)
+- Dashboard orchestrator (all 9 dashboards, Promise.allSettled soft-fail)
+- Drilldown service (all drilldown queries)
 - API routes + validators + controllers
-- Export service (Excel, PDF, CSV)
+- Export service (Excel, PDF, CSV) with rate limiting (20/hr)
+- Drilldown consistency validation (every KPI → drilldown mapping)
+- Observability metrics (dashboard load times, error rates)
 
-### Phase 4: Web Dashboards
+### Phase 5: Web Dashboards
 - Install ECharts (`echarts` + `echarts-for-react`)
-- Install `exceljs` (for client-side export if needed)
-- Shared analytics components (DashboardShell, GlobalFilters, charts, InsightsPanel, etc.)
-- 9 dashboard screens
+- Shared analytics components (DashboardShell, GlobalFilters, charts, InsightsPanel, AlertsBanner, etc.)
+- 9 dashboard screens (phased: Executive + Workforce + Attendance first)
 - Drilldown tables with export
-- Zero-data UX
+- Zero-data UX + data completeness banners
 - Route setup + navigation manifest integration
+- Feature flag checks per dashboard
 
-### Phase 5: Mobile Dashboards
+### Phase 6: Mobile Dashboards
 - Install Victory Native (`victory-native`)
 - Shared analytics components (mobile variants)
-- 9 dashboard screens
+- 9 dashboard screens (same phased order as web)
 - Filter bottom sheet
 - Drilldown lists with export
-- Zero-data UX
+- Zero-data UX + data completeness banners
 - Route setup
 
-### Phase 6: Testing & Polish
-- Backend unit + integration tests
-- Cross-tenant isolation tests
-- Frontend component tests
-- Performance testing
-- Edge case handling
+### Phase 7: Testing & Polish
+- Backend unit tests (filter normalizer, cron populators, rules, scoring, anomaly, prioritization)
+- Integration tests (orchestrator soft-fail, access control, export rate limiting)
+- Cross-tenant isolation tests (automated for every query method)
+- Frontend component tests (charts, zero-data, filter → query)
+- Performance testing (target: <2s dashboard, <1s drilldown)
+- Observability verification (structured logs, metrics)
 
 ---
 
@@ -1325,9 +1582,13 @@ Implemented by `reportAccess.filterMetrics()` which strips unauthorized fields f
 ## 13. Performance Considerations
 
 - **Precomputed tables** eliminate expensive real-time aggregation queries
-- **Parallel queries** in orchestrator (Promise.all) minimize dashboard load time
+- **Promise.allSettled** in orchestrator — parallel queries + graceful degradation on failure
+- **Filter normalizer** caps pagination limits and prevents expensive full-table scans
 - **Tag-based cache** avoids stale data without aggressive TTLs
-- **Pagination** on all drilldown tables (no unbounded queries)
+- **Pagination** on all drilldown tables (max 100 rows, no unbounded queries)
 - **Index strategy**: Composite indexes on `[companyId, date]` for all precomputed tables
 - **Version cleanup**: 90-day retention on precomputed table versions
+- **Export rate limiting**: 20 exports/user/hour prevents server overload
+- **Timezone-aware cron**: Each company computed independently, preventing one large tenant from blocking others
+- **Observability**: Dashboard load times logged for performance monitoring
 - **Target**: Dashboard load < 2 seconds, drilldown load < 1 second
