@@ -4,9 +4,9 @@
 
 **Goal:** Build a 9-dashboard HR Intelligence Platform with precomputed analytics, insight engine, alerts, and role-based access across backend, web, and mobile.
 
-**Architecture:** 6-layer stack — Presentation → Orchestrator → Filter Normalizer → Analytics → Intelligence → Data. Backend precomputes daily/monthly analytics via cron, surfaces insights via rule/scoring/anomaly engines, and serves standardized dashboard responses. Web uses ECharts, mobile uses Victory Native.
+**Architecture:** 6-layer stack — Presentation → Orchestrator → Filter Normalizer → Analytics → Intelligence → Data. Backend precomputes daily/monthly analytics via cron, surfaces insights via rule/scoring/anomaly engines, and serves standardized dashboard responses. Web uses Rrecharts, mobile uses Victory Native.
 
-**Tech Stack:** Node.js/Express/Prisma (backend), React/ECharts (web), React Native/Victory Native (mobile), Redis (caching), node-cron (scheduling), exceljs (exports), Zod (validation)
+**Tech Stack:** Node.js/Express/Prisma (backend), React/Rrecharts (web), React Native/Victory Native (mobile), Redis (caching), node-cron (scheduling), exceljs (exports), Zod (validation)
 
 **Spec:** `docs/superpowers/specs/2026-03-31-hrms-intelligence-platform-design.md`
 
@@ -85,11 +85,11 @@
 | `src/components/analytics/InsightsPanel.tsx` | Collapsible insights |
 | `src/components/analytics/AlertsBanner.tsx` | Alert cards |
 | `src/components/analytics/DrilldownTable.tsx` | Paginated drilldown table |
-| `src/components/analytics/TrendChart.tsx` | ECharts line/area |
-| `src/components/analytics/DistributionChart.tsx` | ECharts donut/bar |
-| `src/components/analytics/HeatmapChart.tsx` | ECharts heatmap |
-| `src/components/analytics/ScatterChart.tsx` | ECharts scatter |
-| `src/components/analytics/FunnelChart.tsx` | ECharts funnel |
+| `src/components/analytics/TrendChart.tsx` | Rrecharts line/area |
+| `src/components/analytics/DistributionChart.tsx` | Rrecharts donut/bar |
+| `src/components/analytics/HeatmapChart.tsx` | Rrecharts heatmap |
+| `src/components/analytics/ScatterChart.tsx` | Rrecharts scatter |
+| `src/components/analytics/FunnelChart.tsx` | Rrecharts funnel |
 | `src/components/analytics/ExportMenu.tsx` | Export dropdown |
 | `src/components/analytics/ZeroDataState.tsx` | Empty state |
 | `src/features/company-admin/hr/analytics/ExecutiveDashboardScreen.tsx` | Dashboard 1 |
@@ -3788,15 +3788,15 @@ git commit -m "feat(analytics): add 10 analytics entries to navigation manifest"
 ### Task 5.1: Install Chart Library & API Layer
 
 **Files:**
-- Install: `echarts`, `echarts-for-react`
+- Install: `recharts`, `rrecharts (already installed)`
 - Create: `web-system-app/src/lib/api/analytics.ts`
 - Create: `web-system-app/src/features/company-admin/api/use-analytics-queries.ts`
 - Create: `web-system-app/src/features/company-admin/api/use-analytics-mutations.ts`
 
-- [ ] **Step 1: Install ECharts**
+- [ ] **Step 1: Install Rrecharts**
 
 ```bash
-cd web-system-app && pnpm add echarts echarts-for-react
+cd web-system-app && pnpm add recharts rrecharts (already installed)
 ```
 
 - [ ] **Step 2: Create API service**
@@ -3922,7 +3922,7 @@ export function useRecompute() {
 
 ```bash
 git add package.json pnpm-lock.yaml src/lib/api/analytics.ts src/features/company-admin/api/use-analytics-queries.ts src/features/company-admin/api/use-analytics-mutations.ts
-git commit -m "feat(analytics): add web API layer, React Query hooks, and install ECharts"
+git commit -m "feat(analytics): add web API layer, React Query hooks, and install Rrecharts"
 ```
 
 ---
@@ -3956,7 +3956,7 @@ Renders active alerts as dismissible cards at the top. Shows severity icon, titl
 
 - [ ] **Step 6: Create `TrendChart.tsx`**
 
-ECharts wrapper for line/area charts. Accepts `TrendSeries` data. Responsive, dark mode aware (use ECharts dark theme detection).
+Rrecharts wrapper for line/area charts. Accepts `TrendSeries` data. Responsive, dark mode aware (use Rrecharts dark theme detection).
 
 ```typescript
 // Key interface
@@ -3968,11 +3968,11 @@ interface TrendChartProps {
 
 - [ ] **Step 7: Create `DistributionChart.tsx`**
 
-ECharts wrapper supporting donut, bar, and stacked bar. Accepts `Distribution` data.
+Rrecharts wrapper supporting donut, bar, and stacked bar. Accepts `Distribution` data.
 
 - [ ] **Step 8: Create `HeatmapChart.tsx`, `ScatterChart.tsx`, `FunnelChart.tsx`**
 
-ECharts wrappers for specialized chart types.
+Rrecharts wrappers for specialized chart types.
 
 - [ ] **Step 9: Create `DrilldownTable.tsx`**
 

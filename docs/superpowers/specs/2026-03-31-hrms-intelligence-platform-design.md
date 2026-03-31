@@ -24,7 +24,7 @@ This spec designs a production-grade HR Intelligence Platform that transforms ra
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    PRESENTATION LAYER                    │
-│  9 Dashboards (Web: ECharts + Mobile: Victory Native)   │
+│  9 Dashboards (Web: Rrecharts + Mobile: Victory Native)   │
 │  Global filters, cross-navigation, zero-data UX         │
 │  Feature flags for phased rollout                        │
 ├─────────────────────────────────────────────────────────┤
@@ -1199,11 +1199,11 @@ Mobile Layout:
 | `InsightsPanel.tsx` | Collapsible panel showing insight items with severity badges |
 | `AlertsBanner.tsx` | Top banner for critical/high alerts |
 | `DrilldownTable.tsx` | Paginated table with sort, search, and export buttons |
-| `TrendChart.tsx` | ECharts line/area chart wrapper |
-| `DistributionChart.tsx` | ECharts donut/bar/heatmap wrapper |
-| `ScatterChart.tsx` | ECharts scatter for Cost vs Performance |
-| `FunnelChart.tsx` | ECharts funnel for recruitment pipeline |
-| `HeatmapChart.tsx` | ECharts heatmap for leave density / attendance calendar |
+| `TrendChart.tsx` | Rrecharts line/area chart wrapper |
+| `DistributionChart.tsx` | Rrecharts donut/bar/heatmap wrapper |
+| `ScatterChart.tsx` | Rrecharts scatter for Cost vs Performance |
+| `FunnelChart.tsx` | Rrecharts funnel for recruitment pipeline |
+| `HeatmapChart.tsx` | Rrecharts heatmap for leave density / attendance calendar |
 | `ExportMenu.tsx` | Dropdown with Excel/PDF/CSV options |
 | `ZeroDataState.tsx` | Empty state with sample visualization + onboarding hints |
 
@@ -1228,7 +1228,7 @@ Mobile Layout:
 
 | Platform | Library | Package |
 |----------|---------|---------|
-| Web | ECharts | `echarts` + `echarts-for-react` |
+| Web | Rrecharts | `rrecharts` (already installed: `^3.8.1`) |
 | Mobile | Victory Native | `victory-native` (uses `react-native-svg` already installed) |
 
 Chart types needed:
@@ -1238,7 +1238,7 @@ Chart types needed:
 - **Heatmap**: Attendance calendar, leave density, skill matrix
 - **Scatter**: Cost vs Performance matrix
 - **Funnel**: Recruitment pipeline
-- **Gauge**: Compliance score, productivity index (optional, ECharts only)
+- **Gauge**: Compliance score, productivity index (optional, Rrecharts only)
 
 ### 6.4 Cross-Dashboard Navigation
 
@@ -1812,7 +1812,7 @@ Implemented by `reportAccess.filterMetrics()` which strips unauthorized fields f
 - Observability metrics (dashboard load times, error rates)
 
 ### Phase 5: Web Dashboards
-- Install ECharts (`echarts` + `echarts-for-react`)
+- Install Rrecharts (`recharts` + `recharts-for-react`)
 - Shared analytics components (DashboardShell, GlobalFilters, charts, InsightsPanel, AlertsBanner, etc.)
 - 9 dashboard screens (phased: Executive + Workforce + Attendance first)
 - Drilldown tables with export
@@ -1850,8 +1850,8 @@ Implemented by `reportAccess.filterMetrics()` which strips unauthorized fields f
 ### Web
 | Package | Purpose |
 |---------|---------|
-| `echarts` | Core charting engine |
-| `echarts-for-react` | React wrapper for ECharts |
+| `recharts` | Core charting engine |
+| `recharts-for-react` | React wrapper for Rrecharts |
 
 ### Mobile
 | Package | Purpose |
