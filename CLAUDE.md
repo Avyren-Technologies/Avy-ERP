@@ -49,10 +49,41 @@ pnpm dev              # Start dev server (ts-node-dev)
 pnpm build            # Compile TypeScript
 pnpm test             # Jest
 pnpm lint             # ESLint
-pnpm db:generate      # Prisma generate
-pnpm db:migrate       # Prisma migrate dev
-pnpm db:studio        # Prisma Studio GUI
+pnpm prisma:merge     # Merge modular .prisma files → schema.prisma
+pnpm db:generate      # Merge + Prisma generate
+pnpm db:migrate       # Merge + Prisma migrate dev
+pnpm db:studio        # Merge + Prisma Studio GUI
 ```
+
+### Prisma Modular Schema (MUST follow)
+
+The Prisma schema is split into **25 domain-specific files** across 4 modules. Prisma requires a single `schema.prisma`, so a merge script combines them.
+
+**Architecture:**
+```
+prisma/
+├── base.prisma                    # generator + datasource (edit here)
+├── schema.prisma                  # AUTO-GENERATED — NEVER edit directly
+├── schema.prisma.backup           # Original monolithic backup
+├── modules/
+│   ├── platform/                  # auth, tenant, billing, audit
+│   ├── company-admin/             # settings, locations, shifts, onboarding-config
+│   ├── hrms/                      # org-structure, employee, attendance, leave,
+│   │                              # payroll-config, payroll-run, ess-workflows,
+│   │                              # performance, recruitment, training, assets,
+│   │                              # expense-letters, offboarding, advanced,
+│   │                              # onboarding-probation, transfers
+│   └── support/                   # tickets
+```
+
+**Rules:**
+- **NEVER edit `schema.prisma` directly** — it is auto-generated and will be overwritten
+- **Edit only files in `prisma/modules/**/*.prisma`** or `prisma/base.prisma`
+- **Always run `pnpm prisma:merge`** before any Prisma CLI command (the `db:*` scripts do this automatically)
+- **No duplicate models/enums** — the merge script validates and errors on conflicts
+- **Adding a new model**: place it in the appropriate module file (e.g., `hrms/attendance.prisma`), keep related enums in the same file
+- **Adding a new domain** (e.g., finance, inventory): create `prisma/modules/<domain>/` with `.prisma` files, they auto-merge
+- **Files are sorted alphabetically** during merge for deterministic output — no merge conflicts in teams
 
 ### File Patterns
 | Type | Naming | Location |
