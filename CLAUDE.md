@@ -123,6 +123,10 @@ methodName = asyncHandler(async (req: Request, res: Response) => {
 - **Wildcards**: `*` (all), `hr:*` (all HR actions)
 - **Navigation manifest**: `src/shared/constants/navigation-manifest.ts` — single source of truth for all sidebar items
   - **Adding a new page**: Add one entry to `NAVIGATION_MANIFEST` array. Both frontends auto-render.
+  - **4-layer filtering** in `rbac.service.ts`: role scope → module subscription → permissions → config toggles
+  - **ESS config gating**: If a feature is disabled in `ESSConfig` (e.g., `viewPayslips=false`), the sidebar item is hidden even if the user has the permission. Map nav item IDs to ESS config fields in `NAV_TO_ESS_CONFIG` in `rbac.service.ts`.
+  - **SystemControls gating**: Module-level toggles (e.g., `aiChatbotEnabled`) also suppress sidebar items via `NAV_TO_SYSTEM_MODULE`.
+  - **Adding ESS nav gating**: When adding a new ESS screen that should respect ESSConfig, add a mapping in `NAV_TO_ESS_CONFIG` in `rbac.service.ts`.
 - **Reference roles**: 14 templates in `permissions.ts` (Employee, Manager, HR Personnel, etc.)
 
 ### Logging
@@ -246,6 +250,45 @@ interface SidebarSection {
 1. Add to `PERMISSION_MODULES` in `permissions.ts`
 2. Add to `MODULE_TO_PERMISSION_MAP` if tied to a subscription module
 3. Reference roles auto-update if using module wildcards
+
+### Adding Number Series to a New Screen
+When a new feature needs auto-generated reference numbers (e.g., `EXP-00001`, `PO-00002`):
+
+1. **Add linked screen** in `src/shared/constants/linked-screens.ts`:
+   ```typescript
+   { value: 'Your Screen', label: 'Your Screen Label', module: 'Module', description: '...', defaultPrefix: 'PRE-' }
+   ```
+2. **Generate number in service** using `generateNextNumber()` from `src/shared/utils/number-series.ts`:
+   ```typescript
+   import { generateNextNumber } from '../../../shared/utils/number-series';
+   const refNumber = await generateNextNumber(
+     platformPrisma, companyId, ['Your Screen', 'Alias'], 'Entity Label',
+   );
+   // Assign directly in create data:
+   referenceNumber: refNumber,
+   ```
+3. **That's it** — the frontend `Number Series Config` dropdown auto-populates from `GET /company/no-series/linked-screens`
+
+**Rules:**
+- **NEVER** write custom number generators (year-based counters, count-based, etc.) — always use `generateNextNumber()`
+- **NEVER** use `.catch(() => undefined)` — all number series are mandatory. If not configured, throw an error so the user knows to set it up
+- Pass an array of aliases for backwards compatibility: `['Leave Management', 'Leave']`
+- The utility uses atomic SQL increment — safe against race conditions
+- The utility throws a user-friendly `ApiError.badRequest` with the linked screen name if the series is not configured
+
+### Adding a New Approval Workflow Trigger Event
+When a new ESS feature needs approval workflow support (e.g., a new request type):
+
+1. **Add trigger event** in `src/shared/constants/trigger-events.ts`:
+   ```typescript
+   { value: 'YOUR_EVENT', label: 'Your Event Label', module: 'Module', description: '...' }
+   ```
+2. **Wire in service**: When the request is submitted, call `essService.createRequest()` with `triggerEvent: 'YOUR_EVENT'`
+3. **Handle completion** in `onApprovalComplete()` in `ess.service.ts` — add a case for your `entityType`
+4. **That's it** — the frontend trigger event dropdown auto-populates from `GET /hr/approval-workflow-config`
+
+**Approver roles** are defined in `src/shared/constants/approver-roles.ts` and also served via the same endpoint.
+Both constants are validated in `ess.validators.ts` using Zod `.refine()`.
 
 ---
 
