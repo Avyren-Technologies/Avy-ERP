@@ -129,6 +129,24 @@ methodName = asyncHandler(async (req: Request, res: Response) => {
   - **Adding ESS nav gating**: When adding a new ESS screen that should respect ESSConfig, add a mapping in `NAV_TO_ESS_CONFIG` in `rbac.service.ts`.
 - **Reference roles**: 14 templates in `permissions.ts` (Employee, Manager, HR Personnel, etc.)
 
+### Date/Time/Timezone Formatting (MUST follow)
+- **Backend:** All timestamps are UTC ISO strings. Never use raw `new Date()` for business logic — use Luxon `DateTime` with `setZone(companyTimezone)`.
+- **Frontend:** Never use `toLocaleDateString()` or `toLocaleTimeString()` directly. Always use `useCompanyFormatter()` hook:
+  ```typescript
+  const fmt = useCompanyFormatter();
+  fmt.date(isoString)           // "02/04/2026" (respects dateFormat setting)
+  fmt.time(isoString)           // "9:00 AM" (respects timeFormat setting)
+  fmt.dateTime(isoString)       // "02/04/2026 9:00 AM"
+  fmt.shiftTime("09:00")        // "9:00 AM" (local company time, no TZ conversion)
+  fmt.relativeDate(isoString)   // "Today", "Yesterday", or formatted date
+  fmt.parseToZoned(isoString)   // Luxon DateTime in company timezone
+  ```
+- **Input rules:** Only ISO strings (`2026-04-02T10:00:00Z`) or `yyyy-MM-dd`. Never JS `Date` objects.
+- **Shift times:** Always `HH:mm` strings — format only (no timezone conversion), just 24h→12h if needed.
+- **Timezone:** Always use company timezone from CompanySettings, never device/browser timezone.
+- **Library:** Use Luxon on all three codebases. Never rely on `Intl.DateTimeFormat` for timezone operations.
+- **Settings:** `useCompanySettings()` with `staleTime: Infinity` — cached until explicit invalidation.
+
 ### Logging
 - Use `logger` from `@/config/logger` (Winston). Never `console.log()` in production code.
 
