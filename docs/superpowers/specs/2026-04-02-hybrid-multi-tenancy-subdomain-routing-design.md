@@ -360,7 +360,7 @@ logger.debug('Tenant resolved', {
 if (tenant.status === 'SUSPENDED') {
   throw ApiError.forbidden('This company account has been suspended. Contact support.')
 }
-if (tenant.status === 'INACTIVE') {
+if (tenant.status === 'CANCELLED' || tenant.status === 'EXPIRED') {
   throw ApiError.forbidden('This company account is inactive.')
 }
 ```
@@ -610,7 +610,7 @@ SUPER_ADMIN_EMAIL=admin@avyren.in    # For registration notifications
 | Demo tenant abuse | Feature flags disable integrations, daily data reset |
 | Connection exhaustion | LRU eviction + PgBouncer connection limits |
 | Reserved slug hijacking | Blacklist validated during onboarding |
-| Tenant status abuse | Middleware blocks SUSPENDED/INACTIVE tenants |
+| Tenant status abuse | Middleware blocks SUSPENDED/CANCELLED/EXPIRED tenants |
 
 ---
 
