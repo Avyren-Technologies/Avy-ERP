@@ -14,9 +14,9 @@ This document outlines the required steps to move the system from the current st
 
 1.1 Cloudflare DNS Configuration
 	•	Add wildcard subdomain:
-	•	*.avyerp.avyren.in → CNAME → Cloudflare Pages project
+	•	*.avyren.in → CNAME → Cloudflare Pages project
 	•	Add root subdomain:
-	•	avyerp.avyren.in → CNAME → Cloudflare Pages project
+	•	avyren.in → CNAME → Cloudflare Pages project
 	•	SSL:
 	•	Enabled automatically via Cloudflare Universal SSL
 
@@ -26,8 +26,8 @@ This document outlines the required steps to move the system from the current st
 	•	Create a project pointing to:
 	•	web-system-app/ (build output directory)
 	•	Add custom domains:
-	•	avyerp.avyren.in
-	•	*.avyerp.avyren.in
+	•	avyren.in
+	•	*.avyren.in
 	•	Build configuration:
 
 pnpm build
@@ -100,9 +100,9 @@ pnpm db:migrate-tenants   # Tenant schemas
 
 3.1 Production Environment Variables
 
-MAIN_DOMAIN=avyerp.avyren.in
+MAIN_DOMAIN=avyren.in
 SUPER_ADMIN_EMAIL=admin@avyren.in
-CORS_ALLOWED_ORIGINS=https://avyerp.avyren.in
+CORS_ALLOWED_ORIGINS=https://avyren.in
 SMTP_HOST=...  # For registration emails
 
 
@@ -110,7 +110,7 @@ SMTP_HOST=...  # For registration emails
 
 3.2 Web Application Environment
 
-VITE_MAIN_DOMAIN=avyerp.avyren.in
+VITE_MAIN_DOMAIN=avyren.in
 VITE_API_URL=https://avy-erp-api.avyren.in/api/v1/
 
 
@@ -163,16 +163,16 @@ VITE_API_URL=https://avy-erp-api.avyren.in/api/v1/
 ✅ 5. Pre-Production Testing Checklist
 
 5.1 Domain & Routing Validation
-	•	avyerp.avyren.in
+	•	avyren.in
 	•	Landing page
 	•	Demo login
 	•	Registration link
-	•	admin.avyerp.avyren.in
+	•	admin.avyren.in
 	•	Super admin login only
-	•	<slug>.avyerp.avyren.in
+	•	<slug>.avyren.in
 	•	Company-specific branded login
 	•	Invalid slug:
-	•	invalid-slug.avyerp.avyren.in
+	•	invalid-slug.avyren.in
 	•	Expected: 404 — Company Not Found
 
 ⸻

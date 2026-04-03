@@ -4,7 +4,7 @@
 
 **Goal:** Evolve the existing schema-per-tenant backend into a hybrid multi-tenancy system with subdomain-based routing for the web app, LRU+PgBouncer connection pooling, company registration flow, and tenant branding.
 
-**Architecture:** Single PostgreSQL database with per-tenant schemas routed through PgBouncer. Web app deployed on Cloudflare Pages with wildcard subdomain (`*.avyerp.avyren.in`). Tenant resolved from hostname at runtime. Mobile app unchanged except removal of register button.
+**Architecture:** Single PostgreSQL database with per-tenant schemas routed through PgBouncer. Web app deployed on Cloudflare Pages with wildcard subdomain (`*.avyren.in`). Tenant resolved from hostname at runtime. Mobile app unchanged except removal of register button.
 
 **Tech Stack:** Node.js/Express, Prisma, PostgreSQL, PgBouncer (Docker), Redis, React (Vite), React Native (Expo), Cloudflare Pages + DNS, lru-cache
 
@@ -200,7 +200,7 @@ In `avy-erp-backend/src/config/env.ts`, add after the `CORS_ALLOWED_ORIGINS` fie
 
 ```typescript
   // Multi-tenancy
-  MAIN_DOMAIN: z.string().default('avyerp.avyren.in'),
+  MAIN_DOMAIN: z.string().default('avyren.in'),
   TENANT_CLIENT_CACHE_SIZE: z.coerce.number().default(50),
   SUPER_ADMIN_EMAIL: z.string().email().optional(),
 ```
@@ -211,7 +211,7 @@ Add to the bottom of `.env` or `.env.example`:
 
 ```env
 # Multi-tenancy
-MAIN_DOMAIN=avyerp.avyren.in
+MAIN_DOMAIN=avyren.in
 TENANT_CLIENT_CACHE_SIZE=50
 SUPER_ADMIN_EMAIL=admin@avyren.in
 ```
@@ -580,12 +580,12 @@ function extractTenantFromRequest(req: Request): string | null {
   const tenantHeader = req.headers['x-tenant-id'] as string;
   if (tenantHeader) return tenantHeader;
 
-  // 2. Subdomain (e.g., company1.avyerp.avyren.in → "company1")
+  // 2. Subdomain (e.g., company1.avyren.in → "company1")
   const host = req.headers.host?.split(':')[0];
   if (host) {
     const isIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(host) || host === 'localhost';
     if (!isIP) {
-      const mainDomain = env.MAIN_DOMAIN; // e.g., "avyerp.avyren.in"
+      const mainDomain = env.MAIN_DOMAIN; // e.g., "avyren.in"
       if (host !== mainDomain && host.endsWith(`.${mainDomain}`)) {
         const slug = host.replace(`.${mainDomain}`, '');
         if (slug && !RESERVED_SLUGS.has(slug)) {
@@ -661,7 +661,7 @@ In `avy-erp-backend/src/app/app.ts`, replace the entire CORS section (lines 46�
 ```typescript
 // CORS configuration — dynamic origin validation for wildcard subdomains
 if (env.ENABLE_CORS) {
-  const mainDomain = env.MAIN_DOMAIN; // e.g., "avyerp.avyren.in"
+  const mainDomain = env.MAIN_DOMAIN; // e.g., "avyren.in"
   const mainOrigin = `https://${mainDomain}`;
   const subdomainPattern = new RegExp(`^https:\\/\\/[\\w-]+\\.${mainDomain.replace(/\./g, '\\.')}$`);
 
@@ -683,7 +683,7 @@ if (env.ENABLE_CORS) {
       // Main domain
       if (origin === mainOrigin) return callback(null, true);
 
-      // Wildcard subdomains (e.g., https://company1.avyerp.avyren.in)
+      // Wildcard subdomains (e.g., https://company1.avyren.in)
       if (subdomainPattern.test(origin)) return callback(null, true);
 
       // Extra configured origins (dev/staging)
@@ -716,7 +716,7 @@ git add avy-erp-backend/src/app/app.ts
 git commit -m "$(cat <<'EOF'
 feat: dynamic CORS validation for wildcard tenant subdomains
 
-Validates origin against *.avyerp.avyren.in pattern and main domain.
+Validates origin against *.avyren.in pattern and main domain.
 Rejects unknown origins in production. Falls back to env-configured
 origins for development.
 
@@ -1514,7 +1514,7 @@ Also add the new env vars:
 
 ```yaml
       # Multi-tenancy
-      MAIN_DOMAIN: ${MAIN_DOMAIN:-avyerp.avyren.in}
+      MAIN_DOMAIN: ${MAIN_DOMAIN:-avyren.in}
       TENANT_CLIENT_CACHE_SIZE: ${TENANT_CLIENT_CACHE_SIZE:-50}
       SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-}
 ```
@@ -1565,7 +1565,7 @@ export interface TenantContext {
   slug: string | null;
 }
 
-const MAIN_DOMAIN = import.meta.env.VITE_MAIN_DOMAIN || 'avyerp.avyren.in';
+const MAIN_DOMAIN = import.meta.env.VITE_MAIN_DOMAIN || 'avyren.in';
 
 const RESERVED_SLUGS = new Set([
   'admin', 'www', 'api', 'app', 'staging', 'dev', 'test', 'demo',
@@ -1629,7 +1629,7 @@ export function getTenantContext(): TenantContext {
 In `web-system-app/.env`, add:
 
 ```env
-VITE_MAIN_DOMAIN=avyerp.avyren.in
+VITE_MAIN_DOMAIN=avyren.in
 ```
 
 - [ ] **Step 3: Commit**
@@ -1898,7 +1898,7 @@ Create `web-system-app/src/features/auth/TenantNotFoundScreen.tsx`:
 import { AlertTriangle } from "lucide-react";
 import companyLogo from "@/assets/logo/Company-Logo.png";
 
-const MAIN_DOMAIN = import.meta.env.VITE_MAIN_DOMAIN || 'avyerp.avyren.in';
+const MAIN_DOMAIN = import.meta.env.VITE_MAIN_DOMAIN || 'avyren.in';
 
 export function TenantNotFoundScreen() {
   return (

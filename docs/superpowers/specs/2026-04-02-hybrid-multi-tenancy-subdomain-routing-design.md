@@ -11,9 +11,9 @@
 Evolve the existing schema-per-tenant architecture into a hybrid multi-tenancy system with subdomain-based routing for the web app. The system supports schema-per-tenant (default) with a future path to database-per-tenant for premium customers.
 
 ### Goals
-- Each tenant gets a branded subdomain: `<slug>.avyerp.avyren.in`
-- Main domain (`avyerp.avyren.in`) serves as the public landing page + demo access
-- Super admin panel on `admin.avyerp.avyren.in`
+- Each tenant gets a branded subdomain: `<slug>.avyren.in`
+- Main domain (`avyren.in`) serves as the public landing page + demo access
+- Super admin panel on `admin.avyren.in`
 - Production-grade connection pooling (LRU + PgBouncer)
 - Tenant schema migration CLI
 - Company registration flow (request-based, not self-service)
@@ -31,17 +31,17 @@ Evolve the existing schema-per-tenant architecture into a hybrid multi-tenancy s
 
 | Domain | Purpose | Auth | Landing Page | Register |
 |--------|---------|------|-------------|----------|
-| `avyerp.avyren.in` | Public site + demo | Demo credentials only | Yes | Yes |
-| `admin.avyerp.avyren.in` | Super admin panel | Super admin login | No | No |
-| `<slug>.avyerp.avyren.in` | Tenant app | Company users only | No | No |
+| `avyren.in` | Public site + demo | Demo credentials only | Yes | Yes |
+| `admin.avyren.in` | Super admin panel | Super admin login | No | No |
+| `<slug>.avyren.in` | Tenant app | Company users only | No | No |
 
 ### Hostname Resolution Logic (Explicit, Not Pattern-Based)
 
 ```
-hostname === "avyerp.avyren.in"           → MAIN (landing + demo)
-hostname === "admin.avyerp.avyren.in"     → SUPER_ADMIN
+hostname === "avyren.in"           → MAIN (landing + demo)
+hostname === "admin.avyren.in"     → SUPER_ADMIN
 hostname matches reserved slugs            → REJECT (404)
-hostname matches *.avyerp.avyren.in       → TENANT (extract slug)
+hostname matches *.avyren.in       → TENANT (extract slug)
 else                                       → REJECT (404)
 ```
 
@@ -300,7 +300,7 @@ PATCH /platform/registration-requests/:id { status: APPROVED }
    - Run tenant migrations on new schema
    - Create company admin user account
    - Send welcome email to registered admin with:
-     - Their subdomain URL: https://<slug>.avyerp.avyren.in
+     - Their subdomain URL: https://<slug>.avyren.in
      - Login credentials
 ```
 
@@ -316,7 +316,7 @@ PATCH /platform/registration-requests/:id { status: APPROVED }
 ```typescript
 // Dynamic origin validation
 const ALLOWED_PATTERN = /^https:\/\/[\w-]+\.avyerp\.avyren\.in$/
-const MAIN_DOMAIN = 'https://avyerp.avyren.in'
+const MAIN_DOMAIN = 'https://avyren.in'
 
 function corsOriginValidator(origin: string): boolean {
   if (!origin) return false
@@ -415,12 +415,12 @@ function detectTenant(): TenantContext {
   const hostname = window.location.hostname
 
   // Main domain
-  if (hostname === 'avyerp.avyren.in') {
+  if (hostname === 'avyren.in') {
     return { mode: 'main', slug: null }
   }
 
   // Extract subdomain
-  const slug = hostname.replace('.avyerp.avyren.in', '')
+  const slug = hostname.replace('.avyren.in', '')
 
   // Super admin
   if (slug === 'admin') {
@@ -459,25 +459,25 @@ mode === 'tenant'?
     → After login: validate user.tenantSlug matches subdomain slug
     → Mismatch: "Your account doesn't belong to this company"
   → exists === false?
-    → Show styled 404: "Company not found. Visit avyerp.avyren.in"
+    → Show styled 404: "Company not found. Visit avyren.in"
 ```
 
 ### Login Page Variants
 
-#### Main Domain (`avyerp.avyren.in`)
+#### Main Domain (`avyren.in`)
 - Avy ERP branding (default logo/colors)
 - Email + password fields
 - "Try Demo" button (pre-fills demo credentials)
 - "Register Your Company" link → registration form
 - Footer link: "Already have an account? Ask your admin for your company URL"
 
-#### Super Admin (`admin.avyerp.avyren.in`)
+#### Super Admin (`admin.avyren.in`)
 - Avy ERP branding
 - Email + password fields
 - No register button
 - No demo button
 
-#### Tenant (`<slug>.avyerp.avyren.in`)
+#### Tenant (`<slug>.avyren.in`)
 - Company logo + company name (fetched from branding endpoint)
 - Email + password fields
 - No register button
@@ -488,10 +488,10 @@ mode === 'tenant'?
 
 - Styled Avy ERP 404 page
 - Message: "This company doesn't exist"
-- CTA: "Visit avyerp.avyren.in to learn more"
+- CTA: "Visit avyren.in to learn more"
 - No information leakage about valid slugs
 
-### Registration Form (`avyerp.avyren.in/register`)
+### Registration Form (`avyren.in/register`)
 
 - Fields: Company Name, Admin Name, Email, Phone
 - Submit → `POST /auth/register-company`
@@ -538,7 +538,7 @@ mode === 'tenant'?
   - Reset demo user passwords
 
 ### Demo Login Flow
-- User clicks "Try Demo" on `avyerp.avyren.in`
+- User clicks "Try Demo" on `avyren.in`
 - Pre-fills `demo-admin@avyerp.com` / `demo123`
 - Logs in → redirected to demo company dashboard
 - Banner at top: "You're using a demo account. Data resets daily."
@@ -551,8 +551,8 @@ mode === 'tenant'?
 
 ```
 Type    Name                        Content                     Proxy
-CNAME   avyerp.avyren.in           <cloudflare-pages>.pages.dev  Proxied
-CNAME   *.avyerp.avyren.in         <cloudflare-pages>.pages.dev  Proxied
+CNAME   avyren.in           <cloudflare-pages>.pages.dev  Proxied
+CNAME   *.avyren.in         <cloudflare-pages>.pages.dev  Proxied
 ```
 
 ### Cloudflare Pages
@@ -560,7 +560,7 @@ CNAME   *.avyerp.avyren.in         <cloudflare-pages>.pages.dev  Proxied
 - Project: `avy-erp-web`
 - Build command: `cd web-system-app && pnpm build`
 - Build output: `web-system-app/dist`
-- Custom domains: `avyerp.avyren.in` + `*.avyerp.avyren.in`
+- Custom domains: `avyren.in` + `*.avyren.in`
 - SSL: automatic (Cloudflare Universal SSL covers wildcard)
 
 ### PgBouncer (Docker)
@@ -592,7 +592,7 @@ DATABASE_URL_TEMPLATE=postgresql://user:pass@pgbouncer:6432/avy_erp?schema={sche
 
 # New
 TENANT_CLIENT_CACHE_SIZE=50           # LRU cache max size
-MAIN_DOMAIN=avyerp.avyren.in         # For CORS and slug detection
+MAIN_DOMAIN=avyren.in         # For CORS and slug detection
 SUPER_ADMIN_EMAIL=admin@avyren.in    # For registration notifications
 ```
 
@@ -629,7 +629,7 @@ Body:
   Phone: {phone}
 
   Review this request in the admin panel:
-  https://admin.avyerp.avyren.in/registration-requests/{id}
+  https://admin.avyren.in/registration-requests/{id}
 ```
 
 ### Registration Approved (to Company Admin)
@@ -639,7 +639,7 @@ Subject: Welcome to Avy ERP — Your Account is Ready
 Body:
   Your company "{companyName}" has been approved!
 
-  Access your ERP at: https://{slug}.avyerp.avyren.in
+  Access your ERP at: https://{slug}.avyren.in
   Login with: {email}
   Temporary password: {tempPassword}
 
@@ -672,8 +672,8 @@ For each deployment that includes schema changes:
 4. Verify PgBouncer connectivity
 5. Deploy web app to Cloudflare Pages (automatic via git push)
 6. Verify wildcard subdomain resolution
-7. Test demo login on avyerp.avyren.in
-8. Test tenant login on <slug>.avyerp.avyren.in
+7. Test demo login on avyren.in
+8. Test tenant login on <slug>.avyren.in
 ```
 
 ---
@@ -707,7 +707,7 @@ For each deployment that includes schema changes:
 - No other changes
 
 ### Infrastructure
-- Cloudflare DNS: wildcard CNAME for `*.avyerp.avyren.in`
+- Cloudflare DNS: wildcard CNAME for `*.avyren.in`
 - Cloudflare Pages: single deployment with wildcard domain
 - PgBouncer: Docker container in docker-compose.yml
 - Backend env: updated DATABASE_URL through PgBouncer, new env vars
