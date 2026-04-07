@@ -25,3 +25,4 @@ unicode-escape-report.json
 *.njsproj
 *.sln
 *.sw?
+.worktrees
