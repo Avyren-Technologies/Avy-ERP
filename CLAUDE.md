@@ -16,6 +16,9 @@ This is a multi-tenant SaaS ERP platform with 3 submodules:
 
 ## Mandatory Rules (ALL codebases)
 
+### Git Safety
+- **NEVER create git worktrees** unless the user explicitly asks for a worktree to be created.
+
 ### Imports
 - **ALWAYS** use path aliases (`@/` prefix). Never relative imports.
 - Backend: `@/shared/utils`, `@/core/auth`, `@/modules/hr/`
