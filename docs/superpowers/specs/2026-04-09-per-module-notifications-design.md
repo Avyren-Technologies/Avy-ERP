@@ -1,0 +1,1415 @@
+# Per-Module Notifications — Design Spec
+
+**Status:** Draft for review
+**Author:** Chetan (product owner) + Claude (architect)
+**Date:** 2026-04-09
+**Branches:** `feat/per-module-notifications` on all three submodules
+**Depends on:** `feat/notifications` (merged or in-flight — the unified dispatcher must exist)
+**Spec reference for base system:** `docs/superpowers/specs/2026-04-09-push-notifications-overhaul-design.md`
+
+---
+
+## 1. Executive Summary
+
+The `feat/notifications` branch built the unified `notificationService.dispatch()` pipeline, priority-partitioned BullMQ workers, dual-transport push, two-tier consent enforcement with per-user preferences, analytics events, Expo receipt polling, socket.io real-time fan-out, and the admin-editable default template catalogue. It also seeded ~63 default `NotificationTemplate` / `NotificationRule` rows per tenant.
+
+What it **did not** ship — by explicit spec §3.4 non-goal — was the per-module call-site wiring that actually invokes the dispatcher from every business flow. Only four HR events are wired today (Interview scheduled, Training nomination/completed, Certificate expiring), plus the legacy `notificationService.send()` facade.
+
+This spec closes every remaining gap so the notification system is **100% implemented**. Concretely it covers:
+
+1. **Per-module event wiring** — ~45 dispatch call sites across 14 services (leave, attendance, ESS, payroll, employee, transfer, promotion, salary revision, offboarding, recruitment, training, assets, support, auth).
+2. **Generic approval workflow handler refactor** — `ess.service.onApprovalComplete()` becomes the universal dispatch point for every `ApprovalRequest` state transition.
+3. **Informational cron events** — 7 scheduled jobs for birthday, work anniversary, holiday reminders, probation end, asset return due, certificate expiring sweep, training session upcoming.
+4. **SMS provider integration** — Twilio via `@twilio/conversations` (or `twilio` package), wired into the existing `smsChannel` stub.
+5. **WhatsApp provider integration** — Meta Cloud API (Graph API v21.0), wired into the existing `whatsappChannel` stub.
+6. **Per-category user preferences** — extend user prefs with a matrix of `(category × channel)` so users can mute payroll push but keep leave push, etc.
+7. **Tenant onboarding Step05 preferences update** — extend the wizard schema + form + payload with the three new toggles (`pushNotifications`, `smsNotifications`, `inAppNotifications`).
+8. **Analytics dashboard** — new backend endpoint + web screen showing delivery rates, channel breakdown, priority distribution, top failing templates, bounce rate time-series.
+9. **Prisma migration file for staging/prod** — replace dev `db push` with a proper migration SQL file generated via `migrate diff --from-migrations`.
+10. **Unit + integration tests** — cover dispatcher, consent-gate, dedup, renderer, masker, batcher, rule-loader, recipient-resolver, idempotency, push providers, SMS/WhatsApp providers, cron jobs.
+11. **Mobile notification icon** — replace the placeholder `adaptive-icon.png` copy with a proper 96×96 monochrome white-silhouette asset.
+12. **Drop `Notification.isRead` column** — now that all read paths use `status`, deprecate the backward-compat field in a safe two-phase migration.
+13. **Pre-existing mobile type error fix** — `leave-request-screen.tsx:16` `import { r } from 'react-native'` — unrelated to notifications but blocks clean mobile type-check.
+14. **Residual reviewer nits** — `as any` cleanup in dispatcher ad-hoc rule construction, `DispatchResult.error` field removal (SQL leak vector), `zcard`/`zadd` pipelining, rule-loader zod integrity check, etc.
+15. **Notification rule cache invalidation on admin CRUD** — wire `invalidateRuleCache()` into the template/rule admin controllers.
+16. **Admin UI for viewing NotificationEvent delivery history** — new tab in the admin notification template/rule screens showing per-notification delivery audit trail.
+
+The delivery is phased into 13 implementation phases (see `docs/superpowers/plans/2026-04-09-per-module-notifications.md`) so each phase can be reviewed and merged independently. The entire scope is additive — legacy code continues to work throughout.
+
+---
+
+## 2. Current State — What's Done vs Missing
+
+### 2.1 What `feat/notifications` shipped (locked in)
+
+- Unified `notificationService.dispatch()` entry point with fallback + ad-hoc modes
+- Priority-partitioned BullMQ queues (`high`, `default`, `low`) with retry + DLQ + backpressure
+- Dedup (payload-hash + TTL), worker-level idempotency (atomic SETNX claim/release)
+- Two-tier consent gate (company master + per-user toggle + `SYSTEM_CRITICAL` override)
+- Dual-transport push router (Expo Server SDK for `EXPO` tokens, firebase-admin for `FCM_WEB`/`FCM_NATIVE`)
+- Expo receipt polling (30s cadence, 15min window, compare-and-set)
+- Socket.io `user:{id}` room fan-out for `notification:new`
+- Handlebars template compiler with LRU cache + variable allowlist + sensitive-field masking on PUSH
+- 63-template default catalogue seeded per tenant
+- Rule loader with Redis cache (60s TTL, SCAN invalidation)
+- Recipient resolver for 9 role tokens (`REQUESTER`/`APPROVER`/`MANAGER`/`HR`/`FINANCE`/`IT`/`ADMIN`/`SELF`/`ALL`)
+- `NotificationEvent` analytics table (append-only) with traceId, source, provider, ticket ID, receipt status
+- Full schema: `Notification` + `UserDevice` + `NotificationEvent` + `UserNotificationPreference` + extended `NotificationTemplate`/`NotificationRule`/`CompanySettings`
+- Preferences API (`GET/PATCH /notifications/preferences`), device registration with token metadata
+- Web + mobile preferences screens, socket hook, navigation manifest entry, logout disconnect
+
+### 2.2 What this spec adds (deferred items)
+
+The `feat/notifications` branch's spec §3.4 explicitly listed these as non-goals. All of them are addressed here:
+
+| Gap | Owner | Phase |
+|---|---|---|
+| Per-module dispatch call sites (~45) | Backend | 2-4 |
+| SMS provider integration (Twilio) | Backend | 6 |
+| WhatsApp provider integration (Meta Cloud) | Backend | 7 |
+| Tenant onboarding Step05 toggles | Web | 9 |
+| Analytics dashboard UI | Backend + Web | 10 |
+| Per-category user preferences | Backend + Web + Mobile | 8 |
+| Unit + integration tests | All | 11 |
+| Prisma migration file for staging/prod | Backend | 1 |
+| Mobile notification icon asset | Mobile | 12 |
+| Drop `Notification.isRead` | Backend | 12 |
+| Pre-existing `leave-request-screen.tsx` error | Mobile | 1 |
+| Informational cron events (birthday, etc.) | Backend | 5 |
+| Rule cache invalidation on CRUD | Backend | 2 |
+| Reviewer residual nits | All | 12 |
+
+---
+
+## 3. Architecture — What Changes
+
+The core architecture is locked and mostly unchanged. This spec only touches three architectural surfaces:
+
+### 3.1 Approval workflow as universal dispatch point
+
+`ess.service.onApprovalComplete(entityType, entityId, decision, approverId)` is called by every approval workflow transition today. It already has a `switch (entityType)` block for ~11 entity types (PayrollRun, SalaryRevision, ExitRequest, EmployeeTransfer, EmployeePromotion, LeaveRequest, AttendanceOverride, ShiftSwapRequest, ExpenseClaim, WfhRequest, LoanRecord). Each case currently does the entity status update. The refactor adds one `await notificationService.dispatch(...)` call per case after the business update, converting the handler into a single unified notification fanout point for approval-driven events.
+
+This means individual service methods (`leave.service.approveRequest`, `payroll.service.approveRun`, etc.) do NOT need their own dispatch calls for the approval-complete case — `onApprovalComplete` handles it. They only dispatch on **submission** (when the `ApprovalRequest` is first created) and any non-approval events (cancellation, direct state mutations).
+
+**Benefit:** One place to reason about approval notifications. Consistent `entityType` → `triggerEvent` mapping. The individual service methods only need to dispatch submission events.
+
+### 3.2 Per-category preferences
+
+The existing `UserNotificationPreference` schema only has per-channel toggles (`pushEnabled`, `emailEnabled`, etc.). This spec adds a new `UserNotificationCategoryPreference` model with a many-to-many matrix of `(userId, category, channel, enabled)`. The consent gate's `evaluateConsent()` is extended to also check the category preference. The preferences screens on web and mobile gain an expandable "Fine-tune by category" section showing a matrix of checkboxes per `(category, channel)`.
+
+**Backward compat:** If no category row exists for a given `(userId, category, channel)`, the per-channel toggle applies (the current behavior). Per-category rows only override.
+
+**Categories** (derived from the existing default catalogue):
+
+- `LEAVE`
+- `ATTENDANCE`
+- `OVERTIME`
+- `REIMBURSEMENT`
+- `LOAN`
+- `PAYROLL`
+- `SHIFT`
+- `WFH`
+- `RESIGNATION`
+- `EMPLOYEE_LIFECYCLE` (onboarded, transfer, promotion, salary revision)
+- `RECRUITMENT`
+- `TRAINING`
+- `ASSETS`
+- `SUPPORT`
+- `AUTH` — **always on, not user-overridable** (CRITICAL semantics)
+- `ANNOUNCEMENTS`
+- `BIRTHDAY_ANNIVERSARY` — opt-out only; opt-in by default
+
+The `AUTH` category is locked: `SYSTEM_CRITICAL` notifications bypass user prefs regardless of category settings.
+
+### 3.3 Provider routing for SMS and WhatsApp
+
+Both channels already have stub files (`sms.channel.ts`, `whatsapp.channel.ts`) that throw `NotImplemented`. The new provider packages live alongside the push providers:
+
+```
+src/core/notifications/channels/sms/
+  sms.channel.ts        (existing, rewritten)
+  twilio.provider.ts    (NEW)
+src/core/notifications/channels/whatsapp/
+  whatsapp.channel.ts   (existing, rewritten)
+  meta-cloud.provider.ts (NEW)
+```
+
+Both providers follow the same interface as `expoProvider`/`fcmProvider`:
+
+```typescript
+interface SendResult {
+  provider: string;
+  messageId: string | null;
+  errorCode?: string;
+}
+```
+
+Configuration is opt-in via environment variables. If credentials are missing, the channel throws `PROVIDER_NOT_CONFIGURED` (the worker records FAILED and continues — no crash).
+
+---
+
+## 4. Data Model Changes
+
+### 4.1 New: `UserNotificationCategoryPreference`
+
+File: `prisma/modules/platform/notifications.prisma`
+
+```prisma
+model UserNotificationCategoryPreference {
+  id        String              @id @default(cuid())
+  userId    String
+  category  String              // LEAVE, PAYROLL, etc.
+  channel   NotificationChannel // PUSH, EMAIL, SMS, WHATSAPP
+  enabled   Boolean             @default(true)
+
+  user      User                @relation("UserNotificationCategoryPrefUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@unique([userId, category, channel])
+  @@index([userId])
+  @@map("user_notification_category_preferences")
+}
+```
+
+Add back-reference on `User`:
+
+```prisma
+categoryPreferences UserNotificationCategoryPreference[] @relation("UserNotificationCategoryPrefUser")
+```
+
+**Rationale:** Matrix row per `(user × category × channel)`. Missing row means "use per-channel default" (current behavior). Only creates rows when the user explicitly opts out.
+
+### 4.2 New: `NotificationCategory` constant module
+
+File: `src/shared/constants/notification-categories.ts` (new)
+
+```typescript
+export interface NotificationCategoryDef {
+  code: string;
+  label: string;
+  description: string;
+  locked?: boolean; // if true, user cannot override (e.g. AUTH)
+  defaultOptIn?: boolean; // false = opt-in only (e.g. marketing)
+}
+
+export const NOTIFICATION_CATEGORIES: NotificationCategoryDef[] = [
+  { code: 'LEAVE', label: 'Leave', description: 'Leave requests, approvals, balance reminders' },
+  { code: 'ATTENDANCE', label: 'Attendance', description: 'Regularization, missed punches' },
+  { code: 'OVERTIME', label: 'Overtime', description: 'Overtime claims and approvals' },
+  { code: 'REIMBURSEMENT', label: 'Reimbursement', description: 'Expense claims and approvals' },
+  { code: 'LOAN', label: 'Loan', description: 'Loan applications and approvals' },
+  { code: 'PAYROLL', label: 'Payroll', description: 'Payslips, salary credits, bonus payments' },
+  { code: 'SHIFT', label: 'Shift', description: 'Shift change, swap requests' },
+  { code: 'WFH', label: 'Work From Home', description: 'WFH requests' },
+  { code: 'RESIGNATION', label: 'Resignation & Offboarding', description: 'Exit requests, F&F' },
+  { code: 'EMPLOYEE_LIFECYCLE', label: 'Employee Lifecycle', description: 'Onboarding, transfers, promotions, salary revisions' },
+  { code: 'RECRUITMENT', label: 'Recruitment', description: 'Interview scheduling, candidate updates, offers' },
+  { code: 'TRAINING', label: 'Training', description: 'Training nominations, certificates, session reminders' },
+  { code: 'ASSETS', label: 'Assets', description: 'Asset assignments and return reminders' },
+  { code: 'SUPPORT', label: 'Support', description: 'Support ticket updates' },
+  { code: 'AUTH', label: 'Security', description: 'Password reset, new device login, account lock', locked: true },
+  { code: 'ANNOUNCEMENTS', label: 'Announcements', description: 'Company announcements and policy updates' },
+  { code: 'BIRTHDAY_ANNIVERSARY', label: 'Celebrations', description: 'Birthday wishes and work anniversaries' },
+];
+
+export function getCategoryDef(code: string): NotificationCategoryDef | undefined {
+  return NOTIFICATION_CATEGORIES.find((c) => c.code === code);
+}
+```
+
+### 4.3 Drop `Notification.isRead` (two-phase)
+
+**Phase A (this PR):** Mark as deprecated in the schema with a comment, audit all read paths to confirm they use `status`. Keep the column.
+
+**Phase B (follow-up PR after this ships):** Actually drop the column + index in a new migration.
+
+This spec only ships Phase A — Phase B is safer as a follow-up once the current implementation is battle-tested in prod.
+
+### 4.4 Add indexes for the analytics dashboard
+
+File: `prisma/modules/platform/notifications.prisma`
+
+```prisma
+model NotificationEvent {
+  // ... existing fields ...
+
+  @@index([notificationId])
+  @@index([traceId])
+  @@index([event, occurredAt])
+  @@index([provider, expoTicketId])
+  @@index([channel, event, occurredAt])           // NEW — for dashboard queries
+  @@index([occurredAt])                            // NEW — for time-series
+  @@map("notification_events")
+}
+```
+
+### 4.5 Migration plan for staging/prod
+
+Dev used `db push` throughout the `feat/notifications` branch. For proper staging/prod deployment, this PR generates a consolidated migration SQL file covering BOTH branches' schema additions:
+
+1. Use the Prisma shadow DB pattern: spin up a throwaway Postgres, run `prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url $SHADOW_URL --script > migration.sql`.
+2. Commit the generated file as `prisma/migrations/20260409_notifications_full/migration.sql`.
+3. Document in the rollout plan that staging/prod runs `pnpm prisma migrate deploy` to apply it.
+
+---
+
+## 5. Per-Module Dispatch Call Sites
+
+This section is the exhaustive catalogue. Every site below gets a `notificationService.dispatch()` call. The implementation plan has task-by-task details with file paths and code snippets; this section is the requirements summary.
+
+### 5.1 Leave module (`src/modules/hr/leave/leave.service.ts`)
+
+| Method (line) | Trigger event | Recipient role | Category | Priority |
+|---|---|---|---|---|
+| `createRequest` (~499) | `LEAVE_APPLICATION` | APPROVER | LEAVE | MEDIUM |
+| `approveRequest` (~857) | (handled by `onApprovalComplete`) | — | — | — |
+| `rejectRequest` (~921) | (handled by `onApprovalComplete`) | — | — | — |
+| `cancelRequest` (~1039) | `LEAVE_CANCELLED` | APPROVER | LEAVE | LOW |
+
+**Notes:**
+- Submission dispatches directly (no approval workflow transition yet).
+- Approvals and rejections route through the `onApprovalComplete('LeaveRequest', ...)` case — see §5.3.
+- `cancelRequest` is a direct state change (not an approval transition), so it dispatches inline.
+
+### 5.2 Attendance + overtime (`src/modules/hr/attendance/attendance.service.ts`)
+
+| Method (line) | Trigger event | Recipient role | Category | Priority |
+|---|---|---|---|---|
+| `approveOvertimeRequest` (~1738) | (handled by `onApprovalComplete`) | — | — | — |
+| `rejectOvertimeRequest` (~1884) | (handled by `onApprovalComplete`) | — | — | — |
+
+**Regularization** is handled in ESS service (§5.3). Overtime submission is also in ESS.
+
+### 5.3 ESS module (`src/modules/hr/ess/ess.service.ts`)
+
+#### 5.3.1 Submission dispatches (direct)
+
+Each `create*Request` method dispatches on submission before the approval workflow gets involved:
+
+| Method | Trigger event | Recipient role | Category | Priority |
+|---|---|---|---|---|
+| `regularizeAttendance` (~1728) | `ATTENDANCE_REGULARIZATION` | APPROVER | ATTENDANCE | MEDIUM |
+| `createShiftChangeRequest` | `SHIFT_CHANGE` | APPROVER | SHIFT | MEDIUM |
+| `createShiftSwapRequest` | `SHIFT_SWAP` | APPROVER | SHIFT | MEDIUM |
+| `createWfhRequest` | `WFH_REQUEST` | APPROVER | WFH | MEDIUM |
+| `createProfileUpdateRequest` | `PROFILE_UPDATE` | HR | EMPLOYEE_LIFECYCLE | LOW |
+| `createReimbursement` | `REIMBURSEMENT` | APPROVER | REIMBURSEMENT | MEDIUM |
+| `createLoanApplication` | `LOAN_APPLICATION` | APPROVER | LOAN | MEDIUM |
+| `createITDeclaration` | `IT_DECLARATION` | HR, FINANCE | PAYROLL | MEDIUM |
+| `createTravelRequest` | `TRAVEL_REQUEST` | APPROVER | REIMBURSEMENT | MEDIUM |
+| `createHelpDeskTicket` | `HELPDESK_SUBMITTED` | HR | SUPPORT | MEDIUM |
+| `createGrievance` | `GRIEVANCE_SUBMITTED` | HR | SUPPORT | HIGH |
+| `createOvertimeRequest` | `OVERTIME_CLAIM` | APPROVER | OVERTIME | MEDIUM |
+| `createTrainingRequest` | `TRAINING_REQUEST` | APPROVER | TRAINING | MEDIUM |
+
+#### 5.3.2 Universal approval handler refactor (`onApprovalComplete`)
+
+`onApprovalComplete(entityType, entityId, decision, approverId)` is the single point where every approval transition can be intercepted. The refactor adds one `dispatch()` call per `case` block in the existing `switch (entityType)`:
+
+| entityType | APPROVED trigger | REJECTED trigger | Recipient | Category | Priority |
+|---|---|---|---|---|---|
+| `LeaveRequest` | `LEAVE_APPROVED` | `LEAVE_REJECTED` | REQUESTER | LEAVE | MEDIUM |
+| `AttendanceOverride` | `ATTENDANCE_REGULARIZED` | `ATTENDANCE_REGULARIZATION_REJECTED` | REQUESTER | ATTENDANCE | MEDIUM |
+| `OvertimeRequest` | `OVERTIME_CLAIM_APPROVED` | `OVERTIME_CLAIM_REJECTED` | REQUESTER | OVERTIME | MEDIUM |
+| `ShiftSwapRequest` | `SHIFT_SWAP_APPROVED` | `SHIFT_SWAP_REJECTED` | REQUESTER | SHIFT | MEDIUM |
+| `WfhRequest` | `WFH_APPROVED` | `WFH_REJECTED` | REQUESTER | WFH | MEDIUM |
+| `ExpenseClaim` | `REIMBURSEMENT_APPROVED` | `REIMBURSEMENT_REJECTED` | REQUESTER | REIMBURSEMENT | MEDIUM |
+| `LoanRecord` | `LOAN_APPROVED` | `LOAN_REJECTED` | REQUESTER | LOAN | HIGH / MEDIUM |
+| `ExitRequest` | `RESIGNATION_ACCEPTED` | `RESIGNATION_REJECTED` | REQUESTER | RESIGNATION | HIGH |
+| `EmployeeTransfer` | `EMPLOYEE_TRANSFER_APPLIED` | `EMPLOYEE_TRANSFER_REJECTED` | REQUESTER, MANAGER | EMPLOYEE_LIFECYCLE | MEDIUM |
+| `EmployeePromotion` | `EMPLOYEE_PROMOTION_APPLIED` | `EMPLOYEE_PROMOTION_REJECTED` | EMPLOYEE, HR | EMPLOYEE_LIFECYCLE | HIGH |
+| `SalaryRevision` | `SALARY_REVISION_APPROVED` | `SALARY_REVISION_REJECTED` | EMPLOYEE (masked amount) | PAYROLL | HIGH |
+| `PayrollRun` | `PAYROLL_APPROVED` | `PAYROLL_REJECTED` | REQUESTER (payroll admin) | PAYROLL | HIGH |
+
+**Implementation note:** Each case block extends its existing business update with a dispatch call:
+
+```typescript
+case 'LeaveRequest': {
+  const entity = await tx.leaveRequest.findUnique({ where: { id: entityId } });
+  if (!entity) break;
+  await tx.leaveRequest.update({ where: { id: entityId }, data: { status: decision === 'APPROVED' ? 'APPROVED' : 'REJECTED' } });
+
+  // NEW: dispatch approval notification
+  await notificationService.dispatch({
+    companyId,
+    triggerEvent: decision === 'APPROVED' ? 'LEAVE_APPROVED' : 'LEAVE_REJECTED',
+    entityType: 'LeaveRequest',
+    entityId,
+    explicitRecipients: [entity.userId],
+    tokens: {
+      employee_name: /* resolved */,
+      leave_days: entity.daysCount,
+      from_date: entity.fromDate.toISOString().slice(0, 10),
+      to_date: entity.toDate.toISOString().slice(0, 10),
+      reason: entity.rejectionReason ?? '',
+    },
+    actionUrl: `/company/hr/my-leave`,
+    type: 'LEAVE',
+  });
+  break;
+}
+```
+
+#### 5.3.3 Legacy `triggerNotification()` removal
+
+`ess.service.ts:1180` has a legacy `triggerNotification()` method that uses template rule resolution to send EMAIL only. It's now dead code — the unified `dispatch()` handles all channels. Deprecate this method with a `@deprecated` JSDoc and have it delegate to `notificationService.dispatch()` so any lingering callers still work. Actual removal in Phase B / follow-up PR.
+
+### 5.4 Payroll (`src/modules/hr/payroll-run/payroll-run.service.ts`)
+
+| Method | Trigger event | Recipient | Category | Priority |
+|---|---|---|---|---|
+| `submitForApproval` (if present) | `PAYROLL_APPROVAL` | APPROVER (Finance Head) | PAYROLL | HIGH |
+| `approveRun` (~1493) | (handled by `onApprovalComplete`) | — | — | — |
+| `publishPayslips` | `PAYSLIP_PUBLISHED` | EMPLOYEE (all in run) | PAYROLL | HIGH |
+| `disburseRun` (~1524) | `SALARY_CREDITED` | EMPLOYEE (all in run, masked amount) | PAYROLL | **CRITICAL** (`systemCritical: true`) |
+| `uploadBonus` (if present) | `BONUS_UPLOAD` | APPROVER | PAYROLL | MEDIUM |
+
+**Notes:**
+- `SALARY_CREDITED` is marked `systemCritical: true` — bypasses user preference but still respects company master toggle. Amount is masked on PUSH via `sensitiveFields: ['amount']`.
+- `publishPayslips` iterates employees in the run and dispatches per employee with `explicitRecipients: [employeeId]`. Uses BullMQ batching so fanout to 500 employees doesn't overwhelm the worker.
+
+### 5.5 Employee lifecycle (`src/modules/hr/employee/employee.service.ts`)
+
+| Method | Trigger event | Recipient | Category | Priority |
+|---|---|---|---|---|
+| `createEmployee` (~144) | `EMPLOYEE_ONBOARDED` | EMPLOYEE (newly created user if linked), MANAGER, HR | EMPLOYEE_LIFECYCLE | MEDIUM |
+
+**Notes:**
+- Fires after the employee record and its user are created.
+- If no user is linked (some tenants create employees without user accounts), dispatch is skipped (explicit `if (employee.userId)` guard).
+
+### 5.6 Transfer + Promotion (`src/modules/hr/transfer/transfer.service.ts`)
+
+| Method | Trigger event | Recipient | Category | Priority |
+|---|---|---|---|---|
+| `createTransfer` (~84) | `EMPLOYEE_TRANSFER` | APPROVER (if workflow) | EMPLOYEE_LIFECYCLE | MEDIUM |
+| `applyTransfer` (~190) | `EMPLOYEE_TRANSFER_APPLIED` | EMPLOYEE, old/new MANAGER, HR | EMPLOYEE_LIFECYCLE | MEDIUM |
+| `createPromotion` (~386) | `EMPLOYEE_PROMOTION` | APPROVER | EMPLOYEE_LIFECYCLE | HIGH |
+| `applyPromotion` (~513) | `EMPLOYEE_PROMOTION_APPLIED` | EMPLOYEE, MANAGER, HR | EMPLOYEE_LIFECYCLE | HIGH |
+
+### 5.7 Salary Revision (`src/modules/hr/payroll/payroll.service.ts`)
+
+| Method | Trigger event | Recipient | Category | Priority |
+|---|---|---|---|---|
+| `updateEmployeeSalary` (~517) | `SALARY_REVISION` | APPROVER (if workflow) or EMPLOYEE | PAYROLL | HIGH |
+
+Submission dispatches to APPROVER if an approval workflow is configured; otherwise to EMPLOYEE directly (with masked amount on push).
+
+### 5.8 Offboarding (`src/modules/hr/offboarding/offboarding.service.ts`)
+
+| Method | Trigger event | Recipient | Category | Priority |
+|---|---|---|---|---|
+| `createExitRequest` (~102) | `RESIGNATION` | HR, APPROVER | RESIGNATION | HIGH |
+| `approveFnF` (~748) | `FNF_INITIATED` | EMPLOYEE, HR, FINANCE | RESIGNATION | HIGH |
+| `payFnF` (~768) | `FNF_COMPLETED` | EMPLOYEE (masked amount), HR | RESIGNATION | HIGH (`systemCritical: true`) |
+
+### 5.9 Recruitment (`src/modules/hr/advanced/advanced.service.ts` and `offer.service.ts`)
+
+| Method | Trigger event | Recipient | Category | Priority |
+|---|---|---|---|---|
+| `advanceCandidateStage` (~373) | `CANDIDATE_STAGE_CHANGED` | HR | RECRUITMENT | LOW |
+| `createInterview` (~480) | `INTERVIEW_SCHEDULED` (existing, migrate) | APPROVER (panelists) | RECRUITMENT | MEDIUM |
+| `completeInterview` (~532) | `INTERVIEW_COMPLETED` (existing, migrate) | HR | RECRUITMENT | LOW |
+| `createOffer` (offer.service.ts ~102) | `OFFER_SENT` | HR (candidate is external — no push/in-app, email only) | RECRUITMENT | MEDIUM |
+| `updateOfferStatus` (offer.service.ts ~199) | `OFFER_ACCEPTED` / `OFFER_REJECTED` | HR, MANAGER | RECRUITMENT | HIGH / MEDIUM |
+
+**Note:** Existing `INTERVIEW_SCHEDULED` and `INTERVIEW_COMPLETED` events are already wired via the HR event bus (`hr-listeners.ts`). This spec keeps the event bus indirection but migrates the listeners from `notificationService.send()` to `notificationService.dispatch()`. (Already done in the `feat/notifications` branch, verified.)
+
+### 5.10 Training (`src/modules/hr/advanced/advanced.service.ts` and `training-session.service.ts`)
+
+| Method | Trigger event | Recipient | Category | Priority |
+|---|---|---|---|---|
+| `createTrainingNomination` (~908) | `TRAINING_NOMINATION` (existing) | EMPLOYEE | TRAINING | MEDIUM |
+| `completeTrainingNomination` (~965) | `TRAINING_COMPLETED` (existing) | EMPLOYEE | TRAINING | LOW |
+| `createTrainingRequest` (ess.service.ts) | `TRAINING_REQUEST` (new) | APPROVER | TRAINING | MEDIUM |
+| Cron: `TRAINING_SESSION_UPCOMING` | `TRAINING_SESSION_UPCOMING` | ENROLLED EMPLOYEES | TRAINING | MEDIUM |
+
+### 5.11 Assets (`src/modules/hr/advanced/advanced.service.ts`)
+
+| Method | Trigger event | Recipient | Category | Priority |
+|---|---|---|---|---|
+| `createAssetAssignment` (~1498) | `ASSET_ASSIGNED` | EMPLOYEE | ASSETS | MEDIUM |
+| `returnAssetAssignment` (~1552) | `ASSET_RETURNED` | ADMIN | ASSETS | LOW |
+| Cron: `ASSET_RETURN_DUE` | `ASSET_RETURN_DUE` | EMPLOYEE, MANAGER | ASSETS | MEDIUM |
+
+### 5.12 Support tickets (`src/core/support/support.service.ts`)
+
+All four methods bridge existing Socket.io emissions with `dispatch()` calls. The Socket.io emission path stays (it drives live ticket UI). The `dispatch()` call creates the bell-icon entry and fires push/email per rules.
+
+| Method | Trigger event | Recipient | Category | Priority |
+|---|---|---|---|---|
+| `createTicket` (~23) | `TICKET_CREATED` | ADMIN (super-admin support team) | SUPPORT | MEDIUM |
+| `sendMessage` (~211) | `TICKET_MESSAGE` | Other party (requester ↔ admin) | SUPPORT | MEDIUM |
+| `updateStatus` (~264) | `TICKET_STATUS_CHANGED` | REQUESTER | SUPPORT | MEDIUM |
+| `approveModuleChange` (~303) | `MODULE_CHANGE_APPROVED` | REQUESTER (company admin) | SUPPORT | HIGH |
+
+### 5.13 Auth critical (`src/core/auth/auth.service.ts`)
+
+| Method | Trigger event | Recipient | Category | Priority |
+|---|---|---|---|---|
+| `forgotPassword` (~510) | `PASSWORD_RESET` | SELF | AUTH | CRITICAL (`systemCritical: true`) |
+| `login` (new device detection) | `NEW_DEVICE_LOGIN` | SELF | AUTH | CRITICAL (`systemCritical: true`) |
+| `lockAccount` (if implemented) | `ACCOUNT_LOCKED` | SELF, SUPER_ADMIN | AUTH | CRITICAL (`systemCritical: true`) |
+
+**Notes:**
+- All three are `systemCritical: true` → bypass user prefs and quiet hours (but still respect company master toggle for legal reasons).
+- `NEW_DEVICE_LOGIN` requires detecting whether the device is new — use the `ActiveSession` table's `deviceInfo` and `ipAddress` as a fingerprint, compare to the most recent session.
+- Password reset already sends an email directly via `registration-emails.ts` — the dispatch call goes through the unified path instead, so the email is rendered from the `PASSWORD_RESET` template and tracked in `NotificationEvent`.
+
+---
+
+## 6. Informational Cron Events
+
+Seven new scheduled notification jobs, wired into the existing cron pattern from `analytics-cron.service.ts`.
+
+### 6.1 Cron job layout
+
+New file: `src/core/notifications/cron/notification-cron.service.ts`
+
+```typescript
+import cron, { ScheduledTask } from 'node-cron';
+import { logger } from '../../../config/logger';
+
+class NotificationCronService {
+  private jobs: ScheduledTask[] = [];
+
+  startAll(): void {
+    // 1. Birthday — daily 8 AM UTC (adjusted per-company)
+    this.jobs.push(cron.schedule('0 8 * * *', () => this.runBirthday()));
+
+    // 2. Work anniversary — daily 8 AM
+    this.jobs.push(cron.schedule('0 8 * * *', () => this.runWorkAnniversary()));
+
+    // 3. Holiday reminder — daily 7 AM
+    this.jobs.push(cron.schedule('0 7 * * *', () => this.runHolidayReminder()));
+
+    // 4. Probation end — daily 9 AM
+    this.jobs.push(cron.schedule('0 9 * * *', () => this.runProbationEnd()));
+
+    // 5. Asset return due — daily 8 AM
+    this.jobs.push(cron.schedule('0 8 * * *', () => this.runAssetReturnDue()));
+
+    // 6. Certificate expiring sweep — daily 9 AM
+    this.jobs.push(cron.schedule('0 9 * * *', () => this.runCertificateExpiring()));
+
+    // 7. Training session upcoming — daily 7 AM
+    this.jobs.push(cron.schedule('0 7 * * *', () => this.runTrainingSessionUpcoming()));
+  }
+
+  stopAll(): void {
+    for (const job of this.jobs) job.stop();
+    this.jobs = [];
+  }
+
+  private async runBirthday(): Promise<void> { /* see §6.2 */ }
+  // ... one method per cron
+}
+
+export const notificationCronService = new NotificationCronService();
+```
+
+Startup wiring in `src/app/server.ts` after `analyticsCronService.startAll()`:
+
+```typescript
+import { notificationCronService } from '../core/notifications/cron/notification-cron.service';
+// ...
+notificationCronService.startAll();
+```
+
+### 6.2 Cron: Birthday
+
+```typescript
+private async runBirthday(): Promise<void> {
+  try {
+    const companies = await platformPrisma.company.findMany({
+      select: { id: true, settings: { select: { timezone: true } } },
+    });
+
+    for (const company of companies) {
+      const tz = company.settings?.timezone ?? 'UTC';
+      const today = DateTime.now().setZone(tz);
+      const mmdd = today.toFormat('MM-dd');
+
+      const tenantDb = await getTenantDbForCompany(company.id);
+      try {
+        // Find employees whose birthday is today
+        const employees = await tenantDb.employee.findMany({
+          where: {
+            status: { notIn: ['EXITED', 'TERMINATED'] },
+            dateOfBirth: { not: null },
+          },
+          select: { id: true, firstName: true, lastName: true, dateOfBirth: true, userId: true },
+        });
+
+        const celebrating = employees.filter(
+          (e) => e.dateOfBirth && DateTime.fromJSDate(e.dateOfBirth).toFormat('MM-dd') === mmdd,
+        );
+
+        for (const emp of celebrating) {
+          if (!emp.userId) continue;
+          await notificationService.dispatch({
+            companyId: company.id,
+            triggerEvent: 'BIRTHDAY',
+            entityType: 'Employee',
+            entityId: emp.id,
+            explicitRecipients: [emp.userId],
+            tokens: { employee_name: `${emp.firstName} ${emp.lastName}` },
+            type: 'BIRTHDAY',
+            priority: 'LOW',
+          });
+        }
+      } finally {
+        await tenantDb.$disconnect();
+      }
+    }
+  } catch (err) {
+    logger.error('Birthday cron failed', { error: err });
+  }
+}
+```
+
+### 6.3 Cron: Work anniversary
+
+Same pattern as birthday, but matches `joiningDate.toFormat('MM-dd')`. Computes years-of-service as `today.year - joiningDate.year` and passes `{ years_of_service }` token.
+
+### 6.4 Cron: Holiday reminder
+
+- Fetches `holidays` table where `date` is within next 3 days (or today).
+- Dispatches `HOLIDAY_REMINDER` to all active employees in company with tokens `{ holiday_name, holiday_date, days_until }`.
+- Runs per-company in company timezone.
+
+### 6.5 Cron: Probation end
+
+- Fetches `Employee` where `probationEndDate` is within next 7 days and `status = 'PROBATION'`.
+- Dispatches `PROBATION_END_REMINDER` to HR + reporting manager with tokens `{ employee_name, probation_end_date }`.
+
+### 6.6 Cron: Asset return due
+
+- Fetches `AssetAssignment` where `returnDueDate` is within next 3 days and `returnedAt IS NULL`.
+- Dispatches `ASSET_RETURN_DUE` to employee + manager.
+
+### 6.7 Cron: Certificate expiring (bulk sweep)
+
+- Fetches `TrainingNomination` with certificate expiring in next 30 days.
+- Dispatches `CERTIFICATE_EXPIRING` (template already seeded) — existing HR listener only fires per-nomination, this cron batches to catch any missed ones.
+
+### 6.8 Cron: Training session upcoming
+
+- Fetches `TrainingSession` starting in next 24 hours.
+- Dispatches `TRAINING_SESSION_UPCOMING` to all enrolled employees.
+
+### 6.9 New default templates for cron events
+
+Extend `src/core/notifications/templates/defaults.ts` with 7 new entries:
+
+| Code | Name | Channels | Category | Priority |
+|---|---|---|---|---|
+| `BIRTHDAY` | Happy Birthday | IN_APP, PUSH | BIRTHDAY_ANNIVERSARY | LOW |
+| `WORK_ANNIVERSARY` | Work Anniversary | IN_APP, PUSH | BIRTHDAY_ANNIVERSARY | LOW |
+| `HOLIDAY_REMINDER` | Holiday Reminder | IN_APP | ANNOUNCEMENTS | LOW |
+| `PROBATION_END_REMINDER` | Probation Ending Soon | IN_APP, EMAIL | EMPLOYEE_LIFECYCLE | MEDIUM |
+| `ASSET_RETURN_DUE` | Asset Return Due | IN_APP, PUSH, EMAIL | ASSETS | MEDIUM |
+| `TRAINING_SESSION_UPCOMING` | Training Session Tomorrow | IN_APP, PUSH, EMAIL | TRAINING | MEDIUM |
+
+(Certificate expiring already seeded.)
+
+Each entry has its rendered title, body, variable list, and recipient role. See the implementation plan for exact handlebars templates.
+
+### 6.10 Idempotency for crons
+
+Each cron run computes a deterministic `dedupHash` per `(companyId, triggerEvent, entityId, date)` so re-running the same cron within the same day doesn't fire twice. The existing dispatcher dedup (60s TTL) isn't enough — cron runs are 24h apart. Add a longer-TTL dedup key for cron events specifically:
+
+```typescript
+const cronDedupKey = `notif:cron-dedup:${companyId}:${triggerEvent}:${entityId}:${todayStr}`;
+const set = await cacheRedis.set(cronDedupKey, '1', 'EX', 86400, 'NX');
+if (set === null) continue; // already fired today
+```
+
+---
+
+## 7. SMS Provider (Twilio)
+
+### 7.1 Package + config
+
+Install: `pnpm add twilio`
+
+New env vars in `src/config/env.ts`:
+```typescript
+TWILIO_ACCOUNT_SID: z.string().optional(),
+TWILIO_AUTH_TOKEN: z.string().optional(),
+TWILIO_FROM_NUMBER: z.string().optional(),   // e.g. +14155551234
+TWILIO_MESSAGING_SERVICE_SID: z.string().optional(), // alternative to from number
+```
+
+### 7.2 Provider implementation
+
+New file: `src/core/notifications/channels/sms/twilio.provider.ts`
+
+```typescript
+import twilio, { Twilio } from 'twilio';
+import { env } from '../../../../config/env';
+import { logger } from '../../../../config/logger';
+import type { NotificationPriority } from '@prisma/client';
+
+let client: Twilio | null = null;
+
+function getClient(): Twilio | null {
+  if (client) return client;
+  if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN) return null;
+  client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
+  return client;
+}
+
+export interface TwilioSendPayload {
+  to: string; // E.164 format (+country code)
+  body: string;
+  priority: NotificationPriority;
+}
+
+export interface TwilioSendResult {
+  provider: 'twilio';
+  messageId: string | null;
+}
+
+export const twilioProvider = {
+  async send(payload: TwilioSendPayload, traceId: string): Promise<TwilioSendResult> {
+    const c = getClient();
+    if (!c) {
+      throw Object.assign(new Error('TWILIO_NOT_CONFIGURED'), { code: 'TWILIO_NOT_CONFIGURED' });
+    }
+    if (!env.TWILIO_FROM_NUMBER && !env.TWILIO_MESSAGING_SERVICE_SID) {
+      throw Object.assign(new Error('TWILIO_NO_SENDER'), { code: 'TWILIO_NO_SENDER' });
+    }
+
+    try {
+      const message = await c.messages.create({
+        body: payload.body,
+        to: payload.to,
+        ...(env.TWILIO_MESSAGING_SERVICE_SID
+          ? { messagingServiceSid: env.TWILIO_MESSAGING_SERVICE_SID }
+          : { from: env.TWILIO_FROM_NUMBER! }),
+      });
+      logger.info('SMS sent', { traceId, to: payload.to, sid: message.sid });
+      return { provider: 'twilio', messageId: message.sid };
+    } catch (err: any) {
+      logger.error('Twilio send failed', { error: err, traceId, to: payload.to });
+      throw Object.assign(new Error(err?.message ?? 'TWILIO_SEND_FAILED'), {
+        code: err?.code ?? 'TWILIO_SEND_FAILED',
+      });
+    }
+  },
+};
+```
+
+### 7.3 Channel integration
+
+Rewrite `src/core/notifications/channels/sms.channel.ts`:
+
+```typescript
+import { platformPrisma } from '../../../config/database';
+import { twilioProvider } from './sms/twilio.provider';
+import type { ChannelSendArgs, ChannelSendResult } from './channel-router';
+
+export const smsChannel = {
+  async send({ notificationId, userId, traceId, priority }: ChannelSendArgs): Promise<ChannelSendResult> {
+    const notif = await platformPrisma.notification.findUniqueOrThrow({ where: { id: notificationId } });
+    const user = await platformPrisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!user.phone) {
+      throw Object.assign(new Error('NO_USER_PHONE'), { code: 'NO_USER_PHONE' });
+    }
+
+    // Normalize to E.164 — if no country code, assume India (+91)
+    const to = user.phone.startsWith('+') ? user.phone : `+91${user.phone.replace(/\D/g, '')}`;
+
+    // Apply PUSH-equivalent masking to SMS as well (same sensitivity concerns)
+    const template = notif.templateId
+      ? await platformPrisma.notificationTemplate.findUnique({ where: { id: notif.templateId } })
+      : null;
+    const sensitiveFields = (template?.sensitiveFields as string[] | null) ?? [];
+    const { maskForChannel } = await import('../templates/masker');
+    const masked = maskForChannel('SMS' as any, { title: notif.title, body: notif.body, data: notif.data as any }, sensitiveFields);
+
+    const result = await twilioProvider.send(
+      { to, body: `${masked.title}: ${masked.body}`, priority },
+      traceId,
+    );
+
+    return { provider: 'twilio', messageId: result.messageId };
+  },
+};
+```
+
+Extend `maskForChannel()` to handle `SMS` the same way as `PUSH` (both are external, short-form channels where sensitive data should not leak).
+
+### 7.4 Rate limiting + compliance
+
+- Twilio has per-account rate limits. The BullMQ worker limiter already prevents bursts. No additional wiring needed.
+- **Legal:** SMS is subject to TCPA (US), DND (India), GDPR (EU). The company-level `smsNotifications` master toggle is the compliance switch. Add a note in the admin UI that SMS requires explicit user opt-in per local law.
+
+### 7.5 Default off
+
+`CompanySettings.smsNotifications` defaults to `false` (already set in the existing schema). Tenants must explicitly enable it — this prevents accidental SMS charges on day-one.
+
+---
+
+## 8. WhatsApp Provider (Meta Cloud API)
+
+### 8.1 Package + config
+
+Use Meta Cloud API directly via `fetch` — no SDK dependency. Meta's official WhatsApp Business API is accessed via Graph API.
+
+New env vars:
+```typescript
+META_WHATSAPP_PHONE_NUMBER_ID: z.string().optional(), // sender phone number ID from Meta dashboard
+META_WHATSAPP_ACCESS_TOKEN: z.string().optional(),    // permanent access token
+META_WHATSAPP_API_VERSION: z.string().default('v21.0'),
+```
+
+### 8.2 Provider implementation
+
+New file: `src/core/notifications/channels/whatsapp/meta-cloud.provider.ts`
+
+```typescript
+import { env } from '../../../../config/env';
+import { logger } from '../../../../config/logger';
+
+export interface MetaCloudPayload {
+  to: string; // E.164 (no leading +)
+  body: string;
+  templateName?: string; // if using a pre-approved template (required for outside 24h window)
+}
+
+export interface MetaCloudResult {
+  provider: 'meta-cloud';
+  messageId: string | null;
+}
+
+export const metaCloudProvider = {
+  async send(payload: MetaCloudPayload, traceId: string): Promise<MetaCloudResult> {
+    if (!env.META_WHATSAPP_PHONE_NUMBER_ID || !env.META_WHATSAPP_ACCESS_TOKEN) {
+      throw Object.assign(new Error('WHATSAPP_NOT_CONFIGURED'), { code: 'WHATSAPP_NOT_CONFIGURED' });
+    }
+
+    const url = `https://graph.facebook.com/${env.META_WHATSAPP_API_VERSION}/${env.META_WHATSAPP_PHONE_NUMBER_ID}/messages`;
+
+    const body = payload.templateName
+      ? {
+          messaging_product: 'whatsapp',
+          to: payload.to.replace(/^\+/, ''),
+          type: 'template',
+          template: {
+            name: payload.templateName,
+            language: { code: 'en_US' },
+            components: [{ type: 'body', parameters: [{ type: 'text', text: payload.body }] }],
+          },
+        }
+      : {
+          messaging_product: 'whatsapp',
+          to: payload.to.replace(/^\+/, ''),
+          type: 'text',
+          text: { body: payload.body },
+        };
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${env.META_WHATSAPP_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`Meta Cloud API error ${res.status}: ${err}`);
+      }
+      const json = (await res.json()) as { messages?: Array<{ id?: string }> };
+      const messageId = json.messages?.[0]?.id ?? null;
+      logger.info('WhatsApp sent', { traceId, to: payload.to, messageId });
+      return { provider: 'meta-cloud', messageId };
+    } catch (err: any) {
+      logger.error('Meta Cloud send failed', { error: err, traceId });
+      throw Object.assign(new Error(err?.message ?? 'META_SEND_FAILED'), {
+        code: 'META_SEND_FAILED',
+      });
+    }
+  },
+};
+```
+
+### 8.3 Template policy
+
+WhatsApp Business API requires **pre-approved message templates** for messages sent outside the 24-hour "session window" (i.e., outside a recent user-initiated conversation). For transactional ERP notifications, templates must be registered in Meta Business Manager first.
+
+**Strategy:**
+1. For this PR, ship support for both free-form text (inside session window) and templated messages (outside).
+2. The admin UI for `NotificationTemplate` gains an optional `whatsappTemplateName` field (the pre-approved template name in Meta).
+3. When sending WhatsApp, the provider checks if `template.whatsappTemplateName` is set; if so uses template mode, else uses text mode.
+4. Document in the admin UI that WhatsApp templates must be registered in Meta Business Manager before use.
+
+Schema extension:
+```prisma
+model NotificationTemplate {
+  // ... existing fields
+  whatsappTemplateName String?  // NEW — pre-approved Meta template name
+}
+```
+
+### 8.4 Channel integration
+
+Rewrite `src/core/notifications/channels/whatsapp.channel.ts` to call `metaCloudProvider`, mirroring the SMS pattern:
+
+```typescript
+import { platformPrisma } from '../../../config/database';
+import { metaCloudProvider } from './whatsapp/meta-cloud.provider';
+import type { ChannelSendArgs, ChannelSendResult } from './channel-router';
+
+export const whatsappChannel = {
+  async send({ notificationId, userId, traceId }: ChannelSendArgs): Promise<ChannelSendResult> {
+    const notif = await platformPrisma.notification.findUniqueOrThrow({ where: { id: notificationId } });
+    const user = await platformPrisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!user.phone) throw Object.assign(new Error('NO_USER_PHONE'), { code: 'NO_USER_PHONE' });
+
+    const to = user.phone.startsWith('+') ? user.phone : `+91${user.phone.replace(/\D/g, '')}`;
+    const template = notif.templateId
+      ? await platformPrisma.notificationTemplate.findUnique({ where: { id: notif.templateId } })
+      : null;
+
+    const result = await metaCloudProvider.send(
+      {
+        to,
+        body: `${notif.title}\n\n${notif.body}`,
+        templateName: template?.whatsappTemplateName ?? undefined,
+      },
+      traceId,
+    );
+    return { provider: 'meta-cloud', messageId: result.messageId };
+  },
+};
+```
+
+---
+
+## 9. Per-Category User Preferences
+
+### 9.1 Schema — see §4.1
+
+New `UserNotificationCategoryPreference` model with unique `(userId, category, channel)`.
+
+### 9.2 Consent gate extension
+
+`src/core/notifications/dispatch/consent-gate.ts` — extend `evaluateConsent()`:
+
+```typescript
+export interface ConsentCache {
+  userId: string;
+  companySettings: CompanySettings | null;
+  preference: UserNotificationPreference | null;
+  categoryPrefs: Map<string, boolean>; // key = `${category}:${channel}`, value = enabled
+}
+
+export async function loadConsentCache(userId: string): Promise<ConsentCache> {
+  // ... existing fetches ...
+  const catPrefs = await platformPrisma.userNotificationCategoryPreference.findMany({
+    where: { userId },
+    select: { category: true, channel: true, enabled: true },
+  });
+  const categoryPrefs = new Map<string, boolean>();
+  for (const p of catPrefs) {
+    categoryPrefs.set(`${p.category}:${p.channel}`, p.enabled);
+  }
+  return { userId, companySettings, preference, categoryPrefs };
+}
+
+export function evaluateConsent(
+  cache: ConsentCache,
+  channel: NotificationChannel,
+  priority: NotificationPriority,
+  category: string | null,        // NEW
+  systemCritical = false,
+): ConsentResult {
+  // ... existing in-app short-circuit, company master, systemCritical override, channel pref ...
+
+  // NEW: per-category override check (only if a row exists — no row means "use channel default")
+  if (category) {
+    const key = `${category}:${channel}`;
+    const catEnabled = cache.categoryPrefs.get(key);
+    if (catEnabled === false) return { allowed: false, reason: 'CATEGORY_PREF_OFF' };
+  }
+
+  // ... quiet hours ...
+  return { allowed: true };
+}
+```
+
+The worker passes the `category` from the job payload (sourced from the rule's `category` column or the default catalogue lookup).
+
+### 9.3 Preferences API extension
+
+Extend `GET /notifications/preferences` to return category preferences alongside per-channel:
+
+```typescript
+// Response shape:
+{
+  preference: { /* existing per-channel toggles */ },
+  companyMasters: { /* existing */ },
+  categoryPreferences: [
+    { category: 'LEAVE', channel: 'PUSH', enabled: true },
+    { category: 'PAYROLL', channel: 'PUSH', enabled: false },
+    // ...
+  ],
+  categoryCatalogue: [
+    { code: 'LEAVE', label: 'Leave', locked: false },
+    { code: 'AUTH', label: 'Security', locked: true },
+    // ...
+  ],
+}
+```
+
+Extend `PATCH /notifications/preferences` to accept a `categoryPreferences` array and upsert:
+
+```typescript
+{
+  pushEnabled: true,
+  categoryPreferences: [
+    { category: 'PAYROLL', channel: 'PUSH', enabled: false },
+  ]
+}
+```
+
+New controller method `updateCategoryPreferences(userId, updates)` in `preferences.service.ts` that upserts each `(category, channel)` row.
+
+### 9.4 Web preferences screen extension
+
+Add a collapsible "Fine-tune by category" section below the existing channels list. When expanded, renders a table: rows are categories (from `categoryCatalogue`), columns are the 4 user-facing channels (Push, Email, SMS, WhatsApp). Each cell is a checkbox. Toggling a checkbox upserts one `UserNotificationCategoryPreference` row via the mutation.
+
+- Categories with `locked: true` (`AUTH`) are rendered as dimmed rows with "Always enabled — security notifications cannot be disabled" tooltip.
+- Category rows also respect the company master and per-channel user pref: if `companyMasters.push === false` or `preference.pushEnabled === false`, the entire Push column is disabled with explanation tooltip.
+- Mutation uses optimistic update + rollback matching the per-channel pattern.
+
+### 9.5 Mobile preferences screen extension
+
+Same functionality via a `ScrollView` with collapsible sections. Each category is a row with 4 `Switch` components (one per channel). Locked categories show a `lock` icon from `lucide-react-native`.
+
+---
+
+## 10. Tenant Onboarding Step 5 Preferences
+
+**File:** `web-system-app/src/features/super-admin/tenant-onboarding/steps/Step05Preferences.tsx`
+
+Extend the existing Zod schema + form:
+
+```typescript
+// Existing
+emailNotif: z.boolean(),
+whatsapp: z.boolean(),
+
+// Add
+pushNotif: z.boolean(),
+smsNotif: z.boolean(),
+inAppNotif: z.boolean(),
+```
+
+Add three new `ToggleRow` components in the render block. The payload passed to `createTenant` backend endpoint is extended to include the three new fields.
+
+**Backend:** `src/core/tenant/tenant.service.ts` (or wherever `createTenant` lives) reads the new fields from the request body and sets them on the `CompanySettings` creation input. The existing `pushNotifications`, `smsNotifications`, `inAppNotifications` fields on the model are already there from the `feat/notifications` branch — just need to wire the onboarding payload through.
+
+---
+
+## 11. Analytics Dashboard
+
+A new backend endpoint + web screen for observability of the notification pipeline.
+
+### 11.1 Backend — aggregation endpoints
+
+New file: `src/core/notifications/analytics/notification-analytics.service.ts`
+
+```typescript
+export interface NotificationAnalyticsSummary {
+  dateFrom: string;
+  dateTo: string;
+  totals: {
+    dispatched: number;
+    sent: number;
+    delivered: number;
+    failed: number;
+    bounced: number;
+    skipped: number;
+    opened: number;
+  };
+  byChannel: Array<{ channel: string; sent: number; delivered: number; failed: number }>;
+  byPriority: Array<{ priority: string; count: number }>;
+  deliveryRateByDay: Array<{ date: string; sent: number; delivered: number; failed: number }>;
+  topFailingTemplates: Array<{ templateCode: string; failCount: number; errorCodes: string[] }>;
+  averageDeliveryTimeMs: number | null;
+}
+
+export const notificationAnalyticsService = {
+  async getSummary(companyId: string, dateFrom: Date, dateTo: Date): Promise<NotificationAnalyticsSummary> {
+    // Aggregate from NotificationEvent joined with Notification
+    // Use groupBy for channel/priority breakdowns
+    // Use raw SQL or multiple findMany for time-series
+  },
+
+  async getTopFailing(companyId: string, limit = 10): Promise<Array<{ templateId: string; templateCode: string; failCount: number }>> {
+    // Group failing events by templateId
+  },
+
+  async getDeliveryTrend(companyId: string, dateFrom: Date, dateTo: Date): Promise<Array<{ date: string; sent: number; delivered: number; failed: number }>> {
+    // Day-by-day rollup
+  },
+};
+```
+
+New controller endpoints mounted under `/notifications/analytics`:
+
+```
+GET /notifications/analytics/summary?dateFrom=&dateTo=  — full summary
+GET /notifications/analytics/top-failing               — top failing templates
+GET /notifications/analytics/delivery-trend            — time series
+```
+
+Permission gate: `hr:configure` or new `notifications:analytics` — company admin only.
+
+### 11.2 Web — analytics screen
+
+New file: `web-system-app/src/features/company-admin/hr/NotificationAnalyticsScreen.tsx`
+
+Layout matches the existing analytics dashboards (reuse chart primitives from `src/features/analytics/`):
+
+- **Top row:** 4 KPI cards — Total Sent, Delivery Rate %, Failure Rate %, Avg Delivery Time
+- **Row 2:** Stacked bar chart — delivery trend by day (sent / delivered / failed)
+- **Row 3 left:** Donut chart — channel breakdown (PUSH / EMAIL / SMS / WHATSAPP / IN_APP)
+- **Row 3 right:** Donut chart — priority breakdown (LOW / MEDIUM / HIGH / CRITICAL)
+- **Row 4:** Table — top 10 failing templates with error codes
+
+Date range picker at the top (default last 30 days). Route: `/app/company/hr/notification-analytics`.
+
+Add navigation manifest entry in `navigation-manifest.ts`:
+
+```typescript
+{
+  id: 'hr-notification-analytics',
+  label: 'Notification Analytics',
+  icon: 'bar-chart-2',
+  requiredPerm: 'hr:configure',
+  path: '/app/company/hr/notification-analytics',
+  module: 'hr',
+  group: 'HR Configuration',
+  roleScope: 'company',
+  sortOrder: 499,
+},
+```
+
+### 11.3 Mobile — skip
+
+The analytics dashboard is a power-user feature for company admins. No mobile screen.
+
+---
+
+## 12. Prisma Migration for Staging/Prod
+
+### 12.1 Strategy
+
+Dev used `db push` for both `feat/notifications` and this branch. Staging/prod needs a proper SQL migration file.
+
+### 12.2 Generation
+
+```bash
+cd avy-erp-backend
+# 1. Spin up a temporary shadow DB
+docker run --rm -d --name prisma-shadow -e POSTGRES_PASSWORD=shadow -p 5433:5432 postgres:16
+export SHADOW_DB_URL="postgresql://postgres:shadow@localhost:5433/shadow"
+
+# 2. Generate the migration SQL by diffing all existing migrations against the current schema
+pnpm prisma migrate diff \
+  --from-migrations prisma/migrations \
+  --to-schema-datamodel prisma/schema.prisma \
+  --shadow-database-url "$SHADOW_DB_URL" \
+  --script > prisma/migrations/20260409_notifications_full/migration.sql
+
+# 3. Clean up
+docker rm -f prisma-shadow
+```
+
+### 12.3 Verification
+
+- Review the generated SQL — should include: `CREATE TABLE notification_events`, `CREATE TABLE user_notification_preferences`, `CREATE TABLE user_notification_category_preferences`, `ALTER TABLE notifications ADD COLUMN ...`, `ALTER TABLE user_devices ADD COLUMN ...`, `CREATE INDEX ...`, etc.
+- Apply to a staging replica of prod DB: `DATABASE_URL=staging_db pnpm prisma migrate deploy`.
+- Spot-check that the seeded default templates are present (they were seeded via `prisma/seeds/2026-04-09-seed-default-notification-templates.ts` on dev — staging runs the same seed script).
+
+### 12.4 Commit
+
+The generated `migration.sql` file is committed to git under `prisma/migrations/20260409_notifications_full/`. The directory name matches `timestamp_description` Prisma convention.
+
+---
+
+## 13. Tests
+
+### 13.1 Unit tests (backend, Jest)
+
+| File | Tests |
+|---|---|
+| `__tests__/dispatcher.test.ts` | happy path; no rules → fallback; ad-hoc mode; dedup hit; backpressure drop; bucket merging; priority upgrade; `createManyAndReturn` Map correlation; catches internal errors |
+| `__tests__/consent-gate.test.ts` | company off; user off; critical override; quiet hours (same-day + overnight); in-app always allowed; category pref off; locked category (AUTH) cannot be overridden |
+| `__tests__/dedup.test.ts` | same payload TTL hit; different payload same entity; Redis unavailable fail-open; stable JSON key sorting |
+| `__tests__/rule-loader.test.ts` | cache hit; cache miss → DB fetch → write-through; invalidate specific; invalidate all via SCAN; Date rehydration |
+| `__tests__/recipient-resolver.test.ts` | each of the 9 role tokens; caching within single dispatch; MANAGER lookup via Employee relation |
+| `__tests__/channel-router.test.ts` | routes to correct provider; in-app no-op; unknown channel throws |
+| `__tests__/push-channel.test.ts` | Expo vs FCM partition; LATEST_ONLY strategy; dead token cleanup user-scoped |
+| `__tests__/expo-provider.test.ts` | chunking; DeviceNotRegistered → deadTokens; success/failed device ID tracking; MAX_FAILURE_COUNT deactivation |
+| `__tests__/fcm-provider.test.ts` | multicast response alignment; JSON stringify nested data; dead token cleanup |
+| `__tests__/twilio-provider.test.ts` | not-configured error; send success; E.164 normalization; Twilio API error mapping |
+| `__tests__/meta-cloud-provider.test.ts` | not-configured error; text mode; template mode; E.164 normalization |
+| `__tests__/template-compiler.test.ts` | compile success; cache hit; invalid handlebars → validator fails; variable allowlist enforced; unknown var → empty string |
+| `__tests__/renderer.test.ts` | allowlist enforced; dedup hash computed; data built from safeTokens (not raw) |
+| `__tests__/masker.test.ts` | PUSH masks sensitive; IN_APP does not; SMS also masks; nested fields; numeric values stringified |
+| `__tests__/batcher.test.ts` | threshold trigger; dynamic hold calculation; HIGH never batched; groupKey prevents cross-entity merge |
+| `__tests__/backpressure.test.ts` | LOW drops at LOW queue limit; LOW drops at DEFAULT queue limit; HIGH never drops |
+| `__tests__/idempotency.test.ts` | atomic SETNX claim; release on failure; TTL expiry; concurrent race |
+| `__tests__/notification-cron.test.ts` | birthday matches MM-DD; anniversary matches MM-DD; holiday window; probation end window; idempotent via cronDedupKey |
+
+### 13.2 Integration tests
+
+New harness under `src/__tests__/integration/notifications/` using a real Postgres + Redis (via testcontainers or a local dev DB):
+
+- `dispatch-end-to-end.test.ts` — call dispatch, assert Notification row written, socket event fired (mock), BullMQ job enqueued, worker processes job, NotificationEvent rows written
+- `consent-enforcement.test.ts` — toggle off, assert no delivery, SKIPPED event recorded
+- `rule-wiring.test.ts` — create rule, call dispatcher, verify rendered output
+- `preferences-api.test.ts` — CRUD on prefs, enforcement in dispatch
+- `approval-workflow.test.ts` — trigger onApprovalComplete for each entityType, assert correct dispatch
+- `twilio-integration.test.ts` — mock Twilio, verify E.164 + message body
+- `meta-cloud-integration.test.ts` — mock fetch, verify JSON body
+- `cron-birthday.test.ts` — seed employee with today's birthday, run cron, assert dispatch called
+
+### 13.3 Load test
+
+Script at `scripts/load-test-notifications.ts`:
+- Dispatches 10,000 notifications to 100 users over 60 seconds
+- Measures p50/p95 dispatcher latency, queue depth peak, worker throughput
+- Pass criteria: p95 < 100ms, no DLQ entries, all events recorded in <5 min
+
+### 13.4 Manual QA
+
+Extend the existing 19-step manual QA checklist (from `feat/notifications` spec §10.6) with:
+- Per-category preference toggle test
+- SMS delivery (with test Twilio account)
+- WhatsApp delivery (with test Meta number)
+- Cron-driven birthday notification (fast-forward date or seed)
+- Analytics dashboard chart rendering
+
+---
+
+## 14. Rollout Plan
+
+### 14.1 Pre-merge verification
+
+- [ ] All unit tests pass
+- [ ] All integration tests pass
+- [ ] Load test p95 < 100ms
+- [ ] Manual QA checklist completed
+- [ ] `pnpm prisma:merge` produces valid schema
+- [ ] Backend `pnpm tsc --noEmit` clean
+- [ ] Web `pnpm tsc --noEmit` clean
+- [ ] Mobile `pnpm type-check` clean (including the pre-existing leave-request error fix)
+- [ ] Migration SQL generated + committed
+- [ ] Migration SQL applied to a fresh staging DB without errors
+
+### 14.2 Deployment order
+
+1. **Staging backend deploy** with new env vars set:
+   - `TWILIO_*` (if Twilio account provisioned)
+   - `META_WHATSAPP_*` (if Meta Business account provisioned)
+   - Migration applied via `pnpm prisma migrate deploy`
+2. **Staging web + mobile deploys**
+3. **Staging manual QA** — full checklist
+4. **Seed any missing default templates** (idempotent)
+5. **Production backend deploy**
+6. **Production web deploy**
+7. **Production mobile EAS update**
+8. **Monitor 24h**:
+   - `NotificationEvent` write rate
+   - DLQ count
+   - Cron job completion logs
+   - Twilio/Meta error rate if configured
+
+### 14.3 Rollback
+
+- If wiring causes issues: set `NOTIFICATIONS_ENABLED=false` — dispatcher becomes a no-op while still writing in-app rows.
+- If a specific cron misfires: stop the cron service via a new kill-switch env var (`NOTIFICATIONS_CRON_ENABLED=false`).
+- If SMS/WhatsApp causes billing/delivery issues: set company-level master toggle off in Settings.
+- If the per-category preference query is slow: drop the `userId` index and fall back to the in-memory evaluation with one query per user (already the pattern).
+- Migration is additive — worst case can be manually reverted by dropping the new columns + tables.
+
+### 14.4 Feature flags
+
+- `NOTIFICATIONS_ENABLED` — existing global kill switch
+- `NOTIFICATIONS_CRON_ENABLED` — new, default `true`. Disables all informational crons without affecting the main dispatcher.
+- `NOTIFICATIONS_SMS_ENABLED` — new, default `true`. If `false`, SMS channel throws `SMS_DISABLED` without hitting Twilio.
+- `NOTIFICATIONS_WHATSAPP_ENABLED` — new, default `true`. Same for WhatsApp.
+
+---
+
+## 15. Non-Goals (explicitly out of scope)
+
+- A full notification inbox filtering system (search, filter by date, export). The existing list screen is sufficient.
+- Notification grouping/threading (e.g., "5 new leave requests" as a single collapsible item on the bell). Batching at send time is implemented; UI grouping is a separate follow-up.
+- Rich media notifications (images, action buttons beyond "Open"). The data model supports `data.imageUrl` but neither the web nor mobile UI consumes it.
+- A/B testing of notification copy. Templates are admin-editable; A/B is a future enhancement.
+- Localization — templates are rendered in English. Per-user locale support is a follow-up.
+- Notification retry from the admin UI (retry a failed notification by clicking a button). The retry happens via BullMQ automatic retry; admins can view failed notifications in the analytics screen but cannot manually retry from the UI in this PR.
+- Real-time delivery status on the bell UI (e.g., "sending…" spinner). Delivery status is only visible in the NotificationEvent audit trail.
+- A dedicated SMS provider abstraction layer for swapping Twilio for another vendor. This PR ships Twilio as the sole SMS provider.
+- Category-level admin overrides (e.g., "force all Payroll notifications on for everyone regardless of preference"). This is a potential enterprise feature for a future PR.
+
+---
+
+## 16. File Change Summary
+
+### 16.1 Backend — created files
+
+```
+src/core/notifications/channels/sms/twilio.provider.ts
+src/core/notifications/channels/whatsapp/meta-cloud.provider.ts
+src/core/notifications/cron/notification-cron.service.ts
+src/core/notifications/analytics/notification-analytics.service.ts
+src/core/notifications/analytics/notification-analytics.controller.ts
+src/core/notifications/analytics/notification-analytics.routes.ts
+src/shared/constants/notification-categories.ts
+src/core/notifications/__tests__/dispatcher.test.ts
+src/core/notifications/__tests__/consent-gate.test.ts
+src/core/notifications/__tests__/dedup.test.ts
+src/core/notifications/__tests__/rule-loader.test.ts
+src/core/notifications/__tests__/recipient-resolver.test.ts
+src/core/notifications/__tests__/channel-router.test.ts
+src/core/notifications/__tests__/push-channel.test.ts
+src/core/notifications/__tests__/expo-provider.test.ts
+src/core/notifications/__tests__/fcm-provider.test.ts
+src/core/notifications/__tests__/twilio-provider.test.ts
+src/core/notifications/__tests__/meta-cloud-provider.test.ts
+src/core/notifications/__tests__/template-compiler.test.ts
+src/core/notifications/__tests__/renderer.test.ts
+src/core/notifications/__tests__/masker.test.ts
+src/core/notifications/__tests__/batcher.test.ts
+src/core/notifications/__tests__/backpressure.test.ts
+src/core/notifications/__tests__/idempotency.test.ts
+src/core/notifications/__tests__/notification-cron.test.ts
+src/__tests__/integration/notifications/dispatch-end-to-end.test.ts
+src/__tests__/integration/notifications/consent-enforcement.test.ts
+src/__tests__/integration/notifications/rule-wiring.test.ts
+src/__tests__/integration/notifications/preferences-api.test.ts
+src/__tests__/integration/notifications/approval-workflow.test.ts
+src/__tests__/integration/notifications/cron-birthday.test.ts
+scripts/load-test-notifications.ts
+prisma/migrations/20260409_notifications_full/migration.sql
+```
+
+### 16.2 Backend — modified files
+
+```
+src/core/notifications/channels/sms.channel.ts          (rewrite stub → Twilio)
+src/core/notifications/channels/whatsapp.channel.ts     (rewrite stub → Meta Cloud)
+src/core/notifications/dispatch/consent-gate.ts         (add category check)
+src/core/notifications/templates/masker.ts              (SMS masking)
+src/core/notifications/templates/defaults.ts            (7 new cron templates)
+src/core/notifications/notification.controller.ts       (categoryPreferences endpoint)
+src/core/notifications/notification.routes.ts           (analytics routes)
+src/core/notifications/preferences/preferences.service.ts (category prefs CRUD)
+src/core/notifications/preferences/preferences.validators.ts (category schema)
+src/config/env.ts                                        (Twilio + Meta + cron env vars)
+src/app/server.ts                                        (start notification-cron.service)
+src/shared/events/listeners/hr-listeners.ts              (verify dispatch usage)
+src/modules/hr/leave/leave.service.ts                    (createRequest + cancelRequest dispatches)
+src/modules/hr/attendance/attendance.service.ts          (any inline non-approval dispatches)
+src/modules/hr/ess/ess.service.ts                        (all submission dispatches + onApprovalComplete refactor)
+src/modules/hr/payroll-run/payroll-run.service.ts        (publishPayslips, disburseRun dispatches)
+src/modules/hr/employee/employee.service.ts              (createEmployee dispatch)
+src/modules/hr/transfer/transfer.service.ts              (createTransfer, applyTransfer, createPromotion, applyPromotion)
+src/modules/hr/payroll/payroll.service.ts                (updateEmployeeSalary)
+src/modules/hr/offboarding/offboarding.service.ts        (createExitRequest, approveFnF, payFnF)
+src/modules/hr/advanced/advanced.service.ts              (advanceCandidateStage, createAssetAssignment, returnAssetAssignment)
+src/modules/hr/advanced/offer.service.ts                 (createOffer, updateOfferStatus)
+src/core/support/support.service.ts                      (4 dispatch calls)
+src/core/auth/auth.service.ts                            (3 CRITICAL dispatches)
+src/shared/constants/navigation-manifest.ts              (notification-analytics entry)
+prisma/modules/platform/notifications.prisma             (UserNotificationCategoryPreference)
+prisma/modules/hrms/ess-workflows.prisma                 (NotificationTemplate.whatsappTemplateName)
+prisma/modules/platform/auth.prisma                      (User.categoryPreferences back-ref)
+package.json                                              (twilio dep)
+.env.example                                              (document new env vars)
+```
+
+### 16.3 Web — created files
+
+```
+src/features/company-admin/hr/NotificationAnalyticsScreen.tsx
+src/features/company-admin/hr/api/use-notification-analytics.ts
+```
+
+### 16.4 Web — modified files
+
+```
+src/features/settings/NotificationPreferencesScreen.tsx  (category prefs section)
+src/lib/api/notifications.ts                             (category + analytics endpoints)
+src/features/super-admin/tenant-onboarding/steps/Step05Preferences.tsx (push/sms/inApp toggles)
+src/features/super-admin/tenant-onboarding/schemas.ts    (zod schema extension)
+src/features/super-admin/tenant-onboarding/index.tsx     (payload wiring)
+src/App.tsx                                               (new route)
+```
+
+### 16.5 Mobile — created files
+
+```
+assets/notification-icon-96.png                          (replace placeholder)
+```
+
+### 16.6 Mobile — modified files
+
+```
+src/features/settings/notification-preferences-screen.tsx (category prefs section)
+src/lib/api/notifications.ts                              (category endpoints)
+src/features/company-admin/hr/leave-request-screen.tsx   (fix pre-existing import typo)
+app.config.ts                                             (notification icon path)
+```
+
+### 16.7 Total file count
+
+| Codebase | Created | Modified | Total |
+|---|---|---|---|
+| Backend | ~32 | ~23 | ~55 |
+| Web | 2 | 6 | 8 |
+| Mobile | 1 | 4 | 5 |
+| **Total** | **35** | **33** | **68** |
+
+---
+
+## 17. Spec Self-Review
+
+**Placeholder scan:** No TBDs, TODOs, or incomplete sections.
+
+**Internal consistency:**
+- Architecture (§3) and data model (§4) align — UserNotificationCategoryPreference is referenced in both
+- Call sites in §5 match the exact method names from the backend mapping agent's research
+- Cron events in §6 use the same category codes as §9's category catalogue
+- Provider configurations in §7-§8 reference env vars added in §16
+- Testing strategy (§13) covers every module and provider in §5-§8
+
+**Ambiguity check:**
+- `systemCritical` semantics clarified: bypasses user pref + quiet hours + category pref; still respects company master
+- Category matrix "no row = use channel default" explicitly stated
+- Cron dedup uses a separate 24h TTL key (not the 60s dispatcher dedup)
+- WhatsApp template vs text mode selection explicit (`template.whatsappTemplateName`)
+- SMS masking uses `PUSH` masker behavior (extended in §7.3)
+- Locked categories (AUTH) cannot be overridden even with a row present
+
+**Scope check:** Focused entirely on closing `feat/notifications` deferred items. No unrelated refactors. Non-goals (§15) explicitly carved out.
+
+**Migration safety:** Schema changes are additive. New table (`user_notification_category_preferences`) and new column (`whatsappTemplateName`). Migration file committed for staging/prod.
+
+**Backward compatibility:**
+- Existing `notificationService.send()` legacy facade continues to work
+- Existing HR listeners continue to work through the dispatcher
+- `Notification.isRead` column kept as deprecated (Phase B in a follow-up)
+- No breaking changes to any existing API endpoint shape (only additions)
