@@ -285,38 +285,71 @@ A cron job at 2 AM daily (§6.8) aggregates the previous day's `NotificationEven
 
 This section adds seven non-negotiable safeguards that protect the system from self-inflicted production incidents (cost explosions, memory spikes, provider bans, duplicate sends, Redis saturation). Every section below is MUST implement, not optional.
 
-### 4A.1 Per-user rate limiting (hot-path)
+### 4A.1 Rate limiting (per-user + per-tenant)
 
-**Problem:** Without a per-user cap, a bug in event wiring, a cron misfire, or a runaway loop can trigger hundreds of notifications to a single user in seconds — costing real money (SMS) and causing provider spam flags.
+**Problem:** Without rate caps, a bug in event wiring, a cron misfire, or a runaway loop can trigger hundreds of notifications to a single user (or thousands across a tenant) in seconds — costing real money (SMS) and causing provider spam flags.
 
-**Solution:** A Redis INCR-based rate limiter applied inside `dispatch()` BEFORE any Notification row is written. Limit: **20 notifications per user per 60-second window** by default, configurable via env var `NOTIFICATIONS_USER_RATE_LIMIT_PER_MIN`. CRITICAL priority bypasses the limit (security/payroll alerts must always deliver).
+**Solution:** Two layers of Redis INCR-based rate limits applied inside `dispatch()` BEFORE any Notification row is written:
+
+1. **Per-user limit:** `NOTIFICATIONS_USER_RATE_LIMIT_PER_MIN` (default 20). Protects individual users from spam.
+2. **Per-tenant burst limit:** `NOTIFICATIONS_TENANT_RATE_LIMIT_PER_MIN` (default 1000). Protects the overall system from a single tenant overwhelming Redis/workers due to a bug.
+
+CRITICAL priority bypasses BOTH limits (security/payroll alerts must always deliver).
 
 ```typescript
 // src/core/notifications/dispatch/rate-limiter.ts (NEW)
 export async function checkUserRateLimit(userId: string, priority: NotificationPriority): Promise<boolean> {
-  if (priority === 'CRITICAL') return true; // bypass for critical
+  if (priority === 'CRITICAL') return true;
 
-  const key = `notif:rate:${userId}`;
+  const key = `notif:rate:user:${userId}`;
   const max = env.NOTIFICATIONS_USER_RATE_LIMIT_PER_MIN;
 
   try {
     const count = await cacheRedis.incr(key);
-    if (count === 1) {
-      await cacheRedis.expire(key, 60);
-    }
+    if (count === 1) await cacheRedis.expire(key, 60);
     if (count > max) {
       logger.warn('User rate limit exceeded, dropping notification', { userId, count, max });
       return false;
     }
     return true;
   } catch (err) {
-    logger.warn('Rate limit check failed (fail-open)', { error: err, userId });
-    return true; // fail open
+    logger.warn('User rate limit check failed (fail-open)', { error: err, userId });
+    return true;
+  }
+}
+
+export async function checkTenantRateLimit(companyId: string, priority: NotificationPriority): Promise<boolean> {
+  if (priority === 'CRITICAL') return true;
+
+  const key = `notif:rate:tenant:${companyId}`;
+  const max = env.NOTIFICATIONS_TENANT_RATE_LIMIT_PER_MIN;
+
+  try {
+    const count = await cacheRedis.incr(key);
+    if (count === 1) await cacheRedis.expire(key, 60);
+    if (count > max) {
+      logger.warn('Tenant rate limit exceeded, dropping notification', { companyId, count, max });
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.warn('Tenant rate limit check failed (fail-open)', { error: err, companyId });
+    return true;
   }
 }
 ```
 
-The dispatcher calls this for every recipient in a bucket BEFORE creating the Notification row. Dropped notifications emit a `RATE_LIMITED` `NotificationEvent` row so admins can see them in the analytics dashboard.
+The dispatcher calls `checkTenantRateLimit` once per dispatch (at the top) and `checkUserRateLimit` per recipient. Dropped notifications emit a `RATE_LIMITED` `NotificationEvent` row so admins can see them in the analytics dashboard.
+
+### 4A.1b Already in place from `feat/notifications` (verified, documented here for completeness)
+
+Before detailing new safeguards, these components from the base branch are already production-grade and do NOT need to be re-implemented:
+
+- **Dead Letter Queue (`notifQueueDLQ`):** `src/core/notifications/queue/queues.ts:21` defines the DLQ queue. `src/workers/notification.worker.ts` moves jobs to DLQ after retries exhaust. A DLQ sweeper cron (`dlq-sweeper.worker.ts`) purges rows older than `NOTIFICATIONS_DLQ_RETENTION_DAYS`. Manual replay from the DLQ is possible via the BullMQ UI.
+- **Worker-level idempotency:** `src/core/notifications/idempotency/worker-idempotency.ts` provides `claimSendSlot()` — a single atomic `SET NX EX` call that prevents duplicate sends across BullMQ retries. Release on throw, keep on success (TTL 24h).
+- **Dispatcher-level dedup:** `src/core/notifications/dispatch/dedup.ts` prevents the same trigger event from firing twice within 60s (TTL configurable) using a payload hash key: `notif:dedup:{companyId}:{triggerEvent}:{entityType}:{entityId}:{recipientId}:{sha1(title+body+data)}`. This covers the reviewer's idempotency-key suggestion (their proposed key is `${triggerEvent}:${entityId}:${userId}` — our existing key is a superset that also includes `companyId` and payload hash).
+- **BullMQ worker retry:** 3 attempts with exponential backoff (2s, 8s, 30s) on every delivery job.
+- **NOTIFICATIONS_ENABLED kill switch:** flip to `false` to no-op the entire dispatcher.
 
 ### 4A.2 Bulk dispatch utility (mandatory for fanouts ≥20)
 
@@ -374,59 +407,104 @@ export async function dispatchBulk(input: DispatchBulkInput): Promise<DispatchRe
 
 **Rule:** any call site where `recipients.length >= 20` (e.g. payroll fanout, ALL-role dispatches, cron fanouts) MUST use `dispatchBulk()`. Individual `dispatch()` calls are fine for 1-19 recipients.
 
-### 4A.3 Consent cache layer (Redis, 5-minute TTL)
+**Backpressure awareness (inside `dispatchBulk`):** Before enqueuing each chunk, check the target queue's waiting count. If it's above a high-water mark (default `NOTIFICATIONS_BULK_QUEUE_HIGH_WATER=5000`), the bulk dispatcher inserts a small delay (`await sleep(200ms)`) between chunks to let the workers drain. This prevents Redis saturation when a cron fanout lands on an already-busy queue.
+
+```typescript
+// Inside dispatchBulk, before adding each chunk:
+const waiting = await queue.getWaitingCount();
+if (waiting > env.NOTIFICATIONS_BULK_QUEUE_HIGH_WATER) {
+  logger.warn('Queue overloaded, throttling bulk dispatch', { queueName: queue.name, waiting });
+  await new Promise((r) => setTimeout(r, 200));
+}
+await queue.add('deliver-bulk', { /* chunk payload */ });
+```
+
+HIGH/CRITICAL priority dispatches still get added immediately (they use the high-priority queue and should never be throttled).
+
+### 4A.3 Consent cache layer (Redis, 5-minute TTL) with versioned keys
 
 **Problem:** `loadConsentCache()` hits the DB for user + companySettings + preference + categoryPrefs every single time a worker processes a job. At 100 jobs/sec that's 400 DB queries/sec for consent alone.
 
-**Solution:** Wrap `loadConsentCache` with a Redis read-through cache. Key: `notif:consent:${userId}`. TTL: 300s (5 minutes). Invalidate on any PATCH to the user's preferences, company settings notification toggles, or category prefs.
+**Solution:** Wrap `loadConsentCache` with a Redis read-through cache. TTL: 300s (5 minutes).
+
+**Versioned cache key strategy (O(1) invalidation):** Instead of looping every user in a company on company-settings change (O(n) invalidation), use a per-entity version counter. The cache key embeds the current version for both the user and the company. When either changes, we INCR the version counter — all existing cache entries become stale instantly (they reference the old version), and the next read fetches fresh data.
 
 ```typescript
-// Extension to consent-gate.ts
-export async function loadConsentCache(userId: string): Promise<ConsentCache> {
-  const cacheKey = `notif:consent:${userId}`;
+// Key layout:
+//   notif:consent:v:user:{userId}         → current user version (integer, INCR on user pref change)
+//   notif:consent:v:company:{companyId}   → current company version (integer, INCR on company settings change)
+//   notif:consent:{userId}:{uv}:{cv}      → cached payload, where uv/cv are the versions at cache time
 
-  // Try cache first
+async function getVersion(scope: 'user' | 'company', id: string): Promise<number> {
+  try {
+    const v = await cacheRedis.get(`notif:consent:v:${scope}:${id}`);
+    return v ? parseInt(v, 10) : 1;
+  } catch {
+    return 1;
+  }
+}
+
+export async function loadConsentCache(userId: string): Promise<ConsentCache> {
+  // Resolve company once (we need it for the version key)
+  const user = await platformPrisma.user.findUnique({ where: { id: userId }, select: { companyId: true } });
+  if (!user?.companyId) return loadConsentCacheFromDB(userId);
+
+  const [uv, cv] = await Promise.all([
+    getVersion('user', userId),
+    getVersion('company', user.companyId),
+  ]);
+  const cacheKey = `notif:consent:${userId}:${uv}:${cv}`;
+
   try {
     const cached = await cacheRedis.get(cacheKey);
     if (cached) {
       const parsed = JSON.parse(cached);
-      return {
-        ...parsed,
-        categoryPrefs: new Map(parsed.categoryPrefs), // rehydrate Map from array
-      };
+      return { ...parsed, categoryPrefs: new Map(parsed.categoryPrefs) };
     }
   } catch { /* fall through */ }
 
-  // DB fetch
   const fresh = await loadConsentCacheFromDB(userId);
-
-  // Write-through cache (serialize Map as array of entries)
   try {
     await cacheRedis.set(
       cacheKey,
       JSON.stringify({ ...fresh, categoryPrefs: Array.from(fresh.categoryPrefs.entries()) }),
       'EX',
-      300,
+      env.NOTIFICATIONS_CONSENT_CACHE_TTL_SEC,
     );
   } catch { /* non-fatal */ }
-
   return fresh;
 }
 
-export async function invalidateConsentCache(userId: string): Promise<void> {
+export async function invalidateUserConsent(userId: string): Promise<void> {
   try {
-    await cacheRedis.del(`notif:consent:${userId}`);
+    await cacheRedis.incr(`notif:consent:v:user:${userId}`);
   } catch (err) {
-    logger.warn('Consent cache invalidation failed', { error: err, userId });
+    logger.warn('User consent version bump failed', { error: err, userId });
+  }
+}
+
+export async function invalidateCompanyConsent(companyId: string): Promise<void> {
+  try {
+    await cacheRedis.incr(`notif:consent:v:company:${companyId}`);
+  } catch (err) {
+    logger.warn('Company consent version bump failed', { error: err, companyId });
   }
 }
 ```
 
-Wire `invalidateConsentCache(userId)` into:
+**Benefits over the loop-users approach:**
+- O(1) invalidation — single INCR call regardless of company size
+- Stale entries age out naturally via TTL (no orphan keys)
+- No thundering herd when a large company's settings change (each user lazily refreshes on their next dispatch)
+
+Wire `invalidateUserConsent(userId)` into:
 - `preferences.service.update()` after successful upsert
 - `preferences.service.updateCategoryPreferences()` after transaction commit
-- Company settings update mutation (CompanySettingsController) when any `*Notifications` field changes
-- On logout (so the next login re-fetches fresh state)
+- `auth.service.signOut()` (optional — stale entries expire anyway)
+
+Wire `invalidateCompanyConsent(companyId)` into:
+- Company settings controller when any `*Notifications` field changes
+- Any admin CRUD that modifies `NotificationTemplate` or `NotificationRule` that could change which channels are delivered per user (optional — the rule loader cache handles most cases)
 
 ### 4A.4 SMS cost controls (mandatory)
 
@@ -583,6 +661,16 @@ while (true) {
 }
 ```
 
+**Pattern 1b: Per-tenant jitter** — to avoid a thundering herd where all N tenants get hit at exactly the same cron tick (e.g., every company firing `runBirthday` at exactly 08:00:00), each company's per-company runner adds a small deterministic jitter before starting:
+
+```typescript
+// At the top of runBirthdayForCompany:
+const jitterMs = Math.floor(Math.random() * 60_000); // 0-60s spread
+await new Promise((resolve) => setTimeout(resolve, jitterMs));
+```
+
+This spreads the DB + Redis load across a 60-second window instead of a 1-second thundering herd. Companies are still processed in parallel (up to `NOTIFICATIONS_CRON_COMPANY_CONCURRENCY`), but each one's "start" is randomized.
+
 **Pattern 2: Per-company parallelism** with `Promise.allSettled` and a concurrency cap to avoid overwhelming the tenant connection pool:
 
 ```typescript
@@ -724,16 +812,93 @@ private async runAggregation(): Promise<void> {
 
 // Safeguards
 NOTIFICATIONS_USER_RATE_LIMIT_PER_MIN: z.coerce.number().default(20),
+NOTIFICATIONS_TENANT_RATE_LIMIT_PER_MIN: z.coerce.number().default(1000),
 NOTIFICATIONS_BULK_CHUNK_SIZE: z.coerce.number().default(50),
 NOTIFICATIONS_BULK_MIN_RECIPIENTS: z.coerce.number().default(20),
+NOTIFICATIONS_BULK_QUEUE_HIGH_WATER: z.coerce.number().default(5000),
 NOTIFICATIONS_CONSENT_CACHE_TTL_SEC: z.coerce.number().default(300),
 NOTIFICATIONS_SMS_DAILY_CAP_PER_TENANT: z.coerce.number().default(500),
 NOTIFICATIONS_SMS_DAILY_CAP_PER_USER: z.coerce.number().default(10),
 NOTIFICATIONS_SMS_DRY_RUN: envBoolean.default(false),
+NOTIFICATIONS_WHATSAPP_DAILY_CAP_PER_TENANT: z.coerce.number().default(500),
+NOTIFICATIONS_WHATSAPP_DAILY_CAP_PER_USER: z.coerce.number().default(10),
 NOTIFICATIONS_WHATSAPP_DRY_RUN: envBoolean.default(false),
 NOTIFICATIONS_EVENT_RETENTION_DAYS: z.coerce.number().default(90),
 NOTIFICATIONS_CRON_COMPANY_CONCURRENCY: z.coerce.number().default(5),
+NOTIFICATIONS_CRON_JITTER_MS: z.coerce.number().default(60000),
+NOTIFICATIONS_METRICS_ENABLED: envBoolean.default(true),
 ```
+
+### 4A.14 Observability metrics hook (future-ready)
+
+**Problem:** Today we rely purely on log lines for observability. For production scale, we want structured metrics (counters, histograms) that can be scraped by Prometheus/Datadog/CloudWatch later.
+
+**Solution:** A lightweight metrics facade in `src/core/notifications/metrics/notification-metrics.ts` that wraps increment/histogram calls. The default implementation logs structured events. When a real metrics backend is added later, only this one file changes.
+
+```typescript
+// src/core/notifications/metrics/notification-metrics.ts (NEW)
+import { logger } from '../../../config/logger';
+import { env } from '../../../config/env';
+
+/**
+ * Metrics facade for the notification system.
+ *
+ * Default implementation logs structured events that are easy to grep/parse.
+ * When a real metrics backend is wired up (Prometheus client, Datadog SDK,
+ * etc.), only this file changes — call sites remain untouched.
+ */
+export const notificationMetrics = {
+  increment(name: string, tags: Record<string, string | number> = {}, value = 1): void {
+    if (!env.NOTIFICATIONS_METRICS_ENABLED) return;
+    logger.info(`[metric] ${name}`, { metric: name, tags, value, type: 'counter' });
+  },
+
+  histogram(name: string, value: number, tags: Record<string, string | number> = {}): void {
+    if (!env.NOTIFICATIONS_METRICS_ENABLED) return;
+    logger.info(`[metric] ${name}`, { metric: name, tags, value, type: 'histogram' });
+  },
+
+  gauge(name: string, value: number, tags: Record<string, string | number> = {}): void {
+    if (!env.NOTIFICATIONS_METRICS_ENABLED) return;
+    logger.info(`[metric] ${name}`, { metric: name, tags, value, type: 'gauge' });
+  },
+};
+```
+
+**Call sites (wired into existing code, non-invasive):**
+
+```typescript
+// dispatcher.ts — after enqueue
+notificationMetrics.increment('notifications.dispatched', {
+  channel: rule.channel,
+  priority: bucket.priority,
+  triggerEvent: input.triggerEvent,
+});
+
+// dispatcher.ts — at start of dispatch
+const startTime = Date.now();
+// ... work ...
+notificationMetrics.histogram('notifications.dispatch_duration_ms', Date.now() - startTime, {
+  triggerEvent: input.triggerEvent,
+});
+
+// channel router — after each send
+notificationMetrics.increment('notifications.sent', { channel, provider, status: 'success' });
+// or on failure:
+notificationMetrics.increment('notifications.sent', { channel, provider, status: 'failure', errorCode });
+
+// rate-limiter — when limit hit
+notificationMetrics.increment('notifications.rate_limited', { scope: 'user' | 'tenant' });
+
+// caps — when cap hit
+notificationMetrics.increment('notifications.cost_capped', { channel: 'SMS' | 'WHATSAPP', scope: 'tenant' | 'user' });
+
+// bulk dispatcher — chunk size / throttle events
+notificationMetrics.histogram('notifications.bulk_chunk_size', chunkSize, { triggerEvent });
+notificationMetrics.increment('notifications.bulk_throttled', { reason: 'queue_high_water' });
+```
+
+**Upgrade path:** When a real metrics backend is added, swap the `logger.info` calls inside `notificationMetrics` for `statsd.increment()` / `promClient.Counter` calls. Every call site stays the same.
 
 ---
 

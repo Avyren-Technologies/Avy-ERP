@@ -476,8 +476,10 @@ These tasks implement the production-grade scaling and cost controls from spec �
 ```typescript
 // Operational safeguards
 NOTIFICATIONS_USER_RATE_LIMIT_PER_MIN: z.coerce.number().default(20),
+NOTIFICATIONS_TENANT_RATE_LIMIT_PER_MIN: z.coerce.number().default(1000),
 NOTIFICATIONS_BULK_CHUNK_SIZE: z.coerce.number().default(50),
 NOTIFICATIONS_BULK_MIN_RECIPIENTS: z.coerce.number().default(20),
+NOTIFICATIONS_BULK_QUEUE_HIGH_WATER: z.coerce.number().default(5000),
 NOTIFICATIONS_CONSENT_CACHE_TTL_SEC: z.coerce.number().default(300),
 NOTIFICATIONS_SMS_DAILY_CAP_PER_TENANT: z.coerce.number().default(500),
 NOTIFICATIONS_SMS_DAILY_CAP_PER_USER: z.coerce.number().default(10),
@@ -487,6 +489,8 @@ NOTIFICATIONS_WHATSAPP_DAILY_CAP_PER_USER: z.coerce.number().default(10),
 NOTIFICATIONS_WHATSAPP_DRY_RUN: envBoolean.default(false),
 NOTIFICATIONS_EVENT_RETENTION_DAYS: z.coerce.number().default(90),
 NOTIFICATIONS_CRON_COMPANY_CONCURRENCY: z.coerce.number().default(5),
+NOTIFICATIONS_CRON_JITTER_MS: z.coerce.number().default(60000),
+NOTIFICATIONS_METRICS_ENABLED: envBoolean.default(true),
 ```
 
 - [ ] **Step 2: Document in `.env.example`**
@@ -523,13 +527,13 @@ git commit -m "feat(notifications): operational safeguard env vars + p-limit dep
 
 ---
 
-### Task 6B: Per-user rate limiter
+### Task 6B: Rate limiters (per-user + per-tenant)
 
 **Files:**
 - Create: `avy-erp-backend/src/core/notifications/dispatch/rate-limiter.ts`
 - Modify: `avy-erp-backend/src/core/notifications/dispatch/dispatcher.ts`
 
-- [ ] **Step 1: Create the rate limiter helper**
+- [ ] **Step 1: Create the rate limiter helper with two layers**
 
 ```typescript
 // src/core/notifications/dispatch/rate-limiter.ts
@@ -539,9 +543,7 @@ import { logger } from '../../../config/logger';
 import type { NotificationPriority } from '@prisma/client';
 
 /**
- * Per-user rate limit gate. Uses Redis INCR with a 60-second rolling window.
- * CRITICAL priority ALWAYS bypasses the limit (security/payroll must deliver).
- * Fail-open on Redis errors — we'd rather over-deliver than silently drop.
+ * Per-user rate limit gate. 20/min default. CRITICAL bypasses.
  */
 export async function checkUserRateLimit(
   userId: string,
@@ -549,7 +551,7 @@ export async function checkUserRateLimit(
 ): Promise<boolean> {
   if (priority === 'CRITICAL') return true;
 
-  const key = `notif:rate:${userId}`;
+  const key = `notif:rate:user:${userId}`;
   const max = env.NOTIFICATIONS_USER_RATE_LIMIT_PER_MIN;
 
   try {
@@ -561,24 +563,66 @@ export async function checkUserRateLimit(
     }
     return true;
   } catch (err) {
-    logger.warn('Rate limit check failed (fail-open)', { error: err, userId });
+    logger.warn('User rate limit check failed (fail-open)', { error: err, userId });
+    return true;
+  }
+}
+
+/**
+ * Per-tenant burst protection. 1000/min default. CRITICAL bypasses.
+ * Protects the overall system from a single tenant's bug/runaway cron.
+ */
+export async function checkTenantRateLimit(
+  companyId: string,
+  priority: NotificationPriority,
+): Promise<boolean> {
+  if (priority === 'CRITICAL') return true;
+
+  const key = `notif:rate:tenant:${companyId}`;
+  const max = env.NOTIFICATIONS_TENANT_RATE_LIMIT_PER_MIN;
+
+  try {
+    const count = await cacheRedis.incr(key);
+    if (count === 1) await cacheRedis.expire(key, 60);
+    if (count > max) {
+      logger.warn('Tenant rate limit exceeded, dropping notification', { companyId, count, max, priority });
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.warn('Tenant rate limit check failed (fail-open)', { error: err, companyId });
     return true;
   }
 }
 ```
 
-- [ ] **Step 2: Wire into the dispatcher's bucket-building loop**
+- [ ] **Step 2: Wire both limiters into the dispatcher**
 
-In `dispatcher.ts`, inside the per-bucket processing loop (after dedup check, before backpressure guard), add a rate limit check:
+In `dispatcher.ts`, `checkTenantRateLimit` once at the top (before rule loading), and `checkUserRateLimit` per recipient inside the bucket loop:
 
 ```typescript
-import { checkUserRateLimit } from './rate-limiter';
-import { recordEvent } from '../events/event-emitter';
+import { checkUserRateLimit, checkTenantRateLimit } from './rate-limiter';
+
+// Near the top of dispatch(), after traceId + enabled check:
+const tenantAllowed = await checkTenantRateLimit(
+  input.companyId,
+  input.priority ?? 'MEDIUM',
+);
+if (!tenantAllowed) {
+  await recordEvent({
+    notificationId: null,
+    channel: 'IN_APP',
+    event: 'SKIPPED',
+    errorCode: 'TENANT_RATE_LIMITED',
+    traceId,
+    source: 'SYSTEM',
+  });
+  return { traceId, enqueued: 0, notificationIds: [] };
+}
 
 // Inside the bucket loop:
-const allowed = await checkUserRateLimit(bucket.userId, bucket.priority);
-if (!allowed) {
-  // Record SKIPPED event with no notificationId (bucket dropped before row creation)
+const userAllowed = await checkUserRateLimit(bucket.userId, bucket.priority);
+if (!userAllowed) {
   await recordEvent({
     notificationId: null,
     channel: 'IN_APP',
@@ -595,32 +639,50 @@ if (!allowed) {
 
 ```bash
 git add src/core/notifications/dispatch
-git commit -m "feat(notifications): per-user rate limiter (20/min default, CRITICAL bypasses)"
+git commit -m "feat(notifications): per-user + per-tenant rate limiters (20/min user, 1000/min tenant, CRITICAL bypasses)"
 ```
 
 ---
 
-### Task 6C: Consent cache Redis layer
+### Task 6C: Consent cache Redis layer (versioned keys, O(1) invalidation)
 
 **Files:**
 - Modify: `avy-erp-backend/src/core/notifications/dispatch/consent-gate.ts`
 - Modify: `avy-erp-backend/src/core/notifications/preferences/preferences.service.ts`
 
-- [ ] **Step 1: Refactor `loadConsentCache` into a read-through cached version**
+Uses the **versioned key** strategy from spec §4A.3 — invalidation is O(1) (single INCR) regardless of company size. Stale entries age out naturally via TTL.
 
-Rename the current DB-fetching body to `loadConsentCacheFromDB` (private), and create a new public `loadConsentCache` that checks Redis first:
+- [ ] **Step 1: Refactor `loadConsentCache` with versioned keys**
 
 ```typescript
-// consent-gate.ts
+// consent-gate.ts additions
 
-const CONSENT_CACHE_PREFIX = 'notif:consent:';
+async function getVersion(scope: 'user' | 'company', id: string): Promise<number> {
+  try {
+    const v = await cacheRedis.get(`notif:consent:v:${scope}:${id}`);
+    return v ? parseInt(v, 10) : 1;
+  } catch {
+    return 1;
+  }
+}
 
 async function loadConsentCacheFromDB(userId: string): Promise<ConsentCache> {
-  // ... existing DB fetch logic ...
+  // ... existing DB fetch logic (renamed from loadConsentCache body) ...
 }
 
 export async function loadConsentCache(userId: string): Promise<ConsentCache> {
-  const cacheKey = `${CONSENT_CACHE_PREFIX}${userId}`;
+  // Resolve company for version keying
+  const user = await platformPrisma.user.findUnique({
+    where: { id: userId },
+    select: { companyId: true },
+  });
+  if (!user?.companyId) return loadConsentCacheFromDB(userId);
+
+  const [uv, cv] = await Promise.all([
+    getVersion('user', userId),
+    getVersion('company', user.companyId),
+  ]);
+  const cacheKey = `notif:consent:${userId}:${uv}:${cv}`;
 
   try {
     const cached = await cacheRedis.get(cacheKey);
@@ -628,10 +690,7 @@ export async function loadConsentCache(userId: string): Promise<ConsentCache> {
       const parsed = JSON.parse(cached) as Omit<ConsentCache, 'categoryPrefs'> & {
         categoryPrefs: Array<[string, boolean]>;
       };
-      return {
-        ...parsed,
-        categoryPrefs: new Map(parsed.categoryPrefs),
-      };
+      return { ...parsed, categoryPrefs: new Map(parsed.categoryPrefs) };
     }
   } catch (err) {
     logger.warn('Consent cache read failed', { error: err, userId });
@@ -656,63 +715,72 @@ export async function loadConsentCache(userId: string): Promise<ConsentCache> {
   return fresh;
 }
 
-export async function invalidateConsentCache(userId: string): Promise<void> {
+/** O(1) invalidation — bumps the user's version counter. Stale cache entries expire via TTL. */
+export async function invalidateUserConsent(userId: string): Promise<void> {
   try {
-    await cacheRedis.del(`${CONSENT_CACHE_PREFIX}${userId}`);
+    await cacheRedis.incr(`notif:consent:v:user:${userId}`);
   } catch (err) {
-    logger.warn('Consent cache invalidation failed', { error: err, userId });
+    logger.warn('User consent version bump failed', { error: err, userId });
+  }
+}
+
+/** O(1) invalidation — bumps the company's version counter. Affects every cached user in that company on their next read. */
+export async function invalidateCompanyConsent(companyId: string): Promise<void> {
+  try {
+    await cacheRedis.incr(`notif:consent:v:company:${companyId}`);
+  } catch (err) {
+    logger.warn('Company consent version bump failed', { error: err, companyId });
   }
 }
 ```
 
-- [ ] **Step 2: Wire invalidation into preference mutations**
+- [ ] **Step 2: Wire `invalidateUserConsent(userId)` into preference mutations**
 
 In `preferences.service.ts`:
 
 ```typescript
-import { invalidateConsentCache } from '../dispatch/consent-gate';
+import { invalidateUserConsent } from '../dispatch/consent-gate';
 
 async update(userId: string, data: UpdatePreferencesInput) {
   const result = await platformPrisma.userNotificationPreference.upsert({ /* ... */ });
-  await invalidateConsentCache(userId); // NEW
+  await invalidateUserConsent(userId);
   return result;
 }
 
 async updateCategoryPreferences(userId: string, updates: /* ... */) {
   // ... existing transaction ...
-  await invalidateConsentCache(userId); // NEW
+  await invalidateUserConsent(userId);
   return this.getForUser(userId);
 }
 ```
 
-- [ ] **Step 3: Wire invalidation into CompanySettings notification toggle updates**
+- [ ] **Step 3: Wire `invalidateCompanyConsent(companyId)` into CompanySettings notification toggle updates**
 
-Find the CompanySettings controller/service where `pushNotifications`/`emailNotifications`/`smsNotifications`/`whatsappNotifications` are updated. After the update succeeds, iterate every user in the company and invalidate their consent cache:
+Find the CompanySettings update method. After a successful save, if any `*Notifications` field changed, bump the company version in ONE call — no user iteration needed:
 
 ```typescript
 // In company-settings.service.ts update method, after save:
-const users = await platformPrisma.user.findMany({
-  where: { companyId },
-  select: { id: true },
-});
-await Promise.allSettled(users.map((u) => invalidateConsentCache(u.id)));
+const notifFieldsChanged = ['pushNotifications', 'emailNotifications', 'smsNotifications', 'whatsappNotifications', 'inAppNotifications']
+  .some((field) => field in updates);
+if (notifFieldsChanged) {
+  await invalidateCompanyConsent(companyId);
+}
 ```
 
-Or, cheaper alternative: also store a `notif:consent:company:{companyId}:version` counter that each cache entry includes, and bump the version on company changes so all cached entries are effectively invalidated on next read. For this PR, the per-user loop is simpler and correct — companies rarely have >1000 users.
+- [ ] **Step 4: Auth logout flow — optional (stale entries TTL out)**
 
-- [ ] **Step 4: Wire invalidation into logout flow**
-
-In `auth.service.ts` logout method, add:
+The versioned key strategy makes logout invalidation unnecessary — stale entries expire naturally. But for belt-and-suspenders:
 
 ```typescript
-await invalidateConsentCache(userId);
+// auth.service.ts signOut:
+await invalidateUserConsent(userId).catch(() => {});
 ```
 
 - [ ] **Step 5: Type-check + commit**
 
 ```bash
 git add src/core/notifications src/core/auth
-git commit -m "feat(notifications): consent cache Redis layer with invalidation hooks"
+git commit -m "feat(notifications): versioned consent cache with O(1) invalidation (user + company)"
 ```
 
 ---
@@ -873,10 +941,30 @@ export async function dispatchBulk(input: DispatchBulkInput): Promise<DispatchBu
       emitSocketEvent(row.userId, { notificationId: row.id, traceId });
     }
 
-    // 5. Chunk into BullMQ bulk-delivery jobs
+    // 5. Chunk into BullMQ bulk-delivery jobs, with backpressure throttling
     if (primaryRule.channel !== 'IN_APP') {
       const queue = pickQueueByPriority(priority);
+      const highWater = env.NOTIFICATIONS_BULK_QUEUE_HIGH_WATER;
+
       for (let i = 0; i < createdRows.length; i += chunkSize) {
+        // Backpressure check — throttle if queue is overloaded. HIGH/CRITICAL
+        // priority never throttles (they use the high-priority queue).
+        if (priority === 'LOW' || priority === 'MEDIUM') {
+          try {
+            const waiting = await queue.getWaitingCount();
+            if (waiting > highWater) {
+              logger.warn('Bulk dispatch throttled — queue overloaded', {
+                queueName: queue.name,
+                waiting,
+                highWater,
+              });
+              await new Promise((r) => setTimeout(r, 200));
+            }
+          } catch {
+            // Redis error — proceed without throttling
+          }
+        }
+
         const chunk = createdRows.slice(i, i + chunkSize);
         await queue.add('deliver-bulk', {
           isBulk: true,
@@ -1104,6 +1192,61 @@ The cron service file doesn't exist yet — it's created in Task 22. The aggrega
 git add prisma/
 git commit -m "feat(notifications): NotificationEventAggregateDaily schema for analytics pre-aggregation"
 ```
+
+---
+
+### Task 6I: Observability metrics hook
+
+**Files:**
+- Create: `avy-erp-backend/src/core/notifications/metrics/notification-metrics.ts`
+
+- [ ] **Step 1: Create the facade**
+
+```typescript
+// src/core/notifications/metrics/notification-metrics.ts
+import { logger } from '../../../config/logger';
+import { env } from '../../../config/env';
+
+/**
+ * Metrics facade for the notification system.
+ *
+ * Default implementation logs structured events (easy to grep/parse).
+ * When a real metrics backend is wired later (Prometheus, Datadog, StatsD),
+ * only this file changes — call sites stay untouched.
+ */
+export const notificationMetrics = {
+  increment(name: string, tags: Record<string, string | number> = {}, value = 1): void {
+    if (!env.NOTIFICATIONS_METRICS_ENABLED) return;
+    logger.info(`[metric] ${name}`, { metric: name, tags, value, type: 'counter' });
+  },
+
+  histogram(name: string, value: number, tags: Record<string, string | number> = {}): void {
+    if (!env.NOTIFICATIONS_METRICS_ENABLED) return;
+    logger.info(`[metric] ${name}`, { metric: name, tags, value, type: 'histogram' });
+  },
+
+  gauge(name: string, value: number, tags: Record<string, string | number> = {}): void {
+    if (!env.NOTIFICATIONS_METRICS_ENABLED) return;
+    logger.info(`[metric] ${name}`, { metric: name, tags, value, type: 'gauge' });
+  },
+};
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/core/notifications/metrics
+git commit -m "feat(notifications): observability metrics facade (logger-backed, future-ready)"
+```
+
+Call sites are wired in later phases as the corresponding code is touched:
+- Dispatcher → `notifications.dispatched` counter + `dispatch_duration_ms` histogram (Phase 1A wire-in below)
+- Rate limiter → `rate_limited` counter
+- SMS/WhatsApp caps → `cost_capped` counter
+- Channel router → `sent` counter tagged with status
+- Bulk dispatcher → `bulk_chunk_size` histogram + `bulk_throttled` counter
+
+Minimum wire-in for this PR: dispatcher (end of `dispatch()`), rate limiters (inside the `return false` paths), and channel router (after each send). Everything else can be added incrementally.
 
 ---
 
@@ -2268,6 +2411,11 @@ private async runBirthdayForCompany(company: {
   name: string;
   settings: { timezone: string | null } | null;
 }): Promise<void> {
+  // Per-tenant jitter to avoid thundering herd — spreads 100 tenants across
+  // a 0-60s window instead of all hitting the DB at the same cron tick.
+  const jitterMs = Math.floor(Math.random() * env.NOTIFICATIONS_CRON_JITTER_MS);
+  await new Promise((resolve) => setTimeout(resolve, jitterMs));
+
   const tz = company.settings?.timezone ?? 'UTC';
   const today = DateTime.now().setZone(tz);
   const mmdd = today.toFormat('MM-dd');
