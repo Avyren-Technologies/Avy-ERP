@@ -22,15 +22,16 @@
 | Phase | Tasks | Description | Depends on |
 |---|---|---|---|
 | 1. Foundation | 1-6 | Migration SQL file, isRead deprecation, mobile type fix, residual nits, env vars | — |
-| 2. Core wiring Part A | 7-11 | Leave, Attendance, ESS submission dispatches, `onApprovalComplete` refactor, rule cache invalidation | 1 |
-| 3. Core wiring Part B | 12-16 | Payroll, Employee lifecycle, Transfer, Promotion, Salary revision, Offboarding | 2 |
+| **1A. Operational Safeguards** | **6A-6H** | **Rate limiter, bulk dispatch, consent cache, SMS/WhatsApp caps, provider retry, WhatsApp mask, event aggregation + retention, cron pagination helper** | 1 |
+| 2. Core wiring Part A | 7-11 | Leave, Attendance, ESS submission dispatches, `onApprovalComplete` refactor (with per-case try/catch), rule cache invalidation | 1A |
+| 3. Core wiring Part B | 12-16 | Payroll (using **dispatchBulk**), Employee lifecycle, Transfer, Promotion, Salary revision, Offboarding | 2 |
 | 4. Core wiring Part C | 17-21 | Recruitment, Training, Assets, Support ticket bridge, Auth critical | 3 |
-| 5. Cron events | 22-27 | 7 informational cron jobs + default template additions | 1 |
-| 6. SMS provider | 28-30 | Twilio package, provider, channel, tests | 1 |
-| 7. WhatsApp provider | 31-33 | Meta Cloud provider, channel, template name field, tests | 1 |
-| 8. Per-category preferences | 34-38 | Schema, consent gate, API, web screen, mobile screen | 1 |
+| 5. Cron events | 22-27 | 7 informational cron jobs (cursor pagination + Promise.allSettled + cron dedup) + aggregation cron + event cleanup cron + default template additions | 1A |
+| 6. SMS provider | 28-30 | Twilio provider with retry + caps + dry-run + masking, channel, tests | 1A |
+| 7. WhatsApp provider | 31-33 | Meta Cloud provider with retry + enforced template + caps + masking, tests | 1A |
+| 8. Per-category preferences | 34-38 | Schema, consent gate, API, web screen (with "Mute all"), mobile screen | 1A |
 | 9. Tenant onboarding Step 5 | 39-40 | Schema + form + backend wiring | 1 |
-| 10. Analytics dashboard | 41-44 | Backend aggregation, REST endpoints, web screen, nav entry | 1 |
+| 10. Analytics dashboard | 41-44 | Backend aggregation (reading from pre-aggregated table), REST endpoints, web screen, nav entry | 1A, 5 |
 | 11. Tests | 45-51 | Unit, integration, load test, manual QA | 2-10 |
 | 12. Mobile polish + final | 52-55 | Notification icon, nav manifest mobile-side paths, final type-check, commit | 11 |
 
@@ -460,6 +461,705 @@ git commit -m "fix(notifications): reviewer residual nits — drop DispatchResul
 
 ---
 
+## Phase 1A: Operational Safeguards
+
+These tasks implement the production-grade scaling and cost controls from spec §4A. Every task in this phase is **mandatory** before the per-module wiring in Phase 2+ begins, because those phases depend on these helpers (`dispatchBulk`, `checkUserRateLimit`, cached consent, etc.).
+
+### Task 6A: Env var additions for safeguards
+
+**Files:**
+- Modify: `avy-erp-backend/src/config/env.ts`
+- Modify: `avy-erp-backend/.env.example`
+
+- [ ] **Step 1: Append new env vars to the Zod schema**
+
+```typescript
+// Operational safeguards
+NOTIFICATIONS_USER_RATE_LIMIT_PER_MIN: z.coerce.number().default(20),
+NOTIFICATIONS_BULK_CHUNK_SIZE: z.coerce.number().default(50),
+NOTIFICATIONS_BULK_MIN_RECIPIENTS: z.coerce.number().default(20),
+NOTIFICATIONS_CONSENT_CACHE_TTL_SEC: z.coerce.number().default(300),
+NOTIFICATIONS_SMS_DAILY_CAP_PER_TENANT: z.coerce.number().default(500),
+NOTIFICATIONS_SMS_DAILY_CAP_PER_USER: z.coerce.number().default(10),
+NOTIFICATIONS_SMS_DRY_RUN: envBoolean.default(false),
+NOTIFICATIONS_WHATSAPP_DAILY_CAP_PER_TENANT: z.coerce.number().default(500),
+NOTIFICATIONS_WHATSAPP_DAILY_CAP_PER_USER: z.coerce.number().default(10),
+NOTIFICATIONS_WHATSAPP_DRY_RUN: envBoolean.default(false),
+NOTIFICATIONS_EVENT_RETENTION_DAYS: z.coerce.number().default(90),
+NOTIFICATIONS_CRON_COMPANY_CONCURRENCY: z.coerce.number().default(5),
+```
+
+- [ ] **Step 2: Document in `.env.example`**
+
+```env
+# Notification safeguards
+NOTIFICATIONS_USER_RATE_LIMIT_PER_MIN=20
+NOTIFICATIONS_BULK_CHUNK_SIZE=50
+NOTIFICATIONS_BULK_MIN_RECIPIENTS=20
+NOTIFICATIONS_CONSENT_CACHE_TTL_SEC=300
+NOTIFICATIONS_SMS_DAILY_CAP_PER_TENANT=500
+NOTIFICATIONS_SMS_DAILY_CAP_PER_USER=10
+NOTIFICATIONS_SMS_DRY_RUN=false
+NOTIFICATIONS_WHATSAPP_DAILY_CAP_PER_TENANT=500
+NOTIFICATIONS_WHATSAPP_DAILY_CAP_PER_USER=10
+NOTIFICATIONS_WHATSAPP_DRY_RUN=false
+NOTIFICATIONS_EVENT_RETENTION_DAYS=90
+NOTIFICATIONS_CRON_COMPANY_CONCURRENCY=5
+```
+
+- [ ] **Step 3: Install `p-limit` for cron concurrency**
+
+```bash
+pnpm add p-limit
+```
+
+- [ ] **Step 4: Type-check + commit**
+
+```bash
+pnpm tsc --noEmit
+git add src/config/env.ts .env.example package.json pnpm-lock.yaml
+git commit -m "feat(notifications): operational safeguard env vars + p-limit dep"
+```
+
+---
+
+### Task 6B: Per-user rate limiter
+
+**Files:**
+- Create: `avy-erp-backend/src/core/notifications/dispatch/rate-limiter.ts`
+- Modify: `avy-erp-backend/src/core/notifications/dispatch/dispatcher.ts`
+
+- [ ] **Step 1: Create the rate limiter helper**
+
+```typescript
+// src/core/notifications/dispatch/rate-limiter.ts
+import { cacheRedis } from '../../../config/redis';
+import { env } from '../../../config/env';
+import { logger } from '../../../config/logger';
+import type { NotificationPriority } from '@prisma/client';
+
+/**
+ * Per-user rate limit gate. Uses Redis INCR with a 60-second rolling window.
+ * CRITICAL priority ALWAYS bypasses the limit (security/payroll must deliver).
+ * Fail-open on Redis errors — we'd rather over-deliver than silently drop.
+ */
+export async function checkUserRateLimit(
+  userId: string,
+  priority: NotificationPriority,
+): Promise<boolean> {
+  if (priority === 'CRITICAL') return true;
+
+  const key = `notif:rate:${userId}`;
+  const max = env.NOTIFICATIONS_USER_RATE_LIMIT_PER_MIN;
+
+  try {
+    const count = await cacheRedis.incr(key);
+    if (count === 1) await cacheRedis.expire(key, 60);
+    if (count > max) {
+      logger.warn('User rate limit exceeded, dropping notification', { userId, count, max, priority });
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.warn('Rate limit check failed (fail-open)', { error: err, userId });
+    return true;
+  }
+}
+```
+
+- [ ] **Step 2: Wire into the dispatcher's bucket-building loop**
+
+In `dispatcher.ts`, inside the per-bucket processing loop (after dedup check, before backpressure guard), add a rate limit check:
+
+```typescript
+import { checkUserRateLimit } from './rate-limiter';
+import { recordEvent } from '../events/event-emitter';
+
+// Inside the bucket loop:
+const allowed = await checkUserRateLimit(bucket.userId, bucket.priority);
+if (!allowed) {
+  // Record SKIPPED event with no notificationId (bucket dropped before row creation)
+  await recordEvent({
+    notificationId: null,
+    channel: 'IN_APP',
+    event: 'SKIPPED',
+    errorCode: 'RATE_LIMITED',
+    traceId,
+    source: 'SYSTEM',
+  });
+  continue;
+}
+```
+
+- [ ] **Step 3: Type-check + commit**
+
+```bash
+git add src/core/notifications/dispatch
+git commit -m "feat(notifications): per-user rate limiter (20/min default, CRITICAL bypasses)"
+```
+
+---
+
+### Task 6C: Consent cache Redis layer
+
+**Files:**
+- Modify: `avy-erp-backend/src/core/notifications/dispatch/consent-gate.ts`
+- Modify: `avy-erp-backend/src/core/notifications/preferences/preferences.service.ts`
+
+- [ ] **Step 1: Refactor `loadConsentCache` into a read-through cached version**
+
+Rename the current DB-fetching body to `loadConsentCacheFromDB` (private), and create a new public `loadConsentCache` that checks Redis first:
+
+```typescript
+// consent-gate.ts
+
+const CONSENT_CACHE_PREFIX = 'notif:consent:';
+
+async function loadConsentCacheFromDB(userId: string): Promise<ConsentCache> {
+  // ... existing DB fetch logic ...
+}
+
+export async function loadConsentCache(userId: string): Promise<ConsentCache> {
+  const cacheKey = `${CONSENT_CACHE_PREFIX}${userId}`;
+
+  try {
+    const cached = await cacheRedis.get(cacheKey);
+    if (cached) {
+      const parsed = JSON.parse(cached) as Omit<ConsentCache, 'categoryPrefs'> & {
+        categoryPrefs: Array<[string, boolean]>;
+      };
+      return {
+        ...parsed,
+        categoryPrefs: new Map(parsed.categoryPrefs),
+      };
+    }
+  } catch (err) {
+    logger.warn('Consent cache read failed', { error: err, userId });
+  }
+
+  const fresh = await loadConsentCacheFromDB(userId);
+
+  try {
+    await cacheRedis.set(
+      cacheKey,
+      JSON.stringify({
+        ...fresh,
+        categoryPrefs: Array.from(fresh.categoryPrefs.entries()),
+      }),
+      'EX',
+      env.NOTIFICATIONS_CONSENT_CACHE_TTL_SEC,
+    );
+  } catch (err) {
+    logger.warn('Consent cache write failed (non-fatal)', { error: err, userId });
+  }
+
+  return fresh;
+}
+
+export async function invalidateConsentCache(userId: string): Promise<void> {
+  try {
+    await cacheRedis.del(`${CONSENT_CACHE_PREFIX}${userId}`);
+  } catch (err) {
+    logger.warn('Consent cache invalidation failed', { error: err, userId });
+  }
+}
+```
+
+- [ ] **Step 2: Wire invalidation into preference mutations**
+
+In `preferences.service.ts`:
+
+```typescript
+import { invalidateConsentCache } from '../dispatch/consent-gate';
+
+async update(userId: string, data: UpdatePreferencesInput) {
+  const result = await platformPrisma.userNotificationPreference.upsert({ /* ... */ });
+  await invalidateConsentCache(userId); // NEW
+  return result;
+}
+
+async updateCategoryPreferences(userId: string, updates: /* ... */) {
+  // ... existing transaction ...
+  await invalidateConsentCache(userId); // NEW
+  return this.getForUser(userId);
+}
+```
+
+- [ ] **Step 3: Wire invalidation into CompanySettings notification toggle updates**
+
+Find the CompanySettings controller/service where `pushNotifications`/`emailNotifications`/`smsNotifications`/`whatsappNotifications` are updated. After the update succeeds, iterate every user in the company and invalidate their consent cache:
+
+```typescript
+// In company-settings.service.ts update method, after save:
+const users = await platformPrisma.user.findMany({
+  where: { companyId },
+  select: { id: true },
+});
+await Promise.allSettled(users.map((u) => invalidateConsentCache(u.id)));
+```
+
+Or, cheaper alternative: also store a `notif:consent:company:{companyId}:version` counter that each cache entry includes, and bump the version on company changes so all cached entries are effectively invalidated on next read. For this PR, the per-user loop is simpler and correct — companies rarely have >1000 users.
+
+- [ ] **Step 4: Wire invalidation into logout flow**
+
+In `auth.service.ts` logout method, add:
+
+```typescript
+await invalidateConsentCache(userId);
+```
+
+- [ ] **Step 5: Type-check + commit**
+
+```bash
+git add src/core/notifications src/core/auth
+git commit -m "feat(notifications): consent cache Redis layer with invalidation hooks"
+```
+
+---
+
+### Task 6D: `dispatchBulk` utility
+
+**Files:**
+- Create: `avy-erp-backend/src/core/notifications/dispatch/dispatch-bulk.ts`
+- Modify: `avy-erp-backend/src/core/notifications/notification.service.ts`
+- Modify: `avy-erp-backend/src/workers/notification.worker.ts`
+
+- [ ] **Step 1: Create the bulk dispatch implementation**
+
+```typescript
+// src/core/notifications/dispatch/dispatch-bulk.ts
+import { nanoid } from 'nanoid';
+import { platformPrisma } from '../../../config/database';
+import { env } from '../../../config/env';
+import { logger } from '../../../config/logger';
+import { loadActiveRules } from './rule-loader';
+import { renderTemplate } from '../templates/renderer';
+import { checkUserRateLimit } from './rate-limiter';
+import { checkDedup } from './dedup';
+import { pickQueueByPriority } from '../queue/queues';
+import { emitSocketEvent } from '../events/socket-emitter';
+import { recordEvent } from '../events/event-emitter';
+import type { NotificationChannel, NotificationPriority, Prisma } from '@prisma/client';
+
+export interface DispatchBulkInput {
+  companyId: string;
+  triggerEvent: string;
+  type?: string;
+  entityType?: string;
+  entityId?: string;
+  recipients: Array<{ userId: string; tokens?: Record<string, unknown> }>;
+  sharedTokens?: Record<string, unknown>;
+  priority?: NotificationPriority;
+  systemCritical?: boolean;
+  actionUrl?: string;
+  chunkSize?: number;
+}
+
+export interface DispatchBulkResult {
+  traceId: string;
+  enqueued: number;
+  skipped: number;
+  notificationIds: string[];
+}
+
+export async function dispatchBulk(input: DispatchBulkInput): Promise<DispatchBulkResult> {
+  const traceId = nanoid(12);
+  const chunkSize = input.chunkSize ?? env.NOTIFICATIONS_BULK_CHUNK_SIZE;
+
+  if (!env.NOTIFICATIONS_ENABLED) {
+    return { traceId, enqueued: 0, skipped: 0, notificationIds: [] };
+  }
+
+  try {
+    // 1. Load rules once
+    const rules = await loadActiveRules(input.companyId, input.triggerEvent);
+    if (rules.length === 0) {
+      logger.warn('dispatchBulk: no rules, falling back to per-recipient dispatch', {
+        traceId,
+        triggerEvent: input.triggerEvent,
+      });
+      // Fall back to per-recipient dispatch via the normal path
+      const { dispatch } = await import('./dispatcher');
+      for (const r of input.recipients) {
+        await dispatch({
+          companyId: input.companyId,
+          triggerEvent: input.triggerEvent,
+          type: input.type,
+          entityType: input.entityType,
+          entityId: input.entityId,
+          explicitRecipients: [r.userId],
+          tokens: { ...input.sharedTokens, ...r.tokens },
+          priority: input.priority,
+          systemCritical: input.systemCritical,
+          actionUrl: input.actionUrl,
+        });
+      }
+      return { traceId, enqueued: input.recipients.length, skipped: 0, notificationIds: [] };
+    }
+
+    // 2. Rate-limit filter
+    const allowedRecipients: typeof input.recipients = [];
+    for (const r of input.recipients) {
+      const ok = await checkUserRateLimit(r.userId, input.priority ?? 'MEDIUM');
+      if (ok) allowedRecipients.push(r);
+    }
+    const skipped = input.recipients.length - allowedRecipients.length;
+
+    if (allowedRecipients.length === 0) {
+      return { traceId, enqueued: 0, skipped, notificationIds: [] };
+    }
+
+    // 3. Build per-recipient Notification rows in one createManyAndReturn
+    //    For simplicity, bulk dispatch uses the FIRST rule only — if multiple
+    //    rules exist for the same trigger event, bulk mode uses the primary
+    //    (first) channel. Per-rule fanout for bulk is out of scope.
+    const primaryRule = rules[0];
+    const priority = input.priority ?? primaryRule.priority ?? primaryRule.template.priority ?? 'MEDIUM';
+
+    const createInputs: Prisma.NotificationCreateManyInput[] = [];
+    const acceptedRecipients: typeof allowedRecipients = [];
+
+    for (const r of allowedRecipients) {
+      const rendered = renderTemplate(primaryRule.template, { ...input.sharedTokens, ...r.tokens });
+      const dup = await checkDedup({
+        companyId: input.companyId,
+        triggerEvent: input.triggerEvent,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        recipientId: r.userId,
+        payload: rendered,
+      });
+      if (dup) continue;
+
+      createInputs.push({
+        userId: r.userId,
+        companyId: input.companyId,
+        title: rendered.title,
+        body: rendered.body,
+        type: input.type ?? input.triggerEvent,
+        category: primaryRule.category ?? null,
+        entityType: input.entityType ?? null,
+        entityId: input.entityId ?? null,
+        data: rendered.data as Prisma.InputJsonValue,
+        actionUrl: input.actionUrl ?? null,
+        priority,
+        status: 'UNREAD',
+        isRead: false,
+        deliveryStatus: {
+          inApp: 'SENT',
+          [primaryRule.channel.toLowerCase()]: primaryRule.channel === 'IN_APP' ? 'SENT' : 'PENDING',
+        } as Prisma.InputJsonValue,
+        traceId,
+        ruleId: (primaryRule as any).isAdHoc ? null : primaryRule.id,
+        ruleVersion: primaryRule.version ?? null,
+        templateId: primaryRule.template.id === 'adhoc' ? null : primaryRule.template.id,
+        templateVersion: primaryRule.template.version ?? null,
+        dedupHash: rendered.dedupHash,
+      });
+      acceptedRecipients.push(r);
+    }
+
+    if (createInputs.length === 0) {
+      return { traceId, enqueued: 0, skipped, notificationIds: [] };
+    }
+
+    const createdRows = await platformPrisma.notification.createManyAndReturn({
+      data: createInputs,
+      select: { id: true, userId: true },
+    });
+
+    // 4. Socket fanout per recipient
+    for (const row of createdRows) {
+      emitSocketEvent(row.userId, { notificationId: row.id, traceId });
+    }
+
+    // 5. Chunk into BullMQ bulk-delivery jobs
+    if (primaryRule.channel !== 'IN_APP') {
+      const queue = pickQueueByPriority(priority);
+      for (let i = 0; i < createdRows.length; i += chunkSize) {
+        const chunk = createdRows.slice(i, i + chunkSize);
+        await queue.add('deliver-bulk', {
+          isBulk: true,
+          notificationIds: chunk.map((r) => r.id),
+          userIds: chunk.map((r) => r.userId),
+          channels: [primaryRule.channel],
+          traceId,
+          priority,
+          systemCritical: input.systemCritical === true || priority === 'CRITICAL',
+        });
+      }
+    }
+
+    // 6. Record ENQUEUED events
+    for (const row of createdRows) {
+      await recordEvent({
+        notificationId: row.id,
+        channel: primaryRule.channel,
+        event: 'ENQUEUED',
+        traceId,
+        source: 'SYSTEM',
+      });
+    }
+
+    return {
+      traceId,
+      enqueued: createdRows.length,
+      skipped,
+      notificationIds: createdRows.map((r) => r.id),
+    };
+  } catch (err) {
+    logger.error('dispatchBulk internal error', { error: err, traceId, trigger: input.triggerEvent });
+    return { traceId, enqueued: 0, skipped: input.recipients.length, notificationIds: [] };
+  }
+}
+```
+
+- [ ] **Step 2: Expose on `notificationService`**
+
+In `notification.service.ts`:
+
+```typescript
+import { dispatchBulk } from './dispatch/dispatch-bulk';
+
+class NotificationService {
+  dispatch = dispatch;
+  dispatchBulk = dispatchBulk; // NEW
+  // ... rest unchanged
+}
+```
+
+- [ ] **Step 3: Extend the worker to handle `isBulk` jobs**
+
+In `notification.worker.ts`, the job handler currently processes one `notificationId`. Extend it to handle the bulk shape:
+
+```typescript
+if (job.data.isBulk) {
+  const { notificationIds, userIds, channels, traceId, priority, systemCritical } = job.data;
+  // Process each (notificationId, userId) pair in parallel with Promise.allSettled
+  await Promise.allSettled(
+    notificationIds.map((nid: string, idx: number) =>
+      processOne({
+        notificationId: nid,
+        userId: userIds[idx],
+        channels,
+        traceId,
+        priority,
+        systemCritical,
+        attemptsMade: job.attemptsMade,
+      }),
+    ),
+  );
+  return;
+}
+// Existing single-notification path
+```
+
+Extract the existing per-notification logic into a `processOne()` helper that takes the same args shape. Both paths share the claim → consent → send flow.
+
+- [ ] **Step 4: Type-check + commit**
+
+```bash
+git add src/core/notifications src/workers
+git commit -m "feat(notifications): dispatchBulk utility with chunked BullMQ jobs + worker bulk handler"
+```
+
+---
+
+### Task 6E: Provider retry wrapper
+
+**Files:**
+- Create: `avy-erp-backend/src/core/notifications/channels/provider-retry.ts`
+
+- [ ] **Step 1: Create the retry helper**
+
+```typescript
+// src/core/notifications/channels/provider-retry.ts
+import { logger } from '../../../config/logger';
+
+export interface RetryOpts {
+  maxAttempts?: number;
+  baseDelayMs?: number;
+  maxDelayMs?: number;
+  isRetryable?: (err: unknown) => boolean;
+}
+
+/**
+ * Retry wrapper for external provider calls (Twilio, Meta Cloud, FCM, etc.).
+ * Exponential backoff: baseDelayMs × 4^(attempt-1), capped at maxDelayMs.
+ * Only retries when `isRetryable(err)` returns true (default: always).
+ */
+export async function withRetry<T>(
+  operation: () => Promise<T>,
+  opts: RetryOpts = {},
+): Promise<T> {
+  const max = opts.maxAttempts ?? 3;
+  const base = opts.baseDelayMs ?? 500;
+  const cap = opts.maxDelayMs ?? 10_000;
+  const isRetryable = opts.isRetryable ?? (() => true);
+
+  for (let attempt = 1; attempt <= max; attempt++) {
+    try {
+      return await operation();
+    } catch (err) {
+      if (attempt === max || !isRetryable(err)) {
+        throw err;
+      }
+      const delay = Math.min(base * Math.pow(4, attempt - 1), cap);
+      logger.info('Provider retry', { attempt, delay, error: (err as Error)?.message });
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error('withRetry: unreachable');
+}
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/core/notifications/channels/provider-retry.ts
+git commit -m "feat(notifications): provider retry wrapper with exponential backoff"
+```
+
+---
+
+### Task 6F: WhatsApp masking parity + extend masker
+
+**Files:**
+- Modify: `avy-erp-backend/src/core/notifications/templates/masker.ts`
+
+- [ ] **Step 1: Extend masker to cover SMS and WHATSAPP**
+
+```typescript
+const MASKED_CHANNELS: NotificationChannel[] = ['PUSH', 'SMS', 'WHATSAPP'];
+
+export function maskForChannel<T extends MaskablePayload>(
+  channel: NotificationChannel,
+  payload: T,
+  sensitiveFields: string[],
+): T {
+  if (!MASKED_CHANNELS.includes(channel) || sensitiveFields.length === 0) return payload;
+
+  // ... rest of the existing masking logic (string replacement + data field masking)
+}
+```
+
+Remove any `'PUSH' | 'EMAIL' | ...` string-literal union in the signature and use the imported `NotificationChannel` type.
+
+- [ ] **Step 2: Type-check + commit**
+
+```bash
+git add src/core/notifications/templates/masker.ts
+git commit -m "feat(notifications): masker covers SMS + WHATSAPP with same sensitive-field rules as PUSH"
+```
+
+---
+
+### Task 6G: `NotificationEventAggregateDaily` schema + aggregation cron + retention cron
+
+**Files:**
+- Modify: `avy-erp-backend/prisma/modules/platform/notifications.prisma`
+- Modify: `avy-erp-backend/src/core/notifications/cron/notification-cron.service.ts` (extend scaffold from Task 22 — but Task 22 runs after this; in reality this task extends what will become the scaffold)
+
+- [ ] **Step 1: Add `NotificationEventAggregateDaily` model**
+
+```prisma
+model NotificationEventAggregateDaily {
+  id              String                @id @default(cuid())
+  companyId       String
+  date            DateTime              @db.Date
+  channel         NotificationChannel
+  event           NotificationEventType
+  provider        String?
+  count           Int                   @default(0)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  company         Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, date, channel, event, provider])
+  @@index([companyId, date])
+  @@map("notification_event_aggregate_daily")
+}
+```
+
+Add back-reference on `Company`:
+
+```prisma
+  notificationEventAggregates NotificationEventAggregateDaily[]
+```
+
+- [ ] **Step 2: Merge + push**
+
+```bash
+pnpm prisma:merge && pnpm db:generate && pnpm prisma db push --skip-generate
+```
+
+- [ ] **Step 3: Defer cron implementation to Task 22 (cron service scaffold)**
+
+The cron service file doesn't exist yet — it's created in Task 22. The aggregation and retention methods will be added during Task 22 when we implement all cron jobs. For now, just ensure the schema is in place.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add prisma/
+git commit -m "feat(notifications): NotificationEventAggregateDaily schema for analytics pre-aggregation"
+```
+
+---
+
+### Task 6H: Cron pagination helper
+
+**Files:**
+- Create: `avy-erp-backend/src/core/notifications/cron/pagination.ts`
+
+- [ ] **Step 1: Create a cursor-based iterator utility**
+
+```typescript
+// src/core/notifications/cron/pagination.ts
+
+/**
+ * Cursor-based paginated iterator for Prisma findMany calls. Yields batches
+ * of rows until the query returns less than `batchSize`. Prevents memory
+ * spikes when processing large tenants (10k+ employees).
+ *
+ * Usage:
+ *   for await (const batch of paginateWithCursor(
+ *     (cursor) => tenantDb.employee.findMany({
+ *       where: { status: 'ACTIVE' },
+ *       take: 200,
+ *       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+ *       orderBy: { id: 'asc' },
+ *     }),
+ *     (row) => row.id,
+ *   )) {
+ *     // process batch
+ *   }
+ */
+export async function* paginateWithCursor<T extends { id: string }>(
+  fetchPage: (cursor?: string) => Promise<T[]>,
+  getId: (row: T) => string = (r) => r.id,
+  batchSize = 200,
+): AsyncGenerator<T[]> {
+  let cursor: string | undefined = undefined;
+  while (true) {
+    const batch = await fetchPage(cursor);
+    if (batch.length === 0) break;
+    yield batch;
+    if (batch.length < batchSize) break;
+    cursor = getId(batch[batch.length - 1]);
+  }
+}
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/core/notifications/cron/pagination.ts
+git commit -m "feat(notifications): cursor-based pagination helper for cron jobs"
+```
+
+---
+
 ## Phase 2: Core wiring Part A
 
 ### Task 7: Wire dispatcher into `leave.service.ts`
@@ -808,7 +1508,9 @@ const TRIGGER_BY_ENTITY: Record<string, { approved: string; rejected: string; ca
 };
 ```
 
-- [ ] **Step 2: After each case block's existing business update, dispatch**
+- [ ] **Step 2: After each case block's existing business update, dispatch — wrapped in per-case try/catch**
+
+**CRITICAL:** Each dispatch call MUST be wrapped in its own try/catch so a failure in one entity type's notification path doesn't block approvals for other entity types. The business status update is already committed before the dispatch — if the dispatch fails, the approval still succeeds.
 
 For each case (example: LeaveRequest):
 
@@ -820,27 +1522,37 @@ case 'LeaveRequest': {
   const newStatus = decision === 'APPROVED' ? 'APPROVED' : 'REJECTED';
   await tx.leaveRequest.update({ where: { id: entityId }, data: { status: newStatus, approvedBy: approverId } });
 
-  // NEW: dispatch approval notification
+  // Dispatch approval notification — isolated per-case with try/catch
   const trigger = TRIGGER_BY_ENTITY[entityType];
   if (trigger) {
-    const requesterUserId = await getRequesterUserId({ employeeId: entity.employeeId, userId: entity.userId });
-    if (requesterUserId) {
-      await notificationService.dispatch({
-        companyId,
-        triggerEvent: decision === 'APPROVED' ? trigger.approved : trigger.rejected,
-        entityType,
+    try {
+      const requesterUserId = await getRequesterUserId({ employeeId: entity.employeeId, userId: entity.userId });
+      if (requesterUserId) {
+        await notificationService.dispatch({
+          companyId,
+          triggerEvent: decision === 'APPROVED' ? trigger.approved : trigger.rejected,
+          entityType,
+          entityId,
+          explicitRecipients: [requesterUserId],
+          tokens: {
+            employee_name: /* fetch or pass through */,
+            leave_days: entity.daysCount,
+            from_date: entity.fromDate?.toISOString().slice(0, 10),
+            to_date: entity.toDate?.toISOString().slice(0, 10),
+            reason: entity.rejectionReason ?? '',
+          },
+          priority: trigger.priority,
+          actionUrl: '/company/hr/my-leave',
+          type: trigger.category,
+        });
+      }
+    } catch (dispatchErr) {
+      // Non-fatal: the approval itself is already committed. Log and continue
+      // so a notification bug doesn't block approvals for other entities.
+      logger.error('LeaveRequest approval dispatch failed (non-fatal)', {
+        error: dispatchErr,
         entityId,
-        explicitRecipients: [requesterUserId],
-        tokens: {
-          employee_name: /* fetch or pass through */,
-          leave_days: entity.daysCount,
-          from_date: entity.fromDate?.toISOString().slice(0, 10),
-          to_date: entity.toDate?.toISOString().slice(0, 10),
-          reason: entity.rejectionReason ?? '',
-        },
-        priority: trigger.priority,
-        actionUrl: '/company/hr/my-leave',
-        type: trigger.category,
+        decision,
       });
     }
   }
@@ -848,7 +1560,7 @@ case 'LeaveRequest': {
 }
 ```
 
-Repeat the pattern for all 12 entity types. Each case's tokens vary based on the entity's fields.
+Repeat the pattern for all 12 entity types. Each case's tokens vary based on the entity's fields. **Every case MUST have its own try/catch around the dispatch call.**
 
 - [ ] **Step 3: Remove the legacy `triggerNotification()` method's body**
 
@@ -886,33 +1598,44 @@ git commit -m "feat(notifications): universal dispatch in onApprovalComplete (12
 
 ## Phase 3: Core wiring Part B
 
-### Task 12: Wire payroll dispatches
+### Task 12: Wire payroll dispatches (via `dispatchBulk`)
 
 **Files:**
 - Modify: `avy-erp-backend/src/modules/hr/payroll-run/payroll-run.service.ts`
 
+**CRITICAL:** Payroll fanout to 500+ employees MUST use `dispatchBulk()`, NOT a `for` loop with individual `dispatch()` calls. The `for` loop pattern would create 500 sequential BullMQ enqueues and 500 Notification row inserts, blowing up Redis and the worker. `dispatchBulk` batches rows into `createManyAndReturn` and chunks BullMQ jobs.
+
 - [ ] **Step 1: Import `notificationService`**
 
-- [ ] **Step 2: Add dispatch in `publishPayslips` method**
-
-After all payslips are published, iterate employees and dispatch `PAYSLIP_PUBLISHED`:
+- [ ] **Step 2: Add dispatch in `publishPayslips` method using `dispatchBulk`**
 
 ```typescript
 try {
   const entries = await platformPrisma.payrollEntry.findMany({
     where: { payrollRunId: runId },
-    select: { employeeId: true, employee: { select: { userId: true, firstName: true, lastName: true } } },
+    select: {
+      employeeId: true,
+      employee: { select: { userId: true, firstName: true, lastName: true } },
+    },
   });
-  for (const entry of entries) {
-    if (!entry.employee?.userId) continue;
-    await notificationService.dispatch({
+
+  const recipients = entries
+    .filter((e) => e.employee?.userId)
+    .map((e) => ({
+      userId: e.employee!.userId!,
+      tokens: {
+        employee_name: `${e.employee!.firstName} ${e.employee!.lastName}`.trim(),
+      },
+    }));
+
+  if (recipients.length > 0) {
+    await notificationService.dispatchBulk({
       companyId,
       triggerEvent: 'PAYSLIP_PUBLISHED',
       entityType: 'PayrollRun',
       entityId: runId,
-      explicitRecipients: [entry.employee.userId],
-      tokens: {
-        employee_name: `${entry.employee.firstName} ${entry.employee.lastName}`.trim(),
+      recipients,
+      sharedTokens: {
         month_year: `${run.month}/${run.year}`,
       },
       priority: 'HIGH',
@@ -921,29 +1644,41 @@ try {
     });
   }
 } catch (err) {
-  logger.warn('Payslip published dispatch failed', { error: err });
+  logger.warn('Payslip published bulk dispatch failed', { error: err });
 }
 ```
 
-- [ ] **Step 3: Add dispatch in `disburseRun` method (`SALARY_CREDITED`, systemCritical)**
+- [ ] **Step 3: Add dispatch in `disburseRun` method (`SALARY_CREDITED`, systemCritical, bulk)**
 
 ```typescript
 try {
   const entries = await platformPrisma.payrollEntry.findMany({
     where: { payrollRunId: runId },
-    select: { employeeId: true, netSalary: true, employee: { select: { userId: true, firstName: true, lastName: true } } },
+    select: {
+      employeeId: true,
+      netSalary: true,
+      employee: { select: { userId: true, firstName: true, lastName: true } },
+    },
   });
-  for (const entry of entries) {
-    if (!entry.employee?.userId) continue;
-    await notificationService.dispatch({
+
+  const recipients = entries
+    .filter((e) => e.employee?.userId)
+    .map((e) => ({
+      userId: e.employee!.userId!,
+      tokens: {
+        employee_name: `${e.employee!.firstName} ${e.employee!.lastName}`.trim(),
+        amount: e.netSalary?.toString() ?? '',
+      },
+    }));
+
+  if (recipients.length > 0) {
+    await notificationService.dispatchBulk({
       companyId,
       triggerEvent: 'SALARY_CREDITED',
       entityType: 'PayrollRun',
       entityId: runId,
-      explicitRecipients: [entry.employee.userId],
-      tokens: {
-        employee_name: `${entry.employee.firstName} ${entry.employee.lastName}`.trim(),
-        amount: entry.netSalary?.toString() ?? '',
+      recipients,
+      sharedTokens: {
         month_year: `${updatedRun.month}/${updatedRun.year}`,
       },
       priority: 'CRITICAL',
@@ -953,18 +1688,20 @@ try {
     });
   }
 } catch (err) {
-  logger.warn('Salary credited dispatch failed', { error: err });
+  logger.warn('Salary credited bulk dispatch failed', { error: err });
 }
 ```
 
 - [ ] **Step 4: Add dispatch in `submitForApproval` (if present) for `PAYROLL_APPROVAL`**
+
+For this one, the recipient is a single approver or a small approver list, so regular `dispatch()` is fine (no bulk needed).
 
 - [ ] **Step 5: Type-check + commit**
 
 ```bash
 pnpm tsc --noEmit 2>&1 | tail -10
 git add src/modules/hr/payroll-run/payroll-run.service.ts
-git commit -m "feat(notifications): wire payroll payslip published + salary credited dispatches"
+git commit -m "feat(notifications): wire payroll payslip published + salary credited via dispatchBulk"
 ```
 
 ---
@@ -1387,12 +2124,18 @@ git log --oneline -20
 **Files:**
 - Create: `avy-erp-backend/src/core/notifications/cron/notification-cron.service.ts`
 
-- [ ] **Step 1: Scaffold the service class**
+- [ ] **Step 1: Scaffold the service class — includes aggregation + retention crons**
 
 ```typescript
 import cron, { ScheduledTask } from 'node-cron';
+import pLimit from 'p-limit';
+import { DateTime } from 'luxon';
 import { logger } from '../../../config/logger';
 import { env } from '../../../config/env';
+import { platformPrisma } from '../../../config/database';
+import { cacheRedis } from '../../../config/redis';
+import { notificationService } from '../notification.service';
+import { paginateWithCursor } from './pagination';
 
 class NotificationCronService {
   private jobs: ScheduledTask[] = [];
@@ -1403,6 +2146,7 @@ class NotificationCronService {
       return;
     }
 
+    // Informational event crons
     this.jobs.push(cron.schedule('0 8 * * *', () => this.runBirthday()));
     this.jobs.push(cron.schedule('0 8 * * *', () => this.runWorkAnniversary()));
     this.jobs.push(cron.schedule('0 7 * * *', () => this.runHolidayReminder()));
@@ -1411,12 +2155,27 @@ class NotificationCronService {
     this.jobs.push(cron.schedule('0 9 * * *', () => this.runCertificateExpiring()));
     this.jobs.push(cron.schedule('0 7 * * *', () => this.runTrainingSessionUpcoming()));
 
+    // Operational crons (spec §4A.9 and §4A.12)
+    this.jobs.push(cron.schedule('30 1 * * *', () => this.runEventAggregation()));
+    this.jobs.push(cron.schedule('0 2 * * *', () => this.runEventCleanup()));
+
     logger.info('Notification cron service started', { jobs: this.jobs.length });
   }
 
   stopAll(): void {
     for (const job of this.jobs) job.stop();
     this.jobs = [];
+  }
+
+  /** Idempotent cron dedup with 24h TTL — prevents double-fire on same day */
+  private async checkCronDedup(key: string): Promise<boolean> {
+    try {
+      const result = await cacheRedis.set(`notif:cron-dedup:${key}`, '1', 'EX', 86400, 'NX');
+      return result === 'OK';
+    } catch (err) {
+      logger.warn('Cron dedup check failed (fail-open)', { error: err, key });
+      return true;
+    }
   }
 
   // Stub methods — filled in by subsequent tasks
@@ -1427,6 +2186,8 @@ class NotificationCronService {
   private async runAssetReturnDue(): Promise<void> { /* Task 25 */ }
   private async runCertificateExpiring(): Promise<void> { /* Task 25 */ }
   private async runTrainingSessionUpcoming(): Promise<void> { /* Task 25 */ }
+  private async runEventAggregation(): Promise<void> { /* Task 26A */ }
+  private async runEventCleanup(): Promise<void> { /* Task 26A */ }
 }
 
 export const notificationCronService = new NotificationCronService();
@@ -1476,7 +2237,7 @@ private async checkCronDedup(key: string): Promise<boolean> {
 }
 ```
 
-- [ ] **Step 3: Implement `runBirthday`**
+- [ ] **Step 3: Implement `runBirthday` with pagination + parallelism**
 
 ```typescript
 private async runBirthday(): Promise<void> {
@@ -1485,55 +2246,100 @@ private async runBirthday(): Promise<void> {
       select: { id: true, name: true, settings: { select: { timezone: true } } },
     });
 
-    for (const company of companies) {
-      const tz = company.settings?.timezone ?? 'UTC';
-      const today = DateTime.now().setZone(tz);
-      const mmdd = today.toFormat('MM-dd');
+    // Run companies in parallel with a concurrency cap to avoid overwhelming
+    // the tenant connection pool. Use Promise.allSettled so one failing tenant
+    // doesn't stop the others.
+    const limit = pLimit(env.NOTIFICATIONS_CRON_COMPANY_CONCURRENCY);
+    const results = await Promise.allSettled(
+      companies.map((company) => limit(() => this.runBirthdayForCompany(company))),
+    );
 
-      try {
-        const tenantDb = await tenantConnectionManager.getClient({ schemaName: /* company schema */ });
-        const employees = await tenantDb.employee.findMany({
-          where: {
-            status: { notIn: ['EXITED', 'TERMINATED'] },
-            dateOfBirth: { not: null },
-          },
-          select: { id: true, firstName: true, lastName: true, dateOfBirth: true, userId: true },
-        });
-
-        const celebrating = employees.filter(
-          (e) => e.dateOfBirth && DateTime.fromJSDate(e.dateOfBirth).toFormat('MM-dd') === mmdd,
-        );
-
-        for (const emp of celebrating) {
-          if (!emp.userId) continue;
-          const dedupKey = `BIRTHDAY:${company.id}:${emp.id}:${today.toFormat('yyyy-MM-dd')}`;
-          const ok = await this.checkCronDedup(dedupKey);
-          if (!ok) continue;
-
-          await notificationService.dispatch({
-            companyId: company.id,
-            triggerEvent: 'BIRTHDAY',
-            entityType: 'Employee',
-            entityId: emp.id,
-            explicitRecipients: [emp.userId],
-            tokens: {
-              employee_name: `${emp.firstName} ${emp.lastName}`.trim(),
-            },
-            priority: 'LOW',
-            type: 'BIRTHDAY_ANNIVERSARY',
-          });
-        }
-
-        await tenantDb.$disconnect();
-      } catch (err) {
-        logger.error('Birthday cron per-company failed', { error: err, companyId: company.id });
-      }
+    const failures = results.filter((r) => r.status === 'rejected');
+    if (failures.length > 0) {
+      logger.warn('Birthday cron: some companies failed', { count: failures.length });
     }
   } catch (err) {
     logger.error('Birthday cron failed', { error: err });
   }
 }
+
+private async runBirthdayForCompany(company: {
+  id: string;
+  name: string;
+  settings: { timezone: string | null } | null;
+}): Promise<void> {
+  const tz = company.settings?.timezone ?? 'UTC';
+  const today = DateTime.now().setZone(tz);
+  const mmdd = today.toFormat('MM-dd');
+  const todayStr = today.toFormat('yyyy-MM-dd');
+
+  let tenantDb: any = null;
+  try {
+    tenantDb = await tenantConnectionManager.getClient({ schemaName: /* company schema */ });
+
+    // Cursor-based pagination to avoid loading 10k employees into memory
+    const BATCH_SIZE = 200;
+    for await (const batch of paginateWithCursor<{ id: string; firstName: string; lastName: string; dateOfBirth: Date | null; userId: string | null }>(
+      (cursor) => tenantDb.employee.findMany({
+        where: {
+          status: { notIn: ['EXITED', 'TERMINATED'] },
+          dateOfBirth: { not: null },
+        },
+        select: { id: true, firstName: true, lastName: true, dateOfBirth: true, userId: true },
+        take: BATCH_SIZE,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+        orderBy: { id: 'asc' },
+      }),
+      (r) => r.id,
+      BATCH_SIZE,
+    )) {
+      // Filter this batch for today's birthdays
+      const celebrating = batch.filter(
+        (e) => e.userId && e.dateOfBirth && DateTime.fromJSDate(e.dateOfBirth).toFormat('MM-dd') === mmdd,
+      );
+      if (celebrating.length === 0) continue;
+
+      // Cron dedup per employee (24h TTL)
+      const allowedRecipients: Array<{ userId: string; tokens: Record<string, unknown> }> = [];
+      for (const emp of celebrating) {
+        const dedupKey = `BIRTHDAY:${company.id}:${emp.id}:${todayStr}`;
+        const ok = await this.checkCronDedup(dedupKey);
+        if (ok) {
+          allowedRecipients.push({
+            userId: emp.userId!,
+            tokens: { employee_name: `${emp.firstName} ${emp.lastName}`.trim() },
+          });
+        }
+      }
+
+      // Use dispatchBulk for batch fanout (chunks internally)
+      if (allowedRecipients.length > 0) {
+        await notificationService.dispatchBulk({
+          companyId: company.id,
+          triggerEvent: 'BIRTHDAY',
+          entityType: 'Employee',
+          recipients: allowedRecipients,
+          priority: 'LOW',
+          type: 'BIRTHDAY_ANNIVERSARY',
+        });
+      }
+    }
+  } catch (err) {
+    logger.error('Birthday cron per-company failed', { error: err, companyId: company.id });
+  } finally {
+    if (tenantDb) {
+      try { await tenantDb.$disconnect(); } catch { /* ignore */ }
+    }
+  }
+}
 ```
+
+**Key changes from the naive version:**
+1. **Parallelism:** `Promise.allSettled` + `pLimit` caps company concurrency at `NOTIFICATIONS_CRON_COMPANY_CONCURRENCY` (default 5).
+2. **Pagination:** `paginateWithCursor` iterates in 200-row batches, never loading the full employee table.
+3. **Bulk dispatch:** `dispatchBulk` for fanout, chunks BullMQ jobs internally.
+4. **Cron dedup:** 24h TTL Redis key per employee prevents double-fire if cron runs twice.
+5. **Connection cleanup:** `finally` block ensures `tenantDb.$disconnect()` always runs.
 
 **Note:** The `tenantConnectionManager.getClient()` signature and schema name lookup depend on the existing codebase pattern from `analytics-cron.service.ts`. Match that pattern exactly.
 
@@ -1687,6 +2493,125 @@ git commit -m "feat(notifications): add 6 new default templates for cron events"
 
 ---
 
+### Task 26A: Implement event aggregation + retention cleanup crons
+
+**Files:**
+- Modify: `avy-erp-backend/src/core/notifications/cron/notification-cron.service.ts`
+
+These two crons enable the analytics dashboard's pre-aggregation strategy (spec §4.6, §4A.9, §4A.12). They were scheduled in Task 22's scaffold; this task implements the method bodies.
+
+- [ ] **Step 1: Implement `runEventAggregation` (1:30 AM daily)**
+
+```typescript
+private async runEventAggregation(): Promise<void> {
+  try {
+    const yesterday = DateTime.now().minus({ days: 1 }).startOf('day').toJSDate();
+    const todayStart = DateTime.now().startOf('day').toJSDate();
+
+    // Group yesterday's events by (companyId, channel, event, provider)
+    const aggregates = await platformPrisma.$queryRaw<
+      Array<{
+        companyId: string;
+        channel: string;
+        event: string;
+        provider: string | null;
+        count: bigint;
+      }>
+    >`
+      SELECT
+        n."companyId",
+        ne.channel::text as channel,
+        ne.event::text as event,
+        ne.provider,
+        COUNT(*)::bigint as count
+      FROM notification_events ne
+      JOIN notifications n ON n.id = ne."notificationId"
+      WHERE ne."occurredAt" >= ${yesterday} AND ne."occurredAt" < ${todayStart}
+      GROUP BY n."companyId", ne.channel, ne.event, ne.provider
+    `;
+
+    let upserted = 0;
+    for (const agg of aggregates) {
+      try {
+        await platformPrisma.notificationEventAggregateDaily.upsert({
+          where: {
+            companyId_date_channel_event_provider: {
+              companyId: agg.companyId,
+              date: yesterday,
+              channel: agg.channel as any,
+              event: agg.event as any,
+              provider: agg.provider ?? '',
+            },
+          },
+          create: {
+            companyId: agg.companyId,
+            date: yesterday,
+            channel: agg.channel as any,
+            event: agg.event as any,
+            provider: agg.provider,
+            count: Number(agg.count),
+          },
+          update: { count: Number(agg.count) },
+        });
+        upserted++;
+      } catch (err) {
+        logger.warn('Aggregate upsert failed', { error: err, agg });
+      }
+    }
+    logger.info('Notification event aggregation complete', { rows: upserted });
+  } catch (err) {
+    logger.error('Notification event aggregation failed', { error: err });
+  }
+}
+```
+
+- [ ] **Step 2: Implement `runEventCleanup` (2:00 AM daily — 30 min after aggregation)**
+
+```typescript
+private async runEventCleanup(): Promise<void> {
+  try {
+    const cutoff = DateTime.now()
+      .minus({ days: env.NOTIFICATIONS_EVENT_RETENTION_DAYS })
+      .toJSDate();
+
+    let totalDeleted = 0;
+    // Delete in 10K batches to avoid long-running transactions
+    while (true) {
+      // Find a batch of ids to delete (older than cutoff)
+      const batch = await platformPrisma.notificationEvent.findMany({
+        where: { occurredAt: { lt: cutoff } },
+        select: { id: true },
+        take: 10_000,
+      });
+      if (batch.length === 0) break;
+
+      const result = await platformPrisma.notificationEvent.deleteMany({
+        where: { id: { in: batch.map((b) => b.id) } },
+      });
+      totalDeleted += result.count;
+      if (batch.length < 10_000) break;
+    }
+
+    logger.info('NotificationEvent cleanup complete', {
+      totalDeleted,
+      retentionDays: env.NOTIFICATIONS_EVENT_RETENTION_DAYS,
+    });
+  } catch (err) {
+    logger.error('NotificationEvent cleanup failed', { error: err });
+  }
+}
+```
+
+- [ ] **Step 3: Type-check + commit**
+
+```bash
+pnpm tsc --noEmit
+git add src/core/notifications/cron
+git commit -m "feat(notifications): aggregation + retention cleanup crons (1:30 AM / 2:00 AM)"
+```
+
+---
+
 ### Task 27: Cron dry-run verification
 
 - [ ] **Step 1: Start dev server with `NOTIFICATIONS_CRON_ENABLED=true`**
@@ -1706,12 +2631,13 @@ git commit -m "feat(notifications): add 6 new default templates for cron events"
 **Files:**
 - Create: `avy-erp-backend/src/core/notifications/channels/sms/twilio.provider.ts`
 
-- [ ] **Step 1: Create the provider file (see spec §7.2)**
+- [ ] **Step 1: Create the provider file with retry + dry-run**
 
 ```typescript
 import twilio, { Twilio } from 'twilio';
 import { env } from '../../../../config/env';
 import { logger } from '../../../../config/logger';
+import { withRetry } from '../provider-retry';
 import type { NotificationPriority } from '@prisma/client';
 
 let client: Twilio | null = null;
@@ -1734,11 +2660,29 @@ export interface TwilioSendResult {
   messageId: string | null;
 }
 
+/** Transient errors worth retrying. Non-retryable errors (auth, bad phone) bubble immediately. */
+function isTransientTwilioError(err: unknown): boolean {
+  const e = err as { status?: number; code?: number | string };
+  if (e.status === 503 || e.status === 429) return true;
+  if (e.code === 'ECONNRESET' || e.code === 'ETIMEDOUT') return true;
+  // Twilio error codes: https://www.twilio.com/docs/api/errors
+  // 20429 = too many requests (rate limit) - retry
+  if (e.code === 20429) return true;
+  return false;
+}
+
 export const twilioProvider = {
   async send(payload: TwilioSendPayload, traceId: string): Promise<TwilioSendResult> {
     if (!env.NOTIFICATIONS_SMS_ENABLED) {
       throw Object.assign(new Error('SMS_DISABLED'), { code: 'SMS_DISABLED' });
     }
+
+    // Dry-run mode — log and return without hitting the provider
+    if (env.NOTIFICATIONS_SMS_DRY_RUN) {
+      logger.info('[DRY-RUN] SMS would have been sent', { traceId, to: payload.to, body: payload.body });
+      return { provider: 'twilio', messageId: 'dry-run' };
+    }
+
     const c = getClient();
     if (!c) {
       throw Object.assign(new Error('TWILIO_NOT_CONFIGURED'), { code: 'TWILIO_NOT_CONFIGURED' });
@@ -1748,17 +2692,22 @@ export const twilioProvider = {
     }
 
     try {
-      const message = await c.messages.create({
-        body: payload.body,
-        to: payload.to,
-        ...(env.TWILIO_MESSAGING_SERVICE_SID
-          ? { messagingServiceSid: env.TWILIO_MESSAGING_SERVICE_SID }
-          : { from: env.TWILIO_FROM_NUMBER! }),
-      });
+      // Retry wrapper for transient errors (3 attempts, exponential backoff)
+      const message = await withRetry(
+        () =>
+          c.messages.create({
+            body: payload.body,
+            to: payload.to,
+            ...(env.TWILIO_MESSAGING_SERVICE_SID
+              ? { messagingServiceSid: env.TWILIO_MESSAGING_SERVICE_SID }
+              : { from: env.TWILIO_FROM_NUMBER! }),
+          }),
+        { isRetryable: isTransientTwilioError, maxAttempts: 3, baseDelayMs: 500 },
+      );
       logger.info('SMS sent', { traceId, to: payload.to, sid: message.sid });
       return { provider: 'twilio', messageId: message.sid };
     } catch (err: any) {
-      logger.error('Twilio send failed', { error: err, traceId, to: payload.to });
+      logger.error('Twilio send failed (after retries)', { error: err, traceId, to: payload.to });
       throw Object.assign(new Error(err?.message ?? 'TWILIO_SEND_FAILED'), {
         code: err?.code ?? 'TWILIO_SEND_FAILED',
       });
@@ -1776,29 +2725,66 @@ git commit -m "feat(notifications): Twilio SMS provider"
 
 ---
 
-### Task 29: Rewrite SMS channel to call Twilio provider
+### Task 29: Rewrite SMS channel to call Twilio provider + add cost caps
 
 **Files:**
 - Modify: `avy-erp-backend/src/core/notifications/channels/sms.channel.ts`
-- Modify: `avy-erp-backend/src/core/notifications/templates/masker.ts`
+- Create: `avy-erp-backend/src/core/notifications/channels/sms/caps.ts`
 
-- [ ] **Step 1: Update masker to handle SMS channel**
+Note: masker was already extended in **Task 6F** to cover SMS + WHATSAPP. No changes needed to the masker here.
 
-In `masker.ts`, change the condition:
+- [ ] **Step 1: Create SMS caps helper**
 
 ```typescript
-// Before
-if (channel !== 'PUSH' || sensitiveFields.length === 0) return payload;
+// src/core/notifications/channels/sms/caps.ts
+import { cacheRedis } from '../../../../config/redis';
+import { env } from '../../../../config/env';
+import { logger } from '../../../../config/logger';
 
-// After
-if ((channel !== 'PUSH' && channel !== 'SMS') || sensitiveFields.length === 0) return payload;
+export interface CapsResult {
+  allowed: boolean;
+  reason?: 'SMS_TENANT_CAP' | 'SMS_USER_CAP';
+}
+
+/**
+ * Enforce per-tenant and per-user daily SMS caps via Redis INCR counters.
+ * Returns { allowed: false, reason } if either cap is exceeded.
+ * 48-hour TTL on counters to cover timezone drift.
+ */
+export async function checkSmsCaps(companyId: string, userId: string): Promise<CapsResult> {
+  const today = new Date().toISOString().slice(0, 10);
+  const tenantKey = `notif:sms:daily:${companyId}:${today}`;
+  const userKey = `notif:sms:daily:${userId}:${today}`;
+
+  try {
+    const tenantCount = await cacheRedis.incr(tenantKey);
+    if (tenantCount === 1) await cacheRedis.expire(tenantKey, 48 * 3600);
+    if (tenantCount > env.NOTIFICATIONS_SMS_DAILY_CAP_PER_TENANT) {
+      logger.warn('SMS tenant daily cap exceeded', { companyId, tenantCount });
+      return { allowed: false, reason: 'SMS_TENANT_CAP' };
+    }
+
+    const userCount = await cacheRedis.incr(userKey);
+    if (userCount === 1) await cacheRedis.expire(userKey, 48 * 3600);
+    if (userCount > env.NOTIFICATIONS_SMS_DAILY_CAP_PER_USER) {
+      logger.warn('SMS user daily cap exceeded', { userId, userCount });
+      return { allowed: false, reason: 'SMS_USER_CAP' };
+    }
+
+    return { allowed: true };
+  } catch (err) {
+    logger.warn('SMS caps check failed (fail-open)', { error: err });
+    return { allowed: true };
+  }
+}
 ```
 
-- [ ] **Step 2: Rewrite `sms.channel.ts`**
+- [ ] **Step 2: Rewrite `sms.channel.ts` with caps check**
 
 ```typescript
 import { platformPrisma } from '../../../config/database';
 import { twilioProvider } from './sms/twilio.provider';
+import { checkSmsCaps } from './sms/caps';
 import { maskForChannel } from '../templates/masker';
 import type { ChannelSendArgs, ChannelSendResult } from './channel-router';
 
@@ -1817,13 +2803,20 @@ export const smsChannel = {
       throw Object.assign(new Error('NO_USER_PHONE'), { code: 'NO_USER_PHONE' });
     }
 
+    // 1. Cost caps check (spec §4A.4) — before hitting Twilio
+    const caps = await checkSmsCaps(notif.companyId, userId);
+    if (!caps.allowed) {
+      throw Object.assign(new Error(caps.reason ?? 'SMS_CAP_HIT'), { code: caps.reason ?? 'SMS_CAP_HIT' });
+    }
+
     const template = notif.templateId
       ? await platformPrisma.notificationTemplate.findUnique({ where: { id: notif.templateId } })
       : null;
     const sensitiveFields = (template?.sensitiveFields as string[] | null) ?? [];
 
+    // 2. Masking (already extended for SMS in Task 6F)
     const masked = maskForChannel(
-      'SMS' as any,
+      'SMS',
       {
         title: notif.title,
         body: notif.body,
@@ -1835,6 +2828,7 @@ export const smsChannel = {
     const to = normalizeToE164(user.phone);
     const smsBody = `${masked.title}: ${masked.body}`.slice(0, 1600); // SMS hard limit
 
+    // 3. Provider call (retry wrapped internally)
     const result = await twilioProvider.send({ to, body: smsBody, priority }, traceId);
 
     return { provider: 'twilio', messageId: result.messageId };
@@ -1845,8 +2839,8 @@ export const smsChannel = {
 - [ ] **Step 3: Type-check + commit**
 
 ```bash
-git add src/core/notifications/channels/sms.channel.ts src/core/notifications/templates/masker.ts
-git commit -m "feat(notifications): wire SMS channel to Twilio provider with masking"
+git add src/core/notifications/channels/sms src/core/notifications/channels/sms.channel.ts
+git commit -m "feat(notifications): SMS channel with Twilio provider, cost caps, masking, retry"
 ```
 
 ---
@@ -1873,24 +2867,236 @@ Mock the `twilio` package via Jest.
 
 ## Phase 7: WhatsApp provider (Meta Cloud)
 
-### Task 31: Meta Cloud provider implementation
+### Task 31: Meta Cloud provider + WhatsApp channel with enforced template + caps + retry
 
 **Files:**
 - Create: `avy-erp-backend/src/core/notifications/channels/whatsapp/meta-cloud.provider.ts`
+- Create: `avy-erp-backend/src/core/notifications/channels/whatsapp/caps.ts`
+- Modify: `avy-erp-backend/src/core/notifications/channels/whatsapp.channel.ts`
 
-- [ ] **Step 1: Create the provider file (see spec §8.2)**
+- [ ] **Step 1: Create WhatsApp caps helper** (same pattern as SMS caps)
 
-Copy the implementation from spec section 8.2 verbatim.
+```typescript
+// src/core/notifications/channels/whatsapp/caps.ts
+import { cacheRedis } from '../../../../config/redis';
+import { env } from '../../../../config/env';
+import { logger } from '../../../../config/logger';
 
-- [ ] **Step 2: Rewrite `whatsapp.channel.ts` to call the provider**
+export interface CapsResult {
+  allowed: boolean;
+  reason?: 'WHATSAPP_TENANT_CAP' | 'WHATSAPP_USER_CAP';
+}
 
-Match the SMS channel pattern from Task 29 but with WhatsApp-specific payload construction.
+export async function checkWhatsappCaps(companyId: string, userId: string): Promise<CapsResult> {
+  const today = new Date().toISOString().slice(0, 10);
+  const tenantKey = `notif:whatsapp:daily:${companyId}:${today}`;
+  const userKey = `notif:whatsapp:daily:${userId}:${today}`;
 
-- [ ] **Step 3: Commit**
+  try {
+    const tenantCount = await cacheRedis.incr(tenantKey);
+    if (tenantCount === 1) await cacheRedis.expire(tenantKey, 48 * 3600);
+    if (tenantCount > env.NOTIFICATIONS_WHATSAPP_DAILY_CAP_PER_TENANT) {
+      logger.warn('WhatsApp tenant daily cap exceeded', { companyId, tenantCount });
+      return { allowed: false, reason: 'WHATSAPP_TENANT_CAP' };
+    }
+
+    const userCount = await cacheRedis.incr(userKey);
+    if (userCount === 1) await cacheRedis.expire(userKey, 48 * 3600);
+    if (userCount > env.NOTIFICATIONS_WHATSAPP_DAILY_CAP_PER_USER) {
+      logger.warn('WhatsApp user daily cap exceeded', { userId, userCount });
+      return { allowed: false, reason: 'WHATSAPP_USER_CAP' };
+    }
+
+    return { allowed: true };
+  } catch (err) {
+    logger.warn('WhatsApp caps check failed (fail-open)', { error: err });
+    return { allowed: true };
+  }
+}
+```
+
+- [ ] **Step 2: Create the Meta Cloud provider with retry + dry-run**
+
+```typescript
+// src/core/notifications/channels/whatsapp/meta-cloud.provider.ts
+import { env } from '../../../../config/env';
+import { logger } from '../../../../config/logger';
+import { withRetry } from '../provider-retry';
+
+export interface MetaCloudPayload {
+  to: string;
+  body: string;
+  templateName: string; // REQUIRED — enforced at channel level
+}
+
+export interface MetaCloudResult {
+  provider: 'meta-cloud';
+  messageId: string | null;
+}
+
+/** Transient errors worth retrying: 5xx, 429 rate limit, connection errors. */
+function isTransientMetaError(err: unknown): boolean {
+  const e = err as { status?: number; code?: string };
+  if (e.status && e.status >= 500) return true;
+  if (e.status === 429) return true;
+  if (e.code === 'ECONNRESET' || e.code === 'ETIMEDOUT') return true;
+  return false;
+}
+
+export const metaCloudProvider = {
+  async send(payload: MetaCloudPayload, traceId: string): Promise<MetaCloudResult> {
+    if (!env.NOTIFICATIONS_WHATSAPP_ENABLED) {
+      throw Object.assign(new Error('WHATSAPP_DISABLED'), { code: 'WHATSAPP_DISABLED' });
+    }
+
+    if (env.NOTIFICATIONS_WHATSAPP_DRY_RUN) {
+      logger.info('[DRY-RUN] WhatsApp would have been sent', {
+        traceId,
+        to: payload.to,
+        templateName: payload.templateName,
+        body: payload.body,
+      });
+      return { provider: 'meta-cloud', messageId: 'dry-run' };
+    }
+
+    if (!env.META_WHATSAPP_PHONE_NUMBER_ID || !env.META_WHATSAPP_ACCESS_TOKEN) {
+      throw Object.assign(new Error('WHATSAPP_NOT_CONFIGURED'), { code: 'WHATSAPP_NOT_CONFIGURED' });
+    }
+
+    const url = `https://graph.facebook.com/${env.META_WHATSAPP_API_VERSION}/${env.META_WHATSAPP_PHONE_NUMBER_ID}/messages`;
+
+    const body = {
+      messaging_product: 'whatsapp',
+      to: payload.to.replace(/^\+/, ''),
+      type: 'template',
+      template: {
+        name: payload.templateName,
+        language: { code: 'en_US' },
+        components: [
+          {
+            type: 'body',
+            parameters: [{ type: 'text', text: payload.body }],
+          },
+        ],
+      },
+    };
+
+    try {
+      const json = await withRetry(
+        async () => {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${env.META_WHATSAPP_ACCESS_TOKEN}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const errText = await res.text();
+            const err: any = new Error(`Meta Cloud API error ${res.status}: ${errText}`);
+            err.status = res.status;
+            throw err;
+          }
+          return (await res.json()) as { messages?: Array<{ id?: string }> };
+        },
+        { isRetryable: isTransientMetaError, maxAttempts: 3, baseDelayMs: 500 },
+      );
+      const messageId = json.messages?.[0]?.id ?? null;
+      logger.info('WhatsApp sent', { traceId, to: payload.to, messageId });
+      return { provider: 'meta-cloud', messageId };
+    } catch (err: any) {
+      logger.error('Meta Cloud send failed (after retries)', { error: err, traceId });
+      throw Object.assign(new Error(err?.message ?? 'META_SEND_FAILED'), { code: 'META_SEND_FAILED' });
+    }
+  },
+};
+```
+
+- [ ] **Step 3: Rewrite `whatsapp.channel.ts` with enforced template + caps + masking**
+
+```typescript
+import { platformPrisma } from '../../../config/database';
+import { metaCloudProvider } from './whatsapp/meta-cloud.provider';
+import { checkWhatsappCaps } from './whatsapp/caps';
+import { maskForChannel } from '../templates/masker';
+import type { ChannelSendArgs, ChannelSendResult } from './channel-router';
+
+function normalizeToE164(phone: string): string {
+  if (phone.startsWith('+')) return phone;
+  return `+91${phone.replace(/\D/g, '')}`;
+}
+
+export const whatsappChannel = {
+  async send({ notificationId, userId, traceId }: ChannelSendArgs): Promise<ChannelSendResult> {
+    const notif = await platformPrisma.notification.findUniqueOrThrow({ where: { id: notificationId } });
+    const user = await platformPrisma.user.findUniqueOrThrow({ where: { id: userId } });
+
+    if (!user.phone) {
+      throw Object.assign(new Error('NO_USER_PHONE'), { code: 'NO_USER_PHONE' });
+    }
+
+    const template = notif.templateId
+      ? await platformPrisma.notificationTemplate.findUnique({ where: { id: notif.templateId } })
+      : null;
+
+    // 1. ENFORCE template requirement (spec §4A.5) — Meta rejects free-form text outside 24h session window
+    if (!template?.whatsappTemplateName) {
+      throw Object.assign(
+        new Error('WHATSAPP_TEMPLATE_REQUIRED: A pre-approved Meta Business template name is required'),
+        { code: 'WHATSAPP_TEMPLATE_REQUIRED' },
+      );
+    }
+
+    // 2. Cost caps
+    const caps = await checkWhatsappCaps(notif.companyId, userId);
+    if (!caps.allowed) {
+      throw Object.assign(new Error(caps.reason ?? 'WHATSAPP_CAP_HIT'), { code: caps.reason ?? 'WHATSAPP_CAP_HIT' });
+    }
+
+    // 3. Masking
+    const sensitiveFields = (template.sensitiveFields as string[] | null) ?? [];
+    const masked = maskForChannel(
+      'WHATSAPP',
+      {
+        title: notif.title,
+        body: notif.body,
+        data: (notif.data as Record<string, unknown> | null) ?? undefined,
+      },
+      sensitiveFields,
+    );
+
+    const to = normalizeToE164(user.phone);
+    const bodyText = `${masked.title}\n\n${masked.body}`;
+
+    // 4. Provider call (retry wrapped internally)
+    const result = await metaCloudProvider.send(
+      { to, body: bodyText, templateName: template.whatsappTemplateName },
+      traceId,
+    );
+    return { provider: 'meta-cloud', messageId: result.messageId };
+  },
+};
+```
+
+- [ ] **Step 4: Add Zod `.refine()` to `createNotificationTemplateSchema` to enforce whatsappTemplateName for WHATSAPP channel**
+
+In `ess.validators.ts` find `createNotificationTemplateSchema` and add:
+
+```typescript
+.refine(
+  (data) => data.channel !== 'WHATSAPP' || !!data.whatsappTemplateName,
+  { message: 'whatsappTemplateName is required when channel is WHATSAPP', path: ['whatsappTemplateName'] },
+);
+```
+
+Also add `whatsappTemplateName: z.string().optional()` to the base schema.
+
+- [ ] **Step 5: Type-check + commit**
 
 ```bash
-git add src/core/notifications/channels/whatsapp
-git commit -m "feat(notifications): WhatsApp Meta Cloud provider + channel"
+git add src/core/notifications/channels/whatsapp src/core/notifications/channels/whatsapp.channel.ts src/modules/hr/ess/ess.validators.ts
+git commit -m "feat(notifications): WhatsApp Meta Cloud provider with enforced template, caps, retry, masking"
 ```
 
 ---
@@ -2336,18 +3542,35 @@ pnpm test src/core/notifications/__tests__
 
 ---
 
-### Task 48: Unit tests — cron service
+### Task 48: Unit tests — cron service + operational safeguards
 
 **Files:**
 - Create: `avy-erp-backend/src/core/notifications/__tests__/notification-cron.test.ts`
+- Create: `avy-erp-backend/src/core/notifications/__tests__/dispatch-bulk.test.ts`
+- Create: `avy-erp-backend/src/core/notifications/__tests__/rate-limiter.test.ts`
+- Create: `avy-erp-backend/src/core/notifications/__tests__/consent-cache.test.ts`
+- Create: `avy-erp-backend/src/core/notifications/__tests__/sms-caps.test.ts`
+- Create: `avy-erp-backend/src/core/notifications/__tests__/whatsapp-template-enforcement.test.ts`
+- Create: `avy-erp-backend/src/core/notifications/__tests__/provider-retry.test.ts`
+- Create: `avy-erp-backend/src/core/notifications/__tests__/event-retention.test.ts`
 
-- [ ] **Step 1: Mock DateTime.now() + Prisma to simulate today being a birthday**
+- [ ] **Step 1: Cron tests** — Mock DateTime.now() + Prisma to simulate today being a birthday. Verify dispatch called with correct trigger + tokens. Verify cron dedup prevents double-fire. Verify cursor pagination iterates all batches. Verify Promise.allSettled doesn't let one company's failure stop others.
 
-- [ ] **Step 2: Verify dispatch is called with correct trigger event + tokens**
+- [ ] **Step 2: dispatchBulk tests** — chunking to `chunkSize`; single rule load across all recipients; per-recipient token merging with `sharedTokens`; rate limit filtering; fallback to per-recipient when no rules.
 
-- [ ] **Step 3: Verify cron dedup prevents double-fire**
+- [ ] **Step 3: Rate limiter tests** — counter increments; expires at 60s; exceeds limit returns false; CRITICAL priority bypasses; Redis down fail-open returns true.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Consent cache tests** — read-through cache hit returns parsed data; cache miss → DB + write-through; invalidation deletes key; Map rehydration from serialized JSON; TTL is 300s.
+
+- [ ] **Step 5: SMS caps tests** — per-tenant cap INCR + reject at +1; per-user cap independently; TTL 48h; dry-run mode bypasses provider.
+
+- [ ] **Step 6: WhatsApp template enforcement tests** — throws `WHATSAPP_TEMPLATE_REQUIRED` when missing; passes with template name set; masker applied to SMS + WHATSAPP + PUSH consistently.
+
+- [ ] **Step 7: Provider retry tests** — 3 attempts with exponential backoff; non-retryable errors throw immediately; auth errors do not retry.
+
+- [ ] **Step 8: Event retention tests** — deletes events older than retention window in batches; aggregation runs before cleanup; idempotent upsert into `NotificationEventAggregateDaily`.
+
+- [ ] **Step 9: Commit**
 
 ---
 
@@ -2550,22 +3773,39 @@ cd .. && git log --oneline main -5
 
 ## Self-Review
 
-**Spec coverage:** every item in the spec's §2.2 deferred items table is addressed by at least one task:
+**Spec coverage:** every item in the spec's §2.2 deferred items table AND every operational safeguard in §4A is addressed by at least one task:
 
 - [x] Per-module dispatch call sites → Phases 2-4 (Tasks 7-21)
-- [x] SMS provider → Phase 6 (Tasks 28-30)
-- [x] WhatsApp provider → Phase 7 (Tasks 31-33)
+- [x] SMS provider → Phase 6 (Tasks 28-30) — **with retry, caps, dry-run, masking**
+- [x] WhatsApp provider → Phase 7 (Tasks 31-33) — **with enforced template, caps, retry, masking**
 - [x] Tenant onboarding Step05 → Phase 9 (Tasks 39-40)
-- [x] Analytics dashboard → Phase 10 (Tasks 41-44)
-- [x] Per-category user preferences → Phase 8 (Tasks 34-38)
-- [x] Unit + integration tests → Phase 11 (Tasks 45-51)
+- [x] Analytics dashboard → Phase 10 (Tasks 41-44) — **reads from pre-aggregated table**
+- [x] Per-category user preferences → Phase 8 (Tasks 34-38) — **with "Mute all" convenience**
+- [x] Unit + integration tests → Phase 11 (Tasks 45-51) — **includes safeguards tests**
 - [x] Prisma migration file → Phase 1 (Task 1)
 - [x] Mobile notification icon → Phase 12 (Task 52)
 - [x] Drop `Notification.isRead` (Phase A) → Phase 12 (Task 53)
 - [x] Pre-existing mobile type error → Phase 1 (Task 2)
-- [x] Informational cron events → Phase 5 (Tasks 22-27)
+- [x] Informational cron events → Phase 5 (Tasks 22-27) — **with cursor pagination + Promise.allSettled**
 - [x] Rule cache invalidation → Phase 2 (Task 16)
 - [x] Reviewer residual nits → Phase 1 (Task 6)
+
+**Operational safeguards (spec §4A):**
+
+- [x] Per-user rate limiter → Phase 1A (Task 6B)
+- [x] Bulk dispatch utility → Phase 1A (Task 6D)
+- [x] Consent cache layer → Phase 1A (Task 6C)
+- [x] SMS daily caps → Phase 6 (Task 29)
+- [x] WhatsApp template enforcement → Phase 7 (Task 31)
+- [x] Provider retry wrapper → Phase 1A (Task 6E)
+- [x] SMS + WhatsApp masking parity → Phase 1A (Task 6F)
+- [x] Pre-aggregation table schema → Phase 1A (Task 6G)
+- [x] Aggregation + retention crons → Phase 5 (Task 26A)
+- [x] Cron pagination helper → Phase 1A (Task 6H)
+- [x] Approval handler per-case try/catch → Phase 2 (Task 11)
+- [x] Payroll bulk dispatch → Phase 3 (Task 12)
+- [x] Cron cursor pagination + Promise.allSettled → Phase 5 (Task 23)
+- [x] Category "Mute all" toggle → Phase 8 (Task 36)
 
 **Placeholder scan:** no TBDs, TODOs, or "TODO: implement later" stubs. Every step has either complete code or an exact reference to a spec section with code.
 

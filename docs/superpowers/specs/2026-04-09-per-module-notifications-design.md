@@ -253,6 +253,488 @@ Dev used `db push` throughout the `feat/notifications` branch. For proper stagin
 2. Commit the generated file as `prisma/migrations/20260409_notifications_full/migration.sql`.
 3. Document in the rollout plan that staging/prod runs `pnpm prisma migrate deploy` to apply it.
 
+### 4.6 NEW: `NotificationEventAggregateDaily` (pre-aggregated analytics)
+
+The `NotificationEvent` table grows fast (~150K rows/month per tenant at 100 users with moderate activity). Real-time `groupBy` aggregations over the full table are slow and get slower over time. Solution: a pre-aggregated daily rollup table populated by cron.
+
+```prisma
+model NotificationEventAggregateDaily {
+  id              String              @id @default(cuid())
+  companyId       String
+  date            DateTime            @db.Date // date-only, company timezone
+  channel         NotificationChannel
+  event           NotificationEventType
+  provider        String?
+  count           Int                 @default(0)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  company         Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, date, channel, event, provider])
+  @@index([companyId, date])
+  @@map("notification_event_aggregate_daily")
+}
+```
+
+A cron job at 2 AM daily (§6.8) aggregates the previous day's `NotificationEvent` rows into this table. The analytics dashboard reads from here for anything older than "today" and falls back to live queries for today's data.
+
+---
+
+## 4A. Operational Safeguards (critical — production-grade scaling & cost controls)
+
+This section adds seven non-negotiable safeguards that protect the system from self-inflicted production incidents (cost explosions, memory spikes, provider bans, duplicate sends, Redis saturation). Every section below is MUST implement, not optional.
+
+### 4A.1 Per-user rate limiting (hot-path)
+
+**Problem:** Without a per-user cap, a bug in event wiring, a cron misfire, or a runaway loop can trigger hundreds of notifications to a single user in seconds — costing real money (SMS) and causing provider spam flags.
+
+**Solution:** A Redis INCR-based rate limiter applied inside `dispatch()` BEFORE any Notification row is written. Limit: **20 notifications per user per 60-second window** by default, configurable via env var `NOTIFICATIONS_USER_RATE_LIMIT_PER_MIN`. CRITICAL priority bypasses the limit (security/payroll alerts must always deliver).
+
+```typescript
+// src/core/notifications/dispatch/rate-limiter.ts (NEW)
+export async function checkUserRateLimit(userId: string, priority: NotificationPriority): Promise<boolean> {
+  if (priority === 'CRITICAL') return true; // bypass for critical
+
+  const key = `notif:rate:${userId}`;
+  const max = env.NOTIFICATIONS_USER_RATE_LIMIT_PER_MIN;
+
+  try {
+    const count = await cacheRedis.incr(key);
+    if (count === 1) {
+      await cacheRedis.expire(key, 60);
+    }
+    if (count > max) {
+      logger.warn('User rate limit exceeded, dropping notification', { userId, count, max });
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.warn('Rate limit check failed (fail-open)', { error: err, userId });
+    return true; // fail open
+  }
+}
+```
+
+The dispatcher calls this for every recipient in a bucket BEFORE creating the Notification row. Dropped notifications emit a `RATE_LIMITED` `NotificationEvent` row so admins can see them in the analytics dashboard.
+
+### 4A.2 Bulk dispatch utility (mandatory for fanouts ≥20)
+
+**Problem:** Iterating `dispatch()` in a loop for 500 payroll recipients creates 500 individual Notification rows + 500 BullMQ jobs + 500 Redis operations in sequence. This is O(N) in the caller's request/worker context, blows up Redis memory, and slows everything.
+
+**Solution:** A dedicated `dispatchBulk()` method on `notificationService` that takes a single trigger event + an array of recipient specs + a shared token baseline + an optional per-recipient token builder. Internally it:
+
+1. Loads rules ONCE (not per recipient)
+2. Renders the template ONCE per unique variable combination (caches if tokens are identical across recipients)
+3. Uses Prisma `createManyAndReturn` for batch row insertion
+4. Enqueues one BullMQ job per chunk of N recipients (default `chunkSize=50`, configurable)
+5. The worker's chunked job handler then iterates those 50 users through `channelRouter.send()` in parallel
+
+```typescript
+// src/core/notifications/dispatch/dispatch-bulk.ts (NEW)
+export interface DispatchBulkInput {
+  companyId: string;
+  triggerEvent: string;
+  type?: string;
+  entityType?: string;
+  entityId?: string;
+  recipients: Array<{
+    userId: string;
+    tokens?: Record<string, unknown>; // per-recipient overrides
+  }>;
+  sharedTokens?: Record<string, unknown>; // common across all recipients
+  priority?: NotificationPriority;
+  systemCritical?: boolean;
+  actionUrl?: string;
+  chunkSize?: number; // default 50
+}
+
+export async function dispatchBulk(input: DispatchBulkInput): Promise<DispatchResult> {
+  const traceId = nanoid(12);
+  const chunkSize = input.chunkSize ?? 50;
+
+  // 1. Rate-limit each recipient (drop over-limit, keep the rest)
+  const allowedRecipients: typeof input.recipients = [];
+  for (const r of input.recipients) {
+    const ok = await checkUserRateLimit(r.userId, input.priority ?? 'MEDIUM');
+    if (ok) allowedRecipients.push(r);
+  }
+
+  // 2. Load rules once
+  const rules = await loadActiveRules(input.companyId, input.triggerEvent);
+  if (rules.length === 0) { /* fallback to IN_APP-only */ }
+
+  // 3. Dedup + consent pre-check per recipient (in-process, no provider calls)
+  // 4. Batch-create Notification rows via createManyAndReturn, keyed by recipient
+  // 5. Chunk recipients into groups of `chunkSize`
+  // 6. For each chunk, enqueue ONE BullMQ job with `isBulk: true, notificationIds: [...], userIds: [...]`
+  // 7. Worker's bulk-job handler iterates the chunk in parallel via Promise.allSettled
+}
+```
+
+**Rule:** any call site where `recipients.length >= 20` (e.g. payroll fanout, ALL-role dispatches, cron fanouts) MUST use `dispatchBulk()`. Individual `dispatch()` calls are fine for 1-19 recipients.
+
+### 4A.3 Consent cache layer (Redis, 5-minute TTL)
+
+**Problem:** `loadConsentCache()` hits the DB for user + companySettings + preference + categoryPrefs every single time a worker processes a job. At 100 jobs/sec that's 400 DB queries/sec for consent alone.
+
+**Solution:** Wrap `loadConsentCache` with a Redis read-through cache. Key: `notif:consent:${userId}`. TTL: 300s (5 minutes). Invalidate on any PATCH to the user's preferences, company settings notification toggles, or category prefs.
+
+```typescript
+// Extension to consent-gate.ts
+export async function loadConsentCache(userId: string): Promise<ConsentCache> {
+  const cacheKey = `notif:consent:${userId}`;
+
+  // Try cache first
+  try {
+    const cached = await cacheRedis.get(cacheKey);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      return {
+        ...parsed,
+        categoryPrefs: new Map(parsed.categoryPrefs), // rehydrate Map from array
+      };
+    }
+  } catch { /* fall through */ }
+
+  // DB fetch
+  const fresh = await loadConsentCacheFromDB(userId);
+
+  // Write-through cache (serialize Map as array of entries)
+  try {
+    await cacheRedis.set(
+      cacheKey,
+      JSON.stringify({ ...fresh, categoryPrefs: Array.from(fresh.categoryPrefs.entries()) }),
+      'EX',
+      300,
+    );
+  } catch { /* non-fatal */ }
+
+  return fresh;
+}
+
+export async function invalidateConsentCache(userId: string): Promise<void> {
+  try {
+    await cacheRedis.del(`notif:consent:${userId}`);
+  } catch (err) {
+    logger.warn('Consent cache invalidation failed', { error: err, userId });
+  }
+}
+```
+
+Wire `invalidateConsentCache(userId)` into:
+- `preferences.service.update()` after successful upsert
+- `preferences.service.updateCategoryPreferences()` after transaction commit
+- Company settings update mutation (CompanySettingsController) when any `*Notifications` field changes
+- On logout (so the next login re-fetches fresh state)
+
+### 4A.4 SMS cost controls (mandatory)
+
+**Problem:** SMS is expensive (₹0.15-₹2 per message in India, higher abroad). A bug in event wiring could send thousands of messages in minutes and rack up ₹10K+ in charges before anyone notices.
+
+**Solution:** Three-tier cost protection.
+
+**Tier 1: Per-tenant daily cap** — env var `NOTIFICATIONS_SMS_DAILY_CAP_PER_TENANT` (default 500). Redis counter `notif:sms:daily:{companyId}:{YYYY-MM-DD}` with 48h TTL. Before each SMS send, INCR and reject if over cap. Over-cap sends emit a `SMS_DAILY_CAP_HIT` `NotificationEvent` so admins see it in analytics.
+
+**Tier 2: Per-user daily cap** — env var `NOTIFICATIONS_SMS_DAILY_CAP_PER_USER` (default 10). Same pattern, key `notif:sms:daily:{userId}:{YYYY-MM-DD}`.
+
+**Tier 3: Dry-run mode** — env var `NOTIFICATIONS_SMS_DRY_RUN` (default `false`). When `true`, the `twilioProvider.send()` logs what it would have sent but doesn't hit Twilio. Used for testing + staging environments without burning real credits.
+
+```typescript
+// Extension to sms.channel.ts
+async function checkSmsCaps(companyId: string, userId: string): Promise<{ allowed: boolean; reason?: string }> {
+  const today = new Date().toISOString().slice(0, 10);
+  const tenantKey = `notif:sms:daily:${companyId}:${today}`;
+  const userKey = `notif:sms:daily:${userId}:${today}`;
+
+  const tenantCount = await cacheRedis.incr(tenantKey);
+  if (tenantCount === 1) await cacheRedis.expire(tenantKey, 48 * 3600);
+  if (tenantCount > env.NOTIFICATIONS_SMS_DAILY_CAP_PER_TENANT) {
+    return { allowed: false, reason: 'SMS_TENANT_CAP' };
+  }
+
+  const userCount = await cacheRedis.incr(userKey);
+  if (userCount === 1) await cacheRedis.expire(userKey, 48 * 3600);
+  if (userCount > env.NOTIFICATIONS_SMS_DAILY_CAP_PER_USER) {
+    return { allowed: false, reason: 'SMS_USER_CAP' };
+  }
+
+  return { allowed: true };
+}
+```
+
+Called from `smsChannel.send()` BEFORE hitting Twilio.
+
+### 4A.5 WhatsApp template enforcement (compliance)
+
+**Problem:** Meta Cloud API rejects free-form text messages sent outside the 24-hour session window. For transactional ERP notifications (leave approved, payroll published, etc.) the recipient has almost never initiated a WhatsApp conversation in the last 24h, so every free-form send silently fails. The prior spec draft allowed `templateName?: string` which creates a compliance time bomb.
+
+**Solution:** Require `whatsappTemplateName` to be set on the `NotificationTemplate` before the WhatsApp channel can send. If it's missing, the channel throws `WHATSAPP_TEMPLATE_REQUIRED` immediately — the worker records FAILED and moves on (no wasted API call).
+
+```typescript
+// Extension to whatsapp.channel.ts
+if (!template?.whatsappTemplateName) {
+  throw Object.assign(
+    new Error('WHATSAPP_TEMPLATE_REQUIRED: A pre-approved Meta Business template is required for WhatsApp delivery'),
+    { code: 'WHATSAPP_TEMPLATE_REQUIRED' },
+  );
+}
+```
+
+**Admin UX:** the `NotificationTemplateScreen` in web validates that `whatsappTemplateName` is set before allowing `channel=WHATSAPP` to be saved. The field is conditionally rendered when channel is WHATSAPP.
+
+### 4A.6 SMS + WhatsApp retry with exponential backoff
+
+**Problem:** Transient provider errors (Twilio 503, Meta rate limits) should retry, not fail immediately. BullMQ worker-level retry (3 attempts, exponential backoff 2s/8s/30s) is already in place for the JOB, but each JOB retry re-runs consent + claim + send from scratch, which is wasteful for transient provider errors.
+
+**Solution:** Add a provider-level retry wrapper around the Twilio and Meta Cloud send calls. 3 attempts with exponential backoff (500ms, 2s, 8s) for transient errors only (not for auth errors, not for `TEMPLATE_REQUIRED`, not for bad phone number). The BullMQ job retry still catches anything that survives this.
+
+```typescript
+// Shared util: src/core/notifications/channels/provider-retry.ts
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  opts: { maxAttempts?: number; isRetryable: (err: unknown) => boolean } = { isRetryable: () => true },
+): Promise<T> {
+  const max = opts.maxAttempts ?? 3;
+  for (let attempt = 1; attempt <= max; attempt++) {
+    try {
+      return await operation();
+    } catch (err) {
+      if (attempt === max || !opts.isRetryable(err)) throw err;
+      const delay = Math.min(500 * Math.pow(4, attempt - 1), 10_000);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw new Error('unreachable');
+}
+
+// Usage in twilio.provider.ts:
+return withRetry(
+  () => c.messages.create({ /* ... */ }),
+  {
+    isRetryable: (err) => {
+      const code = (err as any)?.code;
+      const status = (err as any)?.status;
+      // Retry only on network or transient provider errors
+      if (status === 503 || status === 429) return true;
+      if (code === 'ECONNRESET' || code === 'ETIMEDOUT') return true;
+      return false;
+    },
+  },
+);
+```
+
+Same pattern for Meta Cloud (`5xx` and `429` → retry; `4xx` for template errors → don't).
+
+### 4A.7 WhatsApp + SMS masking parity with PUSH
+
+The existing `maskForChannel()` helper is extended to handle `SMS` and `WHATSAPP` as masked channels alongside `PUSH`. Sensitive fields declared on the template are replaced with `***` in both title and body for ALL three external channels. In-app and email retain full content.
+
+```typescript
+// Extension to masker.ts
+const MASKED_CHANNELS: NotificationChannel[] = ['PUSH', 'SMS', 'WHATSAPP'];
+
+export function maskForChannel<T extends MaskablePayload>(
+  channel: NotificationChannel,
+  payload: T,
+  sensitiveFields: string[],
+): T {
+  if (!MASKED_CHANNELS.includes(channel) || sensitiveFields.length === 0) return payload;
+  // ... rest of the existing masking logic
+}
+```
+
+### 4A.8 Cron pagination + parallelism
+
+**Problem:** The original cron implementation plan loaded ALL employees per company into memory (`findMany()` with no limit). For a tenant with 10K employees this is a memory spike and slow serial iteration over companies blocks the event loop.
+
+**Solution:**
+
+**Pattern 1: Cursor-based pagination** inside each per-company run:
+
+```typescript
+let cursor: string | undefined = undefined;
+const BATCH_SIZE = 200;
+
+while (true) {
+  const batch = await tenantDb.employee.findMany({
+    where: { status: { notIn: ['EXITED', 'TERMINATED'] }, dateOfBirth: { not: null } },
+    select: { id: true, firstName: true, lastName: true, dateOfBirth: true, userId: true },
+    take: BATCH_SIZE,
+    ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+    orderBy: { id: 'asc' },
+  });
+  if (batch.length === 0) break;
+
+  // process batch: filter by today's MM-DD, dispatch via dispatchBulk
+  const celebrating = batch.filter(/* mmdd match */);
+  if (celebrating.length > 0) {
+    await notificationService.dispatchBulk({
+      companyId,
+      triggerEvent: 'BIRTHDAY',
+      recipients: celebrating.map((e) => ({ userId: e.userId!, tokens: { employee_name: `${e.firstName} ${e.lastName}` } })),
+      priority: 'LOW',
+      type: 'BIRTHDAY_ANNIVERSARY',
+    });
+  }
+
+  cursor = batch[batch.length - 1].id;
+  if (batch.length < BATCH_SIZE) break;
+}
+```
+
+**Pattern 2: Per-company parallelism** with `Promise.allSettled` and a concurrency cap to avoid overwhelming the tenant connection pool:
+
+```typescript
+import pLimit from 'p-limit';
+
+async function runBirthday(): Promise<void> {
+  const companies = await platformPrisma.company.findMany({ /* ... */ });
+  const limit = pLimit(5); // max 5 companies in parallel
+  const results = await Promise.allSettled(
+    companies.map((c) => limit(() => this.runBirthdayForCompany(c))),
+  );
+  const failures = results.filter((r) => r.status === 'rejected');
+  if (failures.length > 0) {
+    logger.warn('Birthday cron: some companies failed', { count: failures.length });
+  }
+}
+```
+
+Install `p-limit` package (~1KB dependency) if not already present.
+
+### 4A.9 `NotificationEvent` retention cleanup cron
+
+**Problem:** At 100 users × 30 notifications/day × multiple channels × event types, `NotificationEvent` grows by ~10K rows/day per tenant. Over 90 days that's ~900K rows per tenant. Query performance degrades without cleanup.
+
+**Solution:** New daily cron at 2 AM UTC that deletes `NotificationEvent` rows older than `NOTIFICATIONS_EVENT_RETENTION_DAYS` (default 90). Runs AFTER the aggregation cron (§4.6), so the daily rollup is always computed before the raw rows are deleted.
+
+```typescript
+// In notification-cron.service.ts
+this.jobs.push(
+  cron.schedule('0 2 * * *', () => this.runEventCleanup()),
+);
+
+private async runEventCleanup(): Promise<void> {
+  try {
+    const cutoff = DateTime.now().minus({ days: env.NOTIFICATIONS_EVENT_RETENTION_DAYS }).toJSDate();
+    // Delete in batches to avoid long-running transactions
+    let totalDeleted = 0;
+    while (true) {
+      const result = await platformPrisma.notificationEvent.deleteMany({
+        where: { occurredAt: { lt: cutoff } },
+      });
+      totalDeleted += result.count;
+      if (result.count < 10_000) break; // exit when batch is small
+    }
+    logger.info('NotificationEvent cleanup complete', { totalDeleted });
+  } catch (err) {
+    logger.error('NotificationEvent cleanup failed', { error: err });
+  }
+}
+```
+
+**Aggregation cron runs at 1:30 AM** (30 min before cleanup) to pre-aggregate the previous day's events into `NotificationEventAggregateDaily` (§4.6) so the analytics dashboard keeps working for older dates after raw rows are deleted.
+
+### 4A.10 Approval handler per-case error isolation
+
+**Problem:** `ess.service.onApprovalComplete()` is the universal dispatch point for 12 entity types. If the dispatch for one entity type throws (e.g. transient Prisma error), the entire approval transition could roll back or fail, blocking approvals for unrelated entities.
+
+**Solution:** Each `case` block wraps its dispatch call in a `try/catch` that logs but doesn't re-throw. The business update (entity status change) is already committed before the dispatch call — if the dispatch fails, the approval still succeeds and an admin can re-notify from the analytics screen (future enhancement).
+
+```typescript
+case 'LeaveRequest': {
+  // ... existing status update ...
+  try {
+    await notificationService.dispatch({ /* ... */ });
+  } catch (err) {
+    logger.error('LeaveRequest approval dispatch failed (non-fatal)', { error: err, entityId, decision });
+    // Continue — the approval itself is already committed.
+  }
+  break;
+}
+```
+
+Same pattern for all 12 cases.
+
+### 4A.11 Category preference "Mute all" convenience toggle
+
+**Problem:** The category preferences matrix (N categories × 4 channels = up to 64 toggles) is powerful but tedious. Users who want to silence an entire category (e.g. "mute all Payroll") have to toggle 4 switches.
+
+**Solution:** The web + mobile preferences screen renders each category row with a leading "Mute all" checkbox that toggles all 4 channel checkboxes in the row at once. Under the hood, a single `PATCH /notifications/preferences/categories` call with 4 rows is issued (one per channel).
+
+No backend changes needed beyond the existing bulk `updateCategoryPreferences` endpoint accepting multiple rows in one call.
+
+### 4A.12 Analytics pre-aggregation cron
+
+Already covered in §4.6 (schema) and §4A.9 (retention cron). The aggregation cron itself is documented here.
+
+**Pattern:** Runs at 1:30 AM daily. For each `(companyId, date, channel, event, provider)` tuple in yesterday's `NotificationEvent` rows, upserts one row in `NotificationEventAggregateDaily` with `count`. Idempotent — if the cron runs twice on the same day, the unique constraint on `(companyId, date, channel, event, provider)` ensures the upsert handles it.
+
+```typescript
+private async runAggregation(): Promise<void> {
+  try {
+    const yesterday = DateTime.now().minus({ days: 1 }).startOf('day').toJSDate();
+    const todayStart = DateTime.now().startOf('day').toJSDate();
+
+    // Group by (companyId, channel, event, provider)
+    const aggregates = await platformPrisma.$queryRaw<
+      Array<{ companyId: string; channel: string; event: string; provider: string | null; count: bigint }>
+    >`
+      SELECT n."companyId", ne.channel, ne.event, ne.provider, COUNT(*)::bigint as count
+      FROM notification_events ne
+      JOIN notifications n ON n.id = ne."notificationId"
+      WHERE ne."occurredAt" >= ${yesterday} AND ne."occurredAt" < ${todayStart}
+      GROUP BY n."companyId", ne.channel, ne.event, ne.provider
+    `;
+
+    for (const agg of aggregates) {
+      await platformPrisma.notificationEventAggregateDaily.upsert({
+        where: {
+          companyId_date_channel_event_provider: {
+            companyId: agg.companyId,
+            date: yesterday,
+            channel: agg.channel as any,
+            event: agg.event as any,
+            provider: agg.provider ?? '',
+          },
+        },
+        create: {
+          companyId: agg.companyId,
+          date: yesterday,
+          channel: agg.channel as any,
+          event: agg.event as any,
+          provider: agg.provider,
+          count: Number(agg.count),
+        },
+        update: { count: Number(agg.count) },
+      });
+    }
+    logger.info('Notification event aggregation complete', { rows: aggregates.length });
+  } catch (err) {
+    logger.error('Notification event aggregation failed', { error: err });
+  }
+}
+```
+
+### 4A.13 New env vars
+
+```typescript
+// src/config/env.ts additions (complete set for this spec)
+
+// Safeguards
+NOTIFICATIONS_USER_RATE_LIMIT_PER_MIN: z.coerce.number().default(20),
+NOTIFICATIONS_BULK_CHUNK_SIZE: z.coerce.number().default(50),
+NOTIFICATIONS_BULK_MIN_RECIPIENTS: z.coerce.number().default(20),
+NOTIFICATIONS_CONSENT_CACHE_TTL_SEC: z.coerce.number().default(300),
+NOTIFICATIONS_SMS_DAILY_CAP_PER_TENANT: z.coerce.number().default(500),
+NOTIFICATIONS_SMS_DAILY_CAP_PER_USER: z.coerce.number().default(10),
+NOTIFICATIONS_SMS_DRY_RUN: envBoolean.default(false),
+NOTIFICATIONS_WHATSAPP_DRY_RUN: envBoolean.default(false),
+NOTIFICATIONS_EVENT_RETENTION_DAYS: z.coerce.number().default(90),
+NOTIFICATIONS_CRON_COMPANY_CONCURRENCY: z.coerce.number().default(5),
+```
+
 ---
 
 ## 5. Per-Module Dispatch Call Sites
@@ -743,14 +1225,27 @@ export const smsChannel = {
 
 Extend `maskForChannel()` to handle `SMS` the same way as `PUSH` (both are external, short-form channels where sensitive data should not leak).
 
-### 7.4 Rate limiting + compliance
+### 7.4 Rate limiting, cost caps, retries, and compliance
 
-- Twilio has per-account rate limits. The BullMQ worker limiter already prevents bursts. No additional wiring needed.
-- **Legal:** SMS is subject to TCPA (US), DND (India), GDPR (EU). The company-level `smsNotifications` master toggle is the compliance switch. Add a note in the admin UI that SMS requires explicit user opt-in per local law.
+**Cost caps (see §4A.4):** Every SMS send passes through `checkSmsCaps(companyId, userId)` which enforces per-tenant daily cap (default 500/day) and per-user daily cap (default 10/day) via Redis INCR keys. Over-cap sends emit `SMS_TENANT_CAP` or `SMS_USER_CAP` `NotificationEvent` rows so admins see them in the analytics dashboard.
+
+**Per-user rate limiting (see §4A.1):** The dispatcher's `checkUserRateLimit()` applies to SMS the same way it applies to push (20/min by default). CRITICAL priority bypasses. This is on top of the daily caps — a burst of 20 in one minute will be rate limited even if the daily cap isn't hit.
+
+**Provider-level retry (see §4A.6):** The Twilio `messages.create()` call is wrapped in `withRetry()` with 3 attempts and exponential backoff (500ms/2s/8s). Only transient errors retry (503, 429, ECONNRESET, ETIMEDOUT). Auth failures and bad-phone errors do NOT retry.
+
+**BullMQ worker-level retry** is still in place for anything that escapes the provider retry (job fails the whole 3x attempts → DLQ).
+
+**Dry-run mode (see §4A.4):** `NOTIFICATIONS_SMS_DRY_RUN=true` bypasses Twilio entirely and logs the would-be send. Used in staging and for smoke tests without burning real credits.
+
+**Legal compliance:** SMS is subject to TCPA (US), DND (India), GDPR (EU). The company-level `smsNotifications` master toggle is the compliance switch. The admin UI shows a warning explaining SMS requires explicit user opt-in per local law.
 
 ### 7.5 Default off
 
 `CompanySettings.smsNotifications` defaults to `false` (already set in the existing schema). Tenants must explicitly enable it — this prevents accidental SMS charges on day-one.
+
+### 7.6 Masking parity
+
+SMS messages apply the same `sensitiveFields` masking as PUSH (see §4A.7). Amounts, reset codes, account numbers declared on the template are replaced with `***` in the SMS body.
 
 ---
 
@@ -839,49 +1334,84 @@ export const metaCloudProvider = {
 };
 ```
 
-### 8.3 Template policy
+### 8.3 Template policy — **ENFORCED (mandatory)**
 
-WhatsApp Business API requires **pre-approved message templates** for messages sent outside the 24-hour "session window" (i.e., outside a recent user-initiated conversation). For transactional ERP notifications, templates must be registered in Meta Business Manager first.
+WhatsApp Business API rejects free-form text messages sent outside the 24-hour "session window" (i.e., outside a recent user-initiated conversation). For transactional ERP notifications, the recipient has almost never initiated a WhatsApp conversation in the last 24h, so every free-form send would silently fail in production.
 
-**Strategy:**
-1. For this PR, ship support for both free-form text (inside session window) and templated messages (outside).
-2. The admin UI for `NotificationTemplate` gains an optional `whatsappTemplateName` field (the pre-approved template name in Meta).
-3. When sending WhatsApp, the provider checks if `template.whatsappTemplateName` is set; if so uses template mode, else uses text mode.
-4. Document in the admin UI that WhatsApp templates must be registered in Meta Business Manager before use.
+**This spec mandates:** `whatsappTemplateName` MUST be set on any `NotificationTemplate` where `channel=WHATSAPP`. The WhatsApp channel throws `WHATSAPP_TEMPLATE_REQUIRED` immediately if it's missing — no free-form text mode is supported (see §4A.5).
+
+**Admin UX enforcement:**
+- `NotificationTemplateScreen` (web) conditionally renders a `whatsappTemplateName` text input when `channel === 'WHATSAPP'` and marks it required.
+- The form submission is blocked if the field is empty.
+- A help tooltip explains that the template must first be registered and approved in Meta Business Manager.
+
+**Provider retry + dry-run + cost control:**
+- The Meta Cloud API call is wrapped in `withRetry()` (§4A.6) — 3 attempts with exponential backoff for 5xx and 429 only.
+- `NOTIFICATIONS_WHATSAPP_DRY_RUN=true` bypasses the HTTP call.
+- Per-tenant and per-user daily caps are enforced the same way as SMS (§4A.4), keys: `notif:whatsapp:daily:{companyId}:{date}` and `notif:whatsapp:daily:{userId}:{date}`, with defaults `NOTIFICATIONS_WHATSAPP_DAILY_CAP_PER_TENANT=500` and `NOTIFICATIONS_WHATSAPP_DAILY_CAP_PER_USER=10`.
 
 Schema extension:
 ```prisma
 model NotificationTemplate {
   // ... existing fields
-  whatsappTemplateName String?  // NEW — pre-approved Meta template name
+  whatsappTemplateName String?  // NEW — pre-approved Meta template name (required for WHATSAPP channel)
 }
 ```
 
+**Validator enforcement (backend):** `createNotificationTemplateSchema` in `ess.validators.ts` adds a `.refine()` that rejects `{ channel: 'WHATSAPP', whatsappTemplateName: null | '' }`.
+
 ### 8.4 Channel integration
 
-Rewrite `src/core/notifications/channels/whatsapp.channel.ts` to call `metaCloudProvider`, mirroring the SMS pattern:
+Rewrite `src/core/notifications/channels/whatsapp.channel.ts` to call `metaCloudProvider`, mirroring the SMS pattern with full safeguards:
 
 ```typescript
 import { platformPrisma } from '../../../config/database';
 import { metaCloudProvider } from './whatsapp/meta-cloud.provider';
+import { maskForChannel } from '../templates/masker';
+import { checkWhatsappCaps } from './whatsapp/caps';
 import type { ChannelSendArgs, ChannelSendResult } from './channel-router';
 
 export const whatsappChannel = {
-  async send({ notificationId, userId, traceId }: ChannelSendArgs): Promise<ChannelSendResult> {
+  async send({ notificationId, userId, traceId, priority }: ChannelSendArgs): Promise<ChannelSendResult> {
     const notif = await platformPrisma.notification.findUniqueOrThrow({ where: { id: notificationId } });
     const user = await platformPrisma.user.findUniqueOrThrow({ where: { id: userId } });
     if (!user.phone) throw Object.assign(new Error('NO_USER_PHONE'), { code: 'NO_USER_PHONE' });
 
-    const to = user.phone.startsWith('+') ? user.phone : `+91${user.phone.replace(/\D/g, '')}`;
     const template = notif.templateId
       ? await platformPrisma.notificationTemplate.findUnique({ where: { id: notif.templateId } })
       : null;
 
+    // 1. ENFORCE template requirement (§4A.5)
+    if (!template?.whatsappTemplateName) {
+      throw Object.assign(new Error('WHATSAPP_TEMPLATE_REQUIRED'), { code: 'WHATSAPP_TEMPLATE_REQUIRED' });
+    }
+
+    // 2. Cost caps (§4A.4 pattern applied to WhatsApp)
+    const caps = await checkWhatsappCaps(notif.companyId, userId);
+    if (!caps.allowed) {
+      throw Object.assign(new Error(caps.reason ?? 'WHATSAPP_CAP_HIT'), { code: caps.reason ?? 'WHATSAPP_CAP_HIT' });
+    }
+
+    // 3. Masking (§4A.7 — WhatsApp now masked same as PUSH and SMS)
+    const sensitiveFields = (template.sensitiveFields as string[] | null) ?? [];
+    const masked = maskForChannel(
+      'WHATSAPP',
+      {
+        title: notif.title,
+        body: notif.body,
+        data: (notif.data as Record<string, unknown> | null) ?? undefined,
+      },
+      sensitiveFields,
+    );
+
+    const to = user.phone.startsWith('+') ? user.phone : `+91${user.phone.replace(/\D/g, '')}`;
+
+    // 4. Provider call (internally wrapped in withRetry, see §4A.6)
     const result = await metaCloudProvider.send(
       {
         to,
-        body: `${notif.title}\n\n${notif.body}`,
-        templateName: template?.whatsappTemplateName ?? undefined,
+        body: `${masked.title}\n\n${masked.body}`,
+        templateName: template.whatsappTemplateName,
       },
       traceId,
     );
@@ -985,13 +1515,20 @@ New controller method `updateCategoryPreferences(userId, updates)` in `preferenc
 
 Add a collapsible "Fine-tune by category" section below the existing channels list. When expanded, renders a table: rows are categories (from `categoryCatalogue`), columns are the 4 user-facing channels (Push, Email, SMS, WhatsApp). Each cell is a checkbox. Toggling a checkbox upserts one `UserNotificationCategoryPreference` row via the mutation.
 
-- Categories with `locked: true` (`AUTH`) are rendered as dimmed rows with "Always enabled — security notifications cannot be disabled" tooltip.
+**Mute all convenience (§4A.11):** each category row has a leading "Mute all" checkbox. When checked, all 4 channel cells in that row are set to disabled in a single PATCH (the endpoint accepts bulk updates). When unchecked, all 4 are re-enabled. Mute-all state is derived: `muted = all 4 channels are disabled`.
+
+- Categories with `locked: true` (`AUTH`) are rendered as dimmed rows with "Always enabled — security notifications cannot be disabled" tooltip. The "Mute all" checkbox is hidden for locked rows.
 - Category rows also respect the company master and per-channel user pref: if `companyMasters.push === false` or `preference.pushEnabled === false`, the entire Push column is disabled with explanation tooltip.
 - Mutation uses optimistic update + rollback matching the per-channel pattern.
 
 ### 9.5 Mobile preferences screen extension
 
-Same functionality via a `ScrollView` with collapsible sections. Each category is a row with 4 `Switch` components (one per channel). Locked categories show a `lock` icon from `lucide-react-native`.
+Same functionality via a `ScrollView` with collapsible sections. Each category row has:
+- A "Mute all" switch on the left (hidden for locked categories)
+- 4 per-channel `Switch` components inline (collapsed under an expand affordance to keep the row compact)
+- A `Lock` icon from `lucide-react-native` for the `AUTH` category
+
+Locked categories show a tooltip / subtitle explaining why they can't be modified.
 
 ---
 
@@ -1022,7 +1559,9 @@ Add three new `ToggleRow` components in the render block. The payload passed to 
 
 A new backend endpoint + web screen for observability of the notification pipeline.
 
-### 11.1 Backend — aggregation endpoints
+### 11.1 Backend — aggregation endpoints (reads from pre-aggregated table)
+
+**Strategy:** the analytics service reads from `NotificationEventAggregateDaily` (§4.6) for anything older than today, and queries `NotificationEvent` directly only for today's data. This keeps dashboard queries fast even as raw event volume grows. Pre-aggregation is populated by the daily cron (§4A.12).
 
 New file: `src/core/notifications/analytics/notification-analytics.service.ts`
 
@@ -1048,20 +1587,25 @@ export interface NotificationAnalyticsSummary {
 
 export const notificationAnalyticsService = {
   async getSummary(companyId: string, dateFrom: Date, dateTo: Date): Promise<NotificationAnalyticsSummary> {
-    // Aggregate from NotificationEvent joined with Notification
-    // Use groupBy for channel/priority breakdowns
-    // Use raw SQL or multiple findMany for time-series
+    // 1. Split the range into "historical" (aggregated) and "today" (live).
+    // 2. For historical, query NotificationEventAggregateDaily via groupBy/sum.
+    // 3. For today, query NotificationEvent directly (small window, few rows).
+    // 4. Merge + return.
   },
 
   async getTopFailing(companyId: string, limit = 10): Promise<Array<{ templateId: string; templateCode: string; failCount: number }>> {
-    // Group failing events by templateId
+    // Read from NotificationEventAggregateDaily for historical, NotificationEvent for today.
+    // Join with NotificationTemplate for the template code (cached).
   },
 
   async getDeliveryTrend(companyId: string, dateFrom: Date, dateTo: Date): Promise<Array<{ date: string; sent: number; delivered: number; failed: number }>> {
-    // Day-by-day rollup
+    // Pure NotificationEventAggregateDaily read — one row per (date, channel, event).
+    // In-memory pivot to the time-series shape.
   },
 };
 ```
+
+**Index for the live-query path:** `NotificationEvent` already has `@@index([channel, event, occurredAt])` and `@@index([occurredAt])` from §4.4 which cover the today-only query.
 
 New controller endpoints mounted under `/notifications/analytics`:
 
@@ -1169,7 +1713,14 @@ The generated `migration.sql` file is committed to git under `prisma/migrations/
 | `__tests__/batcher.test.ts` | threshold trigger; dynamic hold calculation; HIGH never batched; groupKey prevents cross-entity merge |
 | `__tests__/backpressure.test.ts` | LOW drops at LOW queue limit; LOW drops at DEFAULT queue limit; HIGH never drops |
 | `__tests__/idempotency.test.ts` | atomic SETNX claim; release on failure; TTL expiry; concurrent race |
-| `__tests__/notification-cron.test.ts` | birthday matches MM-DD; anniversary matches MM-DD; holiday window; probation end window; idempotent via cronDedupKey |
+| `__tests__/notification-cron.test.ts` | birthday matches MM-DD; anniversary matches MM-DD; holiday window; probation end window; idempotent via cronDedupKey; cursor-based pagination iterates all batches; `Promise.allSettled` company-parallelism |
+| `__tests__/dispatch-bulk.test.ts` | chunking to `chunkSize`; single rule load + template render across all recipients; per-recipient token merging with `sharedTokens`; rate limit filtering; fallback to per-recipient `dispatch` when < `BULK_MIN_RECIPIENTS` |
+| `__tests__/rate-limiter.test.ts` | per-user counter increments; expires at 60s; exceeds limit → returns false; CRITICAL priority bypasses; Redis down → fail-open returns true |
+| `__tests__/consent-cache.test.ts` | read-through cache hit returns parsed data; cache miss → DB fetch + write-through; invalidation deletes key; Map rehydration from serialized JSON; TTL is 300s |
+| `__tests__/sms-caps.test.ts` | per-tenant cap INCR + reject at +1; per-user cap INCR + reject at +1; both caps counted independently; TTL 48h; dry-run mode bypasses provider call |
+| `__tests__/whatsapp-template-enforcement.test.ts` | throws WHATSAPP_TEMPLATE_REQUIRED when templateName missing; passes through when set; masker applied with sensitive fields |
+| `__tests__/provider-retry.test.ts` | 3 attempts with exponential backoff; non-retryable errors throw immediately; auth errors do not retry |
+| `__tests__/event-retention.test.ts` | deletes events older than retention window in batches; aggregation runs before cleanup; idempotent upsert into `NotificationEventAggregateDaily` |
 
 ### 13.2 Integration tests
 
@@ -1249,6 +1800,15 @@ Extend the existing 19-step manual QA checklist (from `feat/notifications` spec 
 - `NOTIFICATIONS_CRON_ENABLED` — new, default `true`. Disables all informational crons without affecting the main dispatcher.
 - `NOTIFICATIONS_SMS_ENABLED` — new, default `true`. If `false`, SMS channel throws `SMS_DISABLED` without hitting Twilio.
 - `NOTIFICATIONS_WHATSAPP_ENABLED` — new, default `true`. Same for WhatsApp.
+- `NOTIFICATIONS_SMS_DRY_RUN` / `NOTIFICATIONS_WHATSAPP_DRY_RUN` — new, default `false`. Bypasses real provider calls while still recording `NotificationEvent`.
+- `NOTIFICATIONS_USER_RATE_LIMIT_PER_MIN` — new, default 20. Per-user cap across all channels.
+- `NOTIFICATIONS_SMS_DAILY_CAP_PER_TENANT` / `NOTIFICATIONS_SMS_DAILY_CAP_PER_USER` — new, defaults 500/10.
+- `NOTIFICATIONS_WHATSAPP_DAILY_CAP_PER_TENANT` / `NOTIFICATIONS_WHATSAPP_DAILY_CAP_PER_USER` — new, defaults 500/10.
+- `NOTIFICATIONS_EVENT_RETENTION_DAYS` — new, default 90.
+- `NOTIFICATIONS_BULK_CHUNK_SIZE` — new, default 50.
+- `NOTIFICATIONS_BULK_MIN_RECIPIENTS` — new, default 20 (below this, use individual `dispatch()`).
+- `NOTIFICATIONS_CONSENT_CACHE_TTL_SEC` — new, default 300.
+- `NOTIFICATIONS_CRON_COMPANY_CONCURRENCY` — new, default 5. Max parallel companies in per-tenant cron iteration.
 
 ---
 
@@ -1272,11 +1832,16 @@ Extend the existing 19-step manual QA checklist (from `feat/notifications` spec 
 
 ```
 src/core/notifications/channels/sms/twilio.provider.ts
+src/core/notifications/channels/sms/caps.ts
 src/core/notifications/channels/whatsapp/meta-cloud.provider.ts
+src/core/notifications/channels/whatsapp/caps.ts
+src/core/notifications/channels/provider-retry.ts
 src/core/notifications/cron/notification-cron.service.ts
 src/core/notifications/analytics/notification-analytics.service.ts
 src/core/notifications/analytics/notification-analytics.controller.ts
 src/core/notifications/analytics/notification-analytics.routes.ts
+src/core/notifications/dispatch/rate-limiter.ts
+src/core/notifications/dispatch/dispatch-bulk.ts
 src/shared/constants/notification-categories.ts
 src/core/notifications/__tests__/dispatcher.test.ts
 src/core/notifications/__tests__/consent-gate.test.ts
@@ -1296,6 +1861,13 @@ src/core/notifications/__tests__/batcher.test.ts
 src/core/notifications/__tests__/backpressure.test.ts
 src/core/notifications/__tests__/idempotency.test.ts
 src/core/notifications/__tests__/notification-cron.test.ts
+src/core/notifications/__tests__/dispatch-bulk.test.ts
+src/core/notifications/__tests__/rate-limiter.test.ts
+src/core/notifications/__tests__/consent-cache.test.ts
+src/core/notifications/__tests__/sms-caps.test.ts
+src/core/notifications/__tests__/whatsapp-template-enforcement.test.ts
+src/core/notifications/__tests__/provider-retry.test.ts
+src/core/notifications/__tests__/event-retention.test.ts
 src/__tests__/integration/notifications/dispatch-end-to-end.test.ts
 src/__tests__/integration/notifications/consent-enforcement.test.ts
 src/__tests__/integration/notifications/rule-wiring.test.ts
