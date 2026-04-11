@@ -308,7 +308,6 @@ When a new ESS feature needs approval workflow support (e.g., a new request type
 3. **Handle completion** in `onApprovalComplete()` in `ess.service.ts` — add a case for your `entityType`
 4. **That's it** — the frontend trigger event dropdown auto-populates from `GET /hr/approval-workflow-config`
 
-**Approver roles** are defined in `src/shared/constants/approver-roles.ts` and also served via the same endpoint.
 Both constants are validated in `ess.validators.ts` using Zod `.refine()`.
 
 ---
