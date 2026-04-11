@@ -466,3 +466,259 @@ dashboard API.
    in Redis.
 5. Tenant admins can manage rules + templates via existing
    `/company/hr/notification-templates` and `notification-rules` screens.
+
+
+```
+CHANGELOG.md created at monorepo root.
+
+  Frontend changes to test manually
+
+  All frontend work on feat/per-module-notifications. Web
+  and mobile are near-symmetric.
+
+  Web (web-system-app)
+
+  1. User Notification Preferences screen
+
+  Path: /settings/notifications (from the user menu /
+  settings)
+  File:
+  src/features/settings/NotificationPreferencesScreen.tsx
+
+  - Channel opt-in toggles — IN_APP (always on, disabled),
+  PUSH, EMAIL, SMS, WHATSAPP. Each toggle should be
+  disabled with "Disabled by company" label if the matching
+   company master toggle is off.
+  - Device strategy radio — ALL devices vs. LATEST_ONLY
+  (most recently active only).
+  - Quiet hours — enable toggle + 24h HH:MM start/end
+  inputs. Try:
+    - enabling with both times set ✅
+    - enabling with blank times ❌ should block save
+    - setting start === end ❌ should block save
+    - valid range ✅
+  - Accent color radio — cosmetic, verify it persists
+  across reload.
+  - Send Test Notification button — fires a
+  /notifications/test request. Verify:
+    - rate-limited (5/hour) — smash it 6 times → 6th gets
+  429
+    - test appears in the notifications feed
+    - observes the current channel prefs (e.g. turn PUSH
+  off, send test → no push)
+  - Optimistic update + rollback — disconnect your network,
+   toggle a switch, verify the toggle reverts and an error
+  toast appears.
+  - Skeleton loader — hard reload should show shimmer, not
+  a flash of empty state.
+
+  2. Company notification master toggles
+
+  Path: /company/settings → Notifications section
+  File:
+  src/features/company-admin/CompanySettingsScreen.tsx
+
+  - Master toggles for Push, Email, SMS, WhatsApp (IN_APP
+  is not shown — always on).
+  - Turn a master off → open the user preferences screen as
+   any employee → the matching channel row should be
+  disabled + labeled "Disabled by company".
+  - Save should persist; re-open to verify.
+
+  3. Real-time notification feed + unread badge
+
+  Files: src/layouts/TopBar.tsx,
+  src/layouts/DashboardLayout.tsx,
+  src/hooks/useNotificationSocket.ts
+
+  - The bell icon in the top bar should show the unread
+  count badge.
+  - Trigger any event that fires a notification (create a
+  leave request, submit an expense, etc.) — the badge
+  should update within 1-2 seconds via the socket, no
+  refresh needed.
+  - Open the notification dropdown; clicking a notification
+   should:
+    - mark it as read (badge decrements)
+    - route to the notification's actionUrl
+  - Log out, then log back in — the socket should cleanly
+  disconnect + reconnect. Verify no duplicate socket
+  connections in browser devtools (check Network → WS).
+
+  4. Send Test Notification rate-limited endpoint
+
+  - Rate limit is 5/hour. Hit the test button rapidly — 6th
+   should return 429 with a toast.
+
+  5. Admin: Notification Templates + Rules screens
+  (pre-existing, now with cache invalidation)
+
+  Paths: /company/hr/notification-templates,
+  /company/hr/notification-rules
+
+  - Edit any template body/subject → save → new
+  notifications immediately use the updated copy (rule
+  cache invalidated on save). Previously needed a 60s wait.
+  - Edit a rule's channel → save → next trigger fires the
+  new channel.
+
+  6. Analytics dashboard (backend-only — no screen yet)
+
+  - The backend API is live at GET
+  /notifications/analytics/summary?days=30,
+  .../top-failing, .../delivery-trend — you can hit it with
+   curl/Postman but there's no web screen yet. Nav manifest
+   has the entry but the screen is deferred.
+
+  ---
+  Mobile (mobile-app)
+
+  1. User Notification Preferences screen
+
+  Path: /(app)/settings/notifications
+  File:
+  src/features/settings/notification-preferences-screen.tsx
+
+  - Mirrors web 1:1 — channel switches, device strategy,
+  quiet hours with blur-to-commit time inputs (typing
+  doesn't save until blur). Invalid HH:MM shows a red error
+   border.
+  - ConfirmModal (never Alert.alert) for any destructive
+  confirmations.
+  - Every <Text> uses font-inter.
+  - ChevronLeft back button.
+  - Toasts via showSuccess / showError, not native alerts.
+  - Optimistic update + rollback — same behavior as web.
+
+  2. Push notification registration + device metadata
+
+  File: src/lib/notifications/setup.ts
+
+  - On first app open after login, the app should:
+    - request push permission
+    - get Expo push token (or FCM token on Android if Expo
+  unavailable)
+    - POST to /notifications/register-device with platform,
+   fcmToken, tokenType, deviceName, osVersion, appVersion,
+  locale, timezone
+  - Verify in DB: SELECT * FROM user_devices WHERE "userId"
+   = '<your user>' should have a fresh row.
+  - Graceful FCM init — if Firebase credentials are
+  missing, the app should not crash (non-fatal warning in
+  logs).
+  - Dev echo — on simulator/Expo Go (!Device.isDevice), a
+  dev-only echo notification shows the registered token.
+
+  3. Unread count + polling fallback
+
+  File:
+  src/features/notifications/use-notification-count.ts
+
+  - Badge on the bell icon.
+  - Real-time via socket + 5-minute polling fallback for
+  missed socket events.
+  - Kill the backend → wait 5 minutes → reconnect backend →
+   badge should refresh from the poll without a manual
+  pull-to-refresh.
+
+  4. Socket deep-links
+
+  File:
+  src/features/notifications/use-notification-socket.ts +
+  src/app/(app)/_layout.tsx
+
+  - Tap a push/socket notification while app is running →
+  should route to the entity:
+    - Leave → /company/hr/my-leave (or similar based on
+  actionUrl)
+    - Support ticket → /support/ticket/:id (specifically
+  verified)
+    - Asset → /company/hr/my-assets
+  - Tap a notification while app is killed/backgrounded →
+  cold-start should still deep-link correctly.
+
+  5. Session disconnect on logout
+
+  File: src/features/auth/use-auth-store.ts
+
+  - Logout → verify socket disconnects (no stale
+  subscription carried into the next login session). Log
+  back in as a different user → verify you don't see the
+  previous user's notifications.
+
+  6. Time input on preferences screen
+
+  - Tap quiet hours start → type 25:30 → blur → red border,
+   field retains draft
+  - Type 22:00 → blur → commits and saves
+  - Enable quiet hours with no times set → save
+  button/toggle blocked with error toast
+
+  ---
+  Cross-device smoke tests
+
+  1. End-to-end leave flow — submit a leave request on
+  mobile → approver's web app shows the notification within
+   2 seconds → approve → requester's mobile shows
+  LEAVE_APPROVED push + in-app feed update.
+  2. Payroll fanout — trigger payroll run disburse on web
+  (publish button on a test run) → every test employee's
+  mobile should receive SALARY_CREDITED within 30s (uses
+  bulk dispatch with backpressure).
+  3. New device login — log into mobile from a second
+  phone/simulator → primary device receives
+  NEW_DEVICE_LOGIN push (CRITICAL).
+  4. Forgot password — trigger forgot password flow →
+  receive both email (existing behavior) and push (new
+  behavior) containing the reset code. Verify the code is
+  masked in the push notification (shows ***) but unmasked
+  in the email.
+  5. Quiet hours — set quiet hours 22:00-07:00 on mobile.
+  Trigger a LOW-priority notification inside that window →
+  should NOT be delivered. Trigger a CRITICAL one → should
+  still be delivered.
+
+  ---
+  What is NOT yet visible on frontends (deferred)
+
+  - Category × Channel matrix UI — the 17 categories can be
+   toggled per channel via the API but there's no screen
+  rendering the matrix yet.
+  - Web Notification Analytics dashboard screen — API is
+  ready; chart rendering is pending.
+  - Web onboarding wizard Step 5 push/SMS/in-app toggle
+  fields — backend accepts them; UI fields not yet added.
+
+  Let me commit the changelog:
+
+⏺ Bash(cd /Users/chetan/Documents/Avyren-Technologies/Produ
+      cts/Mobile-ERP && git add CHANGELOG.md && git commit
+      -m "docs: add CHANGELOG.md for
+      feat/per-module-notifica…)
+  ⎿  [main 6ffa47d] docs: add CHANGELOG.md for feat/pe
+     r-module-notifications
+      1 file changed, 468 insertions(+)
+      create mode 100644 CHANGELOG.md
+
+⏺ Committed.
+
+  Summary:
+  - CHANGELOG.md at monorepo root (468 lines) covering
+  everything on the branch — architecture, data model,
+  dispatch pipeline, 5 channels + providers, cron jobs,
+  analytics, preferences, business service wiring, tests,
+  env vars, deps, nav manifest, web preferences screen +
+  socket, mobile preferences screen + push setup, and
+  deferred items.
+  - Manual testing guide above organized by web screens (6
+  areas), mobile screens (6 areas), and 5 cross-device
+  end-to-end smoke tests to exercise the full dispatch
+  pipeline.
+
+  The three biggest end-to-end flows to hit first are:
+  leave request → approval cycle, payroll disburse fanout,
+  and forgot password → dual email+push with masking. Those
+   exercise every layer (submission wiring, dispatchBulk,
+  consent gate, channel router, templates, masking,
+  deep-links).
+  ```

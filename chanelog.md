@@ -453,5 +453,127 @@ Fast-forward
  create mode 100644 wrangler.jsonc
 root@a:/home/a/Documents/Avyren-Technologies/Avy-ERP-Electron-Web# 
 ```
+```
+ Summary — Push Notifications Overhaul Complete
+
+  Documents:
+  - docs/superpowers/specs/2026-04-09-push-notifications-overhaul-design.md — 1,400-line comprehensive design spec
+  - docs/superpowers/plans/2026-04-09-push-notifications-overhaul.md — 2,300-line phased implementation plan
+
+  Commits shipped on feat/notifications across all 3 submodules + root:
+
+  Backend (8 commits)
+
+  1. Deps + 12 env vars (bullmq, expo-server-sdk, handlebars, nanoid)
+  2. Prisma schema: NotificationEvent, UserNotificationPreference, extended
+  Notification/UserDevice/NotificationTemplate/NotificationRule/CompanySettings + 6 new enums
+  3. Phase 2 core infra: BullMQ queues (3 priority + DLQ + receipts + sweep), dedup, worker idempotency, backpressure,
+  template compiler/renderer/masker, 24-entry default catalogue, idempotent seeder (126 templates + rules seeded on dev),
+  socket user-room emit helper, event recorder
+  4. Phase 3 dispatcher: rule loader (Redis-cached), recipient resolver (9 role tokens), consent gate (two-tier + quiet
+  hours + CRITICAL override), dispatcher core with batching (dynamic hold = min(60s, count*5s))
+  5. Phase 5 channels: channel router, in-app no-op, Expo provider (chunking + dead-token detection), FCM provider
+  (multicast + token cleanup), push router (masking + device strategy), email (wraps SMTP), SMS/WhatsApp stubs
+  6. Phase 4 workers: notification worker rewrite (3 priority queues, retry 3× exp backoff, DLQ on exhaustion, rate
+  limiter), receipt poller (30s cadence, 15min window), DLQ sweeper (hourly), wired into server startup
+  7. Phase 6: preferences service/controller/validators/routes, notification controller extensions (archive, events,
+  test-send, preferences), legacy facade routing send() → dispatch()
+  8. HR listeners migrated to dispatch() API (4 existing events)
+
+  Web (1 commit)
+
+  - Socket hook (invalidates React Query on notification:new), full preferences screen at /app/settings/notifications, 3
+  new company toggles (push/sms/inApp), extended device registration metadata, 5-min fallback polling (down from 30s)
+
+  Mobile (1 commit)
+
+  - socket.io-client + expo-application deps, graceful FCM init error handling (the original user error now logs a warn
+  with docs link instead of throwing), full preferences screen at /(app)/notification-preferences, socket hook with
+  dev-only local test notification, expanded deep-link mapping (11 entity types), device metadata, critical Android
+  channel, 5-min fallback polling
+
+  What this fixes vs. the original gaps
+
+  ┌────────────────────────────────┬───────────────────────────────────────────────────────────────────────────────────┐
+  │              Gap               │                                    Resolution                                     │
+  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────┤
+  │ Mobile FirebaseApp not         │ Graceful warn + docs pointer in setup.ts; FCM V1 credentials uploaded via eas     │
+  │ initialized error              │ credentials unblocks Expo Push API                                                │
+  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────┤
+  │ Backend silently sending Expo  │ New channel router partitions by tokenType: EXPO → Expo Server SDK,               │
+  │ tokens to raw FCM              │ FCM_WEB/FCM_NATIVE → firebase-admin                                               │
+  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────┤
+  │ Frontend toggles purely        │ CompanySettings.{push,sms,inApp}Notifications enforced in consent-gate.ts;        │
+  │ cosmetic                       │ per-user UserNotificationPreference honored                                       │
+  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────┤
+  │ Rule engine email-only         │ Unified dispatch() renders rule templates for every channel; legacy               │
+  │                                │ triggerNotification() removed                                                     │
+  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────┤
+  │ Only 4 HR events wired         │ Dispatcher is now the single entry point. Remaining ~50 per-module sites deferred │
+  │                                │  to a follow-up PR per spec §3.4 — the facade shim keeps existing callers working │
+  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────┤
+  │ No real-time                   │ Socket.io user:{id} rooms + notification:new event, both clients invalidate React │
+  │                                │  Query instantly                                                                  │
+  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────┤
+  │                                │ NotificationEvent table + traceId on every row,                                   │
+  │ No observability               │ ENQUEUED/SENT/DELIVERED/OPENED/FAILED/BOUNCED/SKIPPED lifecycle, Expo receipt     │
+  │                                │ polling                                                                           │
+  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────┤
+  │ Missing env validation         │ FIREBASE_SERVICE_ACCOUNT_KEY + 11 new vars in Zod schema                          │
+  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────┤
+  │                                │ BullMQ 3× exponential backoff + DLQ with 7d retention, 60s dedup key with payload │
+  │ No retry/DLQ/dedup/idempotency │  hash, 24h worker idempotency (SETNX), priority-partitioned queues                │
+  │                                │ (high/default/low), backpressure, dynamic batching                                │
+  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────┤
+  │ No token lifecycle             │ UserDevice soft-deactivated on DeviceNotRegistered, failure counting, metadata    │
+  │                                │ (model/os/app version/locale/tz)                                                  │
+  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────┤
+  │ No sensitive masking           │ maskForChannel('PUSH', ...) replaces declared sensitiveFields with *** in         │
+  │                                │ title/body/data; in-app keeps unmasked                                            │
+  ├────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────┤
+  │ No per-user preferences        │ Full CRUD API + screen on both web and mobile, with quiet hours + device strategy │
+  └────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────┘
+
+  Deferred (spec §3.4 non-goals + follow-up PRs)
+
+  - Per-module event wiring (~50 dispatch sites) — leave, attendance, overtime, reimbursement, loan, payroll, resignation,
+  assets, support tickets, auth critical flows. The dispatcher + rule engine + seeded templates + legacy facade are all in
+  place; adding these is purely mechanical call-site changes per module. Risk of landing them all in one PR without
+  per-module QA outweighs benefit.
+  - SMS/WhatsApp provider integration (stubs in place)
+  - Tenant-onboarding Step05 toggles (wizard schema update risk)
+  - Analytics dashboard UI (table populated from day one, viz deferred)
+  - Unit/integration/load tests (spec §10 strategy documented; test files not written in this PR)
+  - Prisma migration file for staging/prod (dev used db push; a migrate diff SQL file should be generated before prod
+  deploy)
+  - Birthday/anniversary/announcement cron events
+
+  Type-check status
+
+  - Backend: clean (pnpm tsc --noEmit passes)
+  - Web: clean (pnpm tsc --noEmit passes)
+  - Mobile: clean for all new notification files; one pre-existing unrelated error in leave-request-screen.tsx (Module
+  'react-native' has no exported member 'r') verified present on feat/notifications before my changes
+
+  Not pushed to remote
+
+  Per git safety protocol, no git push was run. When you're ready:
+
+  cd avy-erp-backend  && git push -u origin feat/notifications
+  cd ../web-system-app && git push -u origin feat/notifications
+  cd ../mobile-app     && git push -u origin feat/notifications
+  cd ..                && git push origin main
+
+  Suggested next steps
+
+  1. Rebuild EAS development client to pick up expo-application + socket.io-client
+  2. Manual smoke test per spec §10.6 checklist on physical device
+  3. Generate a proper Prisma migration for staging/prod: pnpm prisma migrate diff --from-migrations prisma/migrations
+  --to-schema-datamodel prisma/schema.prisma --shadow-database-url <shadow> --script > migration.sql
+  4. Open follow-up PR to wire the remaining ~50 per-module dispatch sites (one module at a time for reviewability)
+  5. Seed defaults on staging/prod: pnpm ts-node -T prisma/seeds/2026-04-09-seed-default-notification-templates.ts
+
+```
+
 
 
