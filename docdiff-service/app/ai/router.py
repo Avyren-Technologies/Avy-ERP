@@ -32,3 +32,15 @@ def list_available_providers() -> list[dict]:
             "models": cls.available_models() if hasattr(cls, "available_models") else [],
         })
     return providers
+
+
+# Register all providers
+from app.ai.anthropic_provider import AnthropicProvider
+from app.ai.google_provider import GoogleProvider
+from app.ai.openrouter_provider import OpenRouterProvider
+from app.ai.qwen_local_provider import QwenLocalProvider
+
+register_provider("anthropic", AnthropicProvider)
+register_provider("google", GoogleProvider)
+register_provider("openrouter", OpenRouterProvider)
+register_provider("qwen_local", QwenLocalProvider)

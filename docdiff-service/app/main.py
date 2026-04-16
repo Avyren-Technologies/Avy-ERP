@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.health import router as health_router
+from app.api.router import api_router
 from app.config import settings
 
 logger = logging.getLogger("docdiff")
@@ -17,6 +19,12 @@ async def lifespan(app: FastAPI):
     import os
     os.makedirs(f"{settings.storage_path}/uploads", exist_ok=True)
     os.makedirs(f"{settings.storage_path}/reports", exist_ok=True)
+
+    from app.database import engine
+    from sqlalchemy import text
+    async with engine.begin() as conn:
+        await conn.execute(text("SELECT 1"))
+    logger.info("Database connection verified")
 
     yield
 
@@ -39,10 +47,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.get("/health")
-async def health_check():
-    return {"status": "ok", "service": "docdiff-pro", "version": "0.1.0"}
+app.include_router(health_router)
+app.include_router(api_router)
 
 
 if __name__ == "__main__":
