@@ -1,0 +1,16 @@
+[project]
+name = "docdiff-service"
+version = "0.1.0"
+description = "DocDiff Pro - AI-powered document comparison and diff reporting service"
+requires-python = ">=3.11"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
