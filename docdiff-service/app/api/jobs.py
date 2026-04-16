@@ -142,9 +142,8 @@ async def start_job(job_id: uuid.UUID, db: DbSession, user: CurrentUser):
     job.stage_progress = {"1": "in_progress"}
     await db.commit()
 
-    # ARQ enqueue will be wired in Task 13
-    # from app.workers.job_worker import enqueue_job
-    # await enqueue_job(str(job_id))
+    from app.workers.job_worker import enqueue_job
+    await enqueue_job(str(job_id))
 
     await db.refresh(job)
     return SuccessResponse(data=JobResponse.model_validate(job), message="Processing started")
