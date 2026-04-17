@@ -33,7 +33,7 @@ class GoogleProvider(AIProvider):
         return AVAILABLE_MODELS
 
     @ai_retry
-    async def call(self, prompt: str, images: list[bytes] | None = None) -> AIResponse:
+    async def call(self, prompt: str, images: list[bytes] | None = None, system: str | None = None) -> AIResponse:
         contents = []
         if images:
             for img in images:
@@ -47,6 +47,8 @@ class GoogleProvider(AIProvider):
             max_output_tokens=512,           # enough for structured JSON, no essays
             response_mime_type="application/json",
         )
+        if system:
+            generation_config.system_instruction = system
 
         try:
             response = await self._client.aio.models.generate_content(

@@ -130,6 +130,8 @@ async def verify_difference(
         raise HTTPException(404, "Difference not found")
 
     was_verified = diff.verification_status in _VERIFIED_STATUSES
+    original_significance = diff.significance
+
     diff.verification_status = body.action
     diff.verified_at = datetime.now(tz=timezone.utc)
 
@@ -141,6 +143,20 @@ async def verify_difference(
         diff.significance = body.corrected_significance
     if body.corrected_value_after is not None:
         diff.value_after = body.corrected_value_after
+
+    # Log correction for future learning if significance was changed
+    if body.corrected_significance is not None:
+        from app.models.correction import ReviewerCorrection
+        correction = ReviewerCorrection(
+            value_before=diff.value_before or "",
+            value_after=diff.value_after or "",
+            difference_type=diff.difference_type.value if diff.difference_type else "",
+            original_significance=original_significance.value if original_significance else "",
+            corrected_significance=body.corrected_significance.value,
+            verifier_comment=body.comment,
+            context=diff.context,
+        )
+        db.add(correction)
 
     # Update job.differences_verified count
     is_now_verified = body.action in _VERIFIED_STATUSES

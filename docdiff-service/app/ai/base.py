@@ -44,7 +44,7 @@ ai_retry = retry(
 
 class AIProvider(ABC):
     @abstractmethod
-    async def call(self, prompt: str, images: list[bytes] | None = None) -> AIResponse:
+    async def call(self, prompt: str, images: list[bytes] | None = None, system: str | None = None) -> AIResponse:
         ...
 
     @property
@@ -61,11 +61,11 @@ class AIProvider(ABC):
     def supports_vision(self) -> bool:
         return True
 
-    async def extract_page_content(self, image: bytes, prompt: str) -> AIResponse:
-        return await self.call(prompt, images=[image])
+    async def extract_page_content(self, image: bytes, prompt: str, system: str | None = None) -> AIResponse:
+        return await self.call(prompt, images=[image], system=system)
 
-    async def classify_difference(self, context: str, prompt: str) -> AIResponse:
-        return await self.call(f"{prompt}\n\n{context}")
+    async def classify_difference(self, context: str, prompt: str, system: str | None = None) -> AIResponse:
+        return await self.call(f"{prompt}\n\n{context}", system=system)
 
-    async def transcribe_handwriting(self, image: bytes, prompt: str) -> AIResponse:
-        return await self.call(prompt, images=[image])
+    async def transcribe_handwriting(self, image: bytes, prompt: str, system: str | None = None) -> AIResponse:
+        return await self.call(prompt, images=[image], system=system)

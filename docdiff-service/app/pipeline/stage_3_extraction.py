@@ -26,6 +26,7 @@ from app.models.document import Document, DocumentPage, PageType, PageProcessing
 from app.models.job import ComparisonJob, JobStatus
 from app.pdf.fast_parser import extract_all_pages
 from app.prompts.extract_page import get_extract_prompt
+from app.prompts.system_prompts import EXTRACTION_SYSTEM_PROMPT
 
 logger = logging.getLogger("docdiff.pipeline")
 
@@ -242,7 +243,7 @@ async def _process_document(
             with open(page.image_path, "rb") as f:
                 image_bytes = f.read()
 
-            ai_response = await ai_provider.extract_page_content(image_bytes, extract_prompt)
+            ai_response = await ai_provider.extract_page_content(image_bytes, extract_prompt, system=EXTRACTION_SYSTEM_PROMPT)
             vlm_call_count += 1
 
             parsed_content, flagged = safe_parse_or_flag(ai_response.content)

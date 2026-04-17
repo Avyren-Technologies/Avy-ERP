@@ -26,7 +26,7 @@ class QwenLocalProvider(AIProvider):
         return AVAILABLE_MODELS
 
     @ai_retry
-    async def call(self, prompt: str, images: list[bytes] | None = None) -> AIResponse:
+    async def call(self, prompt: str, images: list[bytes] | None = None, system: str | None = None) -> AIResponse:
         content = []
         if images:
             for img in images:
@@ -37,13 +37,18 @@ class QwenLocalProvider(AIProvider):
                 })
         content.append({"type": "text", "text": prompt})
 
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": content})
+
         async with httpx.AsyncClient(timeout=180.0) as client:
             try:
                 resp = await client.post(
                     f"{self._endpoint}/chat/completions",
                     json={
                         "model": self._model_name,
-                        "messages": [{"role": "user", "content": content}],
+                        "messages": messages,
                         "max_tokens": 4096,
                     },
                 )

@@ -1,5 +1,6 @@
 from app.models.api_key import APIKey
 from app.models.base import Base, SCHEMA
+from app.models.correction import ReviewerCorrection
 from app.models.difference import (
     DetectedDifference,
     DifferenceType,
@@ -32,4 +33,6 @@ __all__ = [
     "DiffReport",
     # API Key
     "APIKey",
+    # Correction
+    "ReviewerCorrection",
 ]

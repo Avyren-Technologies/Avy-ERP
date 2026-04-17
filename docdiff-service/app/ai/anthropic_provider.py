@@ -26,7 +26,7 @@ class AnthropicProvider(AIProvider):
         return AVAILABLE_MODELS
 
     @ai_retry
-    async def call(self, prompt: str, images: list[bytes] | None = None) -> AIResponse:
+    async def call(self, prompt: str, images: list[bytes] | None = None, system: str | None = None) -> AIResponse:
         content = []
         if images:
             for img in images:
@@ -38,11 +38,14 @@ class AnthropicProvider(AIProvider):
         content.append({"type": "text", "text": prompt})
 
         try:
-            response = await self._client.messages.create(
-                model=self._model_name,
-                max_tokens=4096,
-                messages=[{"role": "user", "content": content}],
-            )
+            kwargs = {
+                "model": self._model_name,
+                "max_tokens": 4096,
+                "messages": [{"role": "user", "content": content}],
+            }
+            if system:
+                kwargs["system"] = system
+            response = await self._client.messages.create(**kwargs)
         except anthropic.RateLimitError as e:
             raise RateLimitError(str(e)) from e
         except anthropic.InternalServerError as e:

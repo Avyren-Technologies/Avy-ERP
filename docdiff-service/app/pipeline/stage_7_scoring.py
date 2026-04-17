@@ -21,6 +21,7 @@ from app.ai.response_parser import safe_parse_or_flag
 from app.models.difference import DifferenceType, Significance
 from app.pipeline.stage_6_diff import RawDiffRecord
 from app.prompts.classify_difference import get_classify_prompt
+from app.prompts.system_prompts import CLASSIFICATION_SYSTEM_PROMPT
 
 logger = logging.getLogger("docdiff.pipeline")
 
@@ -90,6 +91,7 @@ async def run_stage_7(
                 ai_response = await ai_provider.classify_difference(
                     context=record.context or "",
                     prompt=prompt,
+                    system=CLASSIFICATION_SYSTEM_PROMPT,
                 )
                 ai_call_count += 1
                 parsed, flagged = safe_parse_or_flag(ai_response.content)
