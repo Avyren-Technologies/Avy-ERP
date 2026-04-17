@@ -115,41 +115,55 @@ def _deduplicate_differences(scored: list[dict]) -> list[dict]:
     if ocr_removed:
         logger.info(f"Dedup: removed {ocr_removed} OCR garbage entries")
 
-    # Pass 2: Collapse header/footer repeats across pages
-    # Group by (before, after, diff_type) ignoring page numbers
-    content_groups: dict[tuple, list[dict]] = defaultdict(list)
-    for diff in clean:
-        before = (diff.get("value_before") or "").strip()
-        after = (diff.get("value_after") or "").strip()
-        key = (before, after, str(diff.get("difference_type")))
-        content_groups[key].append(diff)
-
+    # Pass 2: Collapse ONLY header/footer zone repeats across pages
+    # Body text diffs with same values are kept as separate entries
+    # (e.g., "001A→001B" in body paragraph is different from same in footer)
     collapsed: list[dict] = []
     collapsed_count = 0
-    seen_keys: set[tuple] = set()
 
+    # Identify header/footer diffs: blocks with type "header" or "footer",
+    # or blocks positioned in header/footer zones (top 8%, bottom 5%)
+    header_footer_groups: dict[tuple, list[dict]] = defaultdict(list)
+    body_diffs: list[dict] = []
+
+    for diff in clean:
+        before = (diff.get("value_before") or "").strip()
+        after = (diff.get("value_after") or "").strip()
+
+        # Check if this diff is from a header/footer zone
+        is_hf = _is_header_footer_diff(diff)
+
+        if is_hf:
+            key = (before, after, str(diff.get("difference_type")))
+            header_footer_groups[key].append(diff)
+        else:
+            body_diffs.append(diff)
+
+    # Collapse header/footer groups that appear on 2+ pages (lower threshold for headers)
+    seen_hf_keys: set[tuple] = set()
     for diff in clean:
         before = (diff.get("value_before") or "").strip()
         after = (diff.get("value_after") or "").strip()
         key = (before, after, str(diff.get("difference_type")))
 
-        if key in seen_keys:
+        if not _is_header_footer_diff(diff):
+            collapsed.append(diff)
             continue
-        seen_keys.add(key)
 
-        group = content_groups[key]
-        if len(group) >= 3:
-            # This change appears on 3+ pages -- it's a header/footer/repeated element
+        if key in seen_hf_keys:
+            continue
+        seen_hf_keys.add(key)
+
+        group = header_footer_groups[key]
+        if len(group) >= 2:  # 2+ pages for header/footer (not 3)
             pages = sorted(set(
                 d.get("page_version_a") or d.get("page_version_b") or 0 for d in group
             ))
             representative = group[0].copy()
             representative["summary"] = (
                 f"{representative.get('summary', '')} "
-                f"(found on {len(group)} pages: {', '.join(str(p) for p in pages[:5])}"
-                f"{'...' if len(pages) > 5 else ''})"
+                f"(repeated on {len(group)} pages)"
             )
-            # Downgrade repeated header/footer changes to cosmetic
             from app.models.difference import Significance
             representative["significance"] = Significance.cosmetic
             representative["auto_confirmed"] = True
@@ -175,15 +189,21 @@ def _deduplicate_differences(scored: list[dict]) -> list[dict]:
     if page_num_removed:
         logger.info(f"Dedup: removed {page_num_removed} page number entries")
 
-    # Pass 4: Same-value dedup on same page (existing logic)
+    # Pass 4: Same-value dedup on same page
+    # EXCLUDE table_cell_change — each cell is an independent change
     seen: set[tuple] = set()
     final: list[dict] = []
     for diff in filtered:
         before = (diff.get("value_before") or "").strip()
         after = (diff.get("value_after") or "").strip()
-        if len(before) <= 1 and len(after) <= 1:
+
+        # Never dedup single-char diffs or table cell changes
+        dt = diff.get("difference_type")
+        dt_val = dt.value if hasattr(dt, "value") else str(dt)
+        if (len(before) <= 1 and len(after) <= 1) or dt_val == "table_cell_change":
             final.append(diff)
             continue
+
         page_a = diff.get("page_version_a")
         page_b = diff.get("page_version_b")
         key = (before, after, page_a, page_b, str(diff.get("difference_type")))
@@ -191,6 +211,11 @@ def _deduplicate_differences(scored: list[dict]) -> list[dict]:
             continue
         seen.add(key)
         final.append(diff)
+
+    # Pass 5: Merge delete+add pairs into modifications
+    # When a text_deletion and text_addition appear on the same page
+    # with similar context, they likely represent a modified block
+    final = _merge_delete_add_pairs(final)
 
     total_removed = len(scored) - len(final)
     if total_removed:
@@ -201,3 +226,111 @@ def _deduplicate_differences(scored: list[dict]) -> list[dict]:
             f"{len(scored) - len(final) - ocr_removed - collapsed_count - page_num_removed} same-value)"
         )
     return final
+
+
+def _is_header_footer_diff(diff: dict) -> bool:
+    """Check if a diff originates from a header/footer zone block."""
+    # Check bbox position (header = top 8%, footer = bottom 5%)
+    for bbox_key in ("bbox_version_a", "bbox_version_b"):
+        bbox = diff.get(bbox_key)
+        if bbox and isinstance(bbox, dict):
+            y = bbox.get("y", 0.5)
+            y_end = y + bbox.get("height", 0)
+            if y < 0.08 or y_end > 0.95:
+                return True
+
+    # Check context for header/footer indicators
+    context = (diff.get("context") or "").lower()
+    summary = (diff.get("summary") or "").lower()
+    if any(kw in context or kw in summary for kw in ("header", "footer", "page number")):
+        return True
+
+    return False
+
+
+def _merge_delete_add_pairs(diffs: list[dict]) -> list[dict]:
+    """Merge text_deletion + text_addition pairs on the same page into text_modification.
+
+    When the alignment stage fails to match blocks (e.g., handwritten notes),
+    a modified block appears as separate deletion + addition entries.
+    This merges them when they're on the same page.
+    """
+    from app.models.difference import DifferenceType
+    from app.utils.diff_utils import compute_similarity
+
+    deletions: list[tuple[int, dict]] = []
+    additions: list[tuple[int, dict]] = []
+
+    for i, diff in enumerate(diffs):
+        dt = diff.get("difference_type")
+        dt_val = dt.value if hasattr(dt, "value") else str(dt)
+        if dt_val == "text_deletion":
+            deletions.append((i, diff))
+        elif dt_val == "text_addition":
+            additions.append((i, diff))
+
+    merged_indices: set[int] = set()
+    merged_diffs: list[dict] = []
+
+    for del_idx, del_diff in deletions:
+        if del_idx in merged_indices:
+            continue
+
+        del_page = del_diff.get("page_version_a") or del_diff.get("page_version_b")
+        del_text = (del_diff.get("value_before") or "").strip()
+
+        if not del_text or not del_page:
+            continue
+
+        # Find a matching addition on the same page
+        best_add_idx = -1
+        best_add_diff = None
+        best_similarity = 0.0
+
+        for add_idx, add_diff in additions:
+            if add_idx in merged_indices:
+                continue
+
+            add_page = add_diff.get("page_version_b") or add_diff.get("page_version_a")
+            if add_page != del_page:
+                continue
+
+            add_text = (add_diff.get("value_after") or "").strip()
+            if not add_text:
+                continue
+
+            # Check if they're related (some text similarity or same context)
+            sim = compute_similarity(del_text[:200], add_text[:200])
+
+            if sim > best_similarity and sim >= 0.15:  # Very low threshold — just needs SOME relation
+                best_similarity = sim
+                best_add_idx = add_idx
+                best_add_diff = add_diff
+
+        if best_add_diff is not None:
+            # Merge into a modification
+            merged_diff = del_diff.copy()
+            merged_diff["difference_type"] = DifferenceType.text_modification
+            merged_diff["value_before"] = del_text
+            merged_diff["value_after"] = (best_add_diff.get("value_after") or "").strip()
+            merged_diff["page_version_b"] = best_add_diff.get("page_version_b")
+            merged_diff["bbox_version_b"] = best_add_diff.get("bbox_version_b")
+            merged_diff["summary"] = (
+                f"Text modified: \"{del_text[:50]}\" → \"{merged_diff['value_after'][:50]}\""
+            )
+            merged_diffs.append(merged_diff)
+            merged_indices.add(del_idx)
+            merged_indices.add(best_add_idx)
+
+    # Build final list: unmerged originals + merged
+    result: list[dict] = []
+    for i, diff in enumerate(diffs):
+        if i not in merged_indices:
+            result.append(diff)
+    result.extend(merged_diffs)
+
+    merge_count = len(merged_diffs)
+    if merge_count:
+        logger.info(f"Dedup: merged {merge_count} delete+add pairs into modifications")
+
+    return result

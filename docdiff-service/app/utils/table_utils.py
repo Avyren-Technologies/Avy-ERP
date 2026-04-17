@@ -103,6 +103,45 @@ def compare_tables(table_a: dict, table_b: dict) -> TableDiff:
     rows_added = sorted(rows_in_b - rows_in_a)
     rows_deleted = sorted(rows_in_a - rows_in_b)
 
+    # Filter false-positive row additions/deletions
+    # If a "new" row's cells match an existing row in the other table, it's not really new
+    if rows_added:
+        real_added = []
+        for row_idx in rows_added:
+            row_cells_b = [cells_b.get((row_idx, c), "") for c in range(tb.get("cols", 0))]
+            row_text_b = " ".join(row_cells_b).strip()
+            if not row_text_b:
+                continue  # Empty row — skip
+            # Check if this row content exists in table A
+            found_in_a = False
+            for r_a in rows_in_a:
+                row_cells_a = [cells_a.get((r_a, c), "") for c in range(ta.get("cols", 0))]
+                row_text_a = " ".join(row_cells_a).strip()
+                if compute_similarity(row_text_a, row_text_b) > 0.8:
+                    found_in_a = True
+                    break
+            if not found_in_a:
+                real_added.append(row_idx)
+        rows_added = real_added
+
+    if rows_deleted:
+        real_deleted = []
+        for row_idx in rows_deleted:
+            row_cells_a = [cells_a.get((row_idx, c), "") for c in range(ta.get("cols", 0))]
+            row_text_a = " ".join(row_cells_a).strip()
+            if not row_text_a:
+                continue
+            found_in_b = False
+            for r_b in rows_in_b:
+                row_cells_b = [cells_b.get((r_b, c), "") for c in range(tb.get("cols", 0))]
+                row_text_b = " ".join(row_cells_b).strip()
+                if compute_similarity(row_text_a, row_text_b) > 0.8:
+                    found_in_b = True
+                    break
+            if not found_in_b:
+                real_deleted.append(row_idx)
+        rows_deleted = real_deleted
+
     return TableDiff(
         cell_changes=cell_changes,
         rows_added=rows_added,
