@@ -107,6 +107,17 @@ def _extract_page(page: fitz.Page) -> dict:
                     {"title": text[:120], "level": level, "block_ids": [block_id]}
                 )
 
+        # Detect header/footer zones using normalized bbox
+        bbox_y = bbox.get("y", 0)
+        bbox_y_end = bbox_y + bbox.get("height", 0)
+
+        if bbox_y < 0.08:  # Top 8% of page
+            block["type"] = "header"
+            block["block_type"] = "header"
+        elif bbox_y_end > 0.95:  # Bottom 5% of page
+            block["type"] = "footer"
+            block["block_type"] = "footer"
+
         result_blocks.append(block)
         reading_order.append(block_id)
 

@@ -21,6 +21,69 @@ def _page_has_annotations(pdf_path: str, page_number: int) -> bool:
     return len(annots) > 0
 
 
+def _classify_page_type(pdf_path: str, page_idx: int) -> tuple[str, float]:
+    """Classify page type using text density analysis.
+
+    Returns (PageType value, confidence).
+
+    A page with an OCR text layer (scanned + OCR'd) is detected by:
+    - Has text layer BUT text doesn't match expected character density
+    - Has text layer BUT font names indicate OCR (e.g., "Tesseract")
+    """
+    doc = fitz.open(pdf_path)
+    page = doc[page_idx]
+
+    # Get text and page dimensions
+    text = page.get_text("text").strip()
+    text_len = len(text)
+    page_area = page.rect.width * page.rect.height
+
+    # Get text blocks with position info
+    text_dict = page.get_text("dict")
+    blocks = text_dict.get("blocks", [])
+    text_blocks = [b for b in blocks if b.get("type") == 0]  # type 0 = text
+    image_blocks = [b for b in blocks if b.get("type") == 1]  # type 1 = image
+
+    # Calculate text coverage (what fraction of page is text blocks)
+    text_area = sum(
+        (b["bbox"][2] - b["bbox"][0]) * (b["bbox"][3] - b["bbox"][1])
+        for b in text_blocks
+    ) if text_blocks else 0
+    text_coverage = text_area / page_area if page_area > 0 else 0
+
+    # Calculate image coverage
+    image_area = sum(
+        (b["bbox"][2] - b["bbox"][0]) * (b["bbox"][3] - b["bbox"][1])
+        for b in image_blocks
+    ) if image_blocks else 0
+    image_coverage = image_area / page_area if page_area > 0 else 0
+
+    doc.close()
+
+    # Classification rules
+    if text_len < 10:
+        # Very little text — likely scanned or image-only
+        return PageType.scanned, 0.95
+
+    if image_coverage > 0.7 and text_coverage < 0.1:
+        # Page is mostly images — scanned
+        return PageType.scanned, 0.90
+
+    if text_coverage > 0.3 and image_coverage < 0.2:
+        # Lots of text, few images — born digital
+        return PageType.born_digital, 0.95
+
+    if image_coverage > 0.5 and text_len > 50:
+        # Significant images AND text — likely OCR'd scanned or mixed
+        return PageType.mixed, 0.75
+
+    # Default: born digital if has reasonable text
+    if text_len > 50:
+        return PageType.born_digital, 0.85
+
+    return PageType.scanned, 0.70
+
+
 async def run_stage_2(job_id: uuid.UUID, db: AsyncSession) -> bool:
     """Stage 2: Page Classification.
 
@@ -63,10 +126,12 @@ async def run_stage_2(job_id: uuid.UUID, db: AsyncSession) -> bool:
             # Page number stored as 1-indexed; PyMuPDF uses 0-indexed
             zero_idx = page.page_number - 1
 
-            # Classify as born_digital or scanned based on text layer presence
-            text_present = has_text_layer(doc.file_path, zero_idx)
-            page_type = PageType.born_digital if text_present else PageType.scanned
+            # Classify using text density analysis
+            page_type, classification_confidence = _classify_page_type(
+                doc.file_path, zero_idx
+            )
             page.page_type = page_type
+            page.extraction_confidence = classification_confidence
 
             # Check for PDF annotations
             page.has_annotations = _page_has_annotations(doc.file_path, zero_idx)

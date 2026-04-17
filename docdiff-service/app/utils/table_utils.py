@@ -24,6 +24,31 @@ class TableDiff:
     header_changes: list[CellDiff]
 
 
+def _normalize_cell_value(text: str) -> str:
+    """Normalize cell value for comparison.
+
+    - Strip whitespace
+    - Normalize numbers: "2.0" -> "2", "1,000" -> "1000"
+    - Preserve non-numeric text as-is
+    """
+    text = text.strip()
+    if not text:
+        return text
+
+    # Try to parse as number and normalize
+    try:
+        # Remove commas from numbers
+        cleaned = text.replace(",", "").replace(" ", "")
+        # Try float conversion
+        num = float(cleaned)
+        # If it's a whole number, show without decimal
+        if num == int(num):
+            return str(int(num))
+        return str(num)
+    except ValueError:
+        return text
+
+
 def compare_tables(table_a: dict, table_b: dict) -> TableDiff:
     cells_a = _build_cell_map(table_a.get("cells", []))
     cells_b = _build_cell_map(table_b.get("cells", []))
@@ -46,15 +71,17 @@ def compare_tables(table_a: dict, table_b: dict) -> TableDiff:
 
     all_keys = set(cells_a.keys()) | set(cells_b.keys())
     for key in sorted(all_keys):
-        val_a = cells_a.get(key, None)
-        val_b = cells_b.get(key, None)
+        raw_a = cells_a.get(key, None)
+        raw_b = cells_b.get(key, None)
+        val_a = _normalize_cell_value(raw_a) if raw_a is not None else None
+        val_b = _normalize_cell_value(raw_b) if raw_b is not None else None
         row, col = key
         if val_a is None and val_b is not None:
-            cell_changes.append(CellDiff(row=row, col=col, value_before="", value_after=val_b, diff_type="added"))
+            cell_changes.append(CellDiff(row=row, col=col, value_before="", value_after=raw_b, diff_type="added"))
         elif val_a is not None and val_b is None:
-            cell_changes.append(CellDiff(row=row, col=col, value_before=val_a, value_after="", diff_type="deleted"))
+            cell_changes.append(CellDiff(row=row, col=col, value_before=raw_a, value_after="", diff_type="deleted"))
         elif val_a != val_b:
-            cell_changes.append(CellDiff(row=row, col=col, value_before=val_a or "", value_after=val_b or "", diff_type="modified"))
+            cell_changes.append(CellDiff(row=row, col=col, value_before=raw_a or "", value_after=raw_b or "", diff_type="modified"))
 
     rows_in_a = {key[0] for key in cells_a.keys()}
     rows_in_b = {key[0] for key in cells_b.keys()}

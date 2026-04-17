@@ -29,6 +29,78 @@ from app.prompts.extract_page import get_extract_prompt
 
 logger = logging.getLogger("docdiff.pipeline")
 
+
+def _merge_extractions(pymupdf_content: dict, vlm_content: dict) -> dict:
+    """Merge PyMuPDF and VLM extraction results for better accuracy.
+
+    Strategy:
+    - Use VLM for structure (block types, section hierarchy, bounding boxes)
+    - Use PyMuPDF for exact text when available (higher fidelity than OCR)
+    - Keep VLM annotations (handwriting) that PyMuPDF can't detect
+    """
+    if not pymupdf_content or not pymupdf_content.get("blocks"):
+        return vlm_content
+    if not vlm_content or not vlm_content.get("blocks"):
+        return pymupdf_content
+
+    vlm_blocks = vlm_content.get("blocks", [])
+    pymupdf_blocks = pymupdf_content.get("blocks", [])
+
+    # For each VLM block, find the closest PyMuPDF block by position
+    # and use PyMuPDF's text if it's longer (more complete)
+    for vb in vlm_blocks:
+        if vb.get("type") in ("annotation", "image"):
+            continue  # VLM is authoritative for these
+
+        vb_bbox = vb.get("bbox", {})
+        vb_text = vb.get("text", "")
+
+        best_match = None
+        best_overlap = 0
+
+        for pb in pymupdf_blocks:
+            pb_bbox = pb.get("bbox", {})
+            # Compute rough overlap
+            overlap = _bbox_overlap(vb_bbox, pb_bbox)
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_match = pb
+
+        if best_match and best_overlap > 0.3:
+            pb_text = best_match.get("text", "")
+            # Use PyMuPDF text if it's more complete
+            if len(pb_text) > len(vb_text) * 0.8:
+                vb["text"] = pb_text
+                # Boost confidence since we have PyMuPDF verification
+                if "confidence" in vb:
+                    vb["confidence"] = min(1.0, vb.get("confidence", 0.8) + 0.1)
+
+    return vlm_content
+
+
+def _bbox_overlap(a: dict, b: dict) -> float:
+    """Compute overlap ratio between two normalized bboxes."""
+    if not a or not b:
+        return 0.0
+    ax1, ay1 = a.get("x", 0), a.get("y", 0)
+    ax2, ay2 = ax1 + a.get("width", 0), ay1 + a.get("height", 0)
+    bx1, by1 = b.get("x", 0), b.get("y", 0)
+    bx2, by2 = bx1 + b.get("width", 0), by1 + b.get("height", 0)
+
+    ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+    ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+
+    if ix1 >= ix2 or iy1 >= iy2:
+        return 0.0
+
+    intersection = (ix2 - ix1) * (iy2 - iy1)
+    area_a = (ax2 - ax1) * (ay2 - ay1)
+    area_b = (bx2 - bx1) * (by2 - by1)
+    union = area_a + area_b - intersection
+
+    return intersection / union if union > 0 else 0.0
+
+
 # Seconds to sleep between VLM calls to respect provider rate limits.
 # Gemini paid-tier: ~60 RPM — 1 second is conservative but safe.
 # Bump to 4 if you see 429 errors on free-tier keys.
@@ -183,9 +255,19 @@ async def _process_document(
                 )
                 continue
 
+            # Two-pass merge: if PyMuPDF also extracted content, merge for better accuracy
+            if fast_pages and page_idx < len(fast_pages):
+                pymupdf_content = fast_pages[page_idx]
+                if pymupdf_content.get("blocks"):
+                    parsed_content = _merge_extractions(pymupdf_content, parsed_content)
+                    page.extraction_method = "vlm+pymupdf"
+                    page.extraction_confidence = 0.90
+
             page.content = parsed_content
-            page.extraction_method = "vlm"
-            page.extraction_confidence = 0.80
+            if not page.extraction_method:
+                page.extraction_method = "vlm"
+            if not page.extraction_confidence:
+                page.extraction_confidence = 0.80
             page.processing_status = PageProcessingStatus.completed
             logger.debug(
                 f"Stage 3: {doc.role} page {page.page_number} "

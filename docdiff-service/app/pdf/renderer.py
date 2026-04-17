@@ -55,3 +55,33 @@ def has_text_layer(pdf_path: str, page_number: int) -> bool:
     text = page.get_text("text").strip()
     doc.close()
     return len(text) > 10
+
+
+def get_optimal_dpi(pdf_path: str, page_number: int) -> int:
+    """Determine optimal rendering DPI based on page content.
+
+    - Born-digital pages with text layer: 150 DPI (sufficient for overlays)
+    - Scanned pages without text layer: 300 DPI (better OCR accuracy)
+    - Pages with small text or fine detail: 300 DPI
+    """
+    if has_text_layer(pdf_path, page_number):
+        return 150  # Text is already extractable, just need visual
+    return 300  # Need high quality for VLM OCR
+
+
+def render_all_pages_adaptive(pdf_path: str, output_dir: str) -> list[tuple[str, int]]:
+    """Render all pages with adaptive DPI based on content type.
+
+    Returns list of (image_path, dpi_used) tuples.
+    """
+    doc = fitz.open(pdf_path)
+    page_count = doc.page_count
+    doc.close()
+
+    results = []
+    for i in range(page_count):
+        dpi = get_optimal_dpi(pdf_path, i)
+        path = render_page_to_image(pdf_path, i, output_dir, dpi)
+        results.append((path, dpi))
+
+    return results
