@@ -51,7 +51,7 @@ def run_stage_6(aligned_pairs: list[AlignedPair]) -> list[RawDiffRecord]:
         # Only Version A present → deletion
         # ------------------------------------------------------------------
         if blk_a is not None and blk_b is None:
-            block_type = blk_a.get("block_type", "text")
+            block_type = blk_a.get("type") or blk_a.get("block_type", "text")
             if block_type == "table":
                 diff_type = DifferenceType.table_row_deletion
             elif block_type == "annotation":
@@ -68,7 +68,7 @@ def run_stage_6(aligned_pairs: list[AlignedPair]) -> list[RawDiffRecord]:
                     page_version_b=None,
                     bbox_version_a=blk_a.get("bbox"),
                     bbox_version_b=None,
-                    block_id_version_a=blk_a.get("block_id"),
+                    block_id_version_a=blk_a.get("id"),
                     block_id_version_b=None,
                 )
             )
@@ -78,7 +78,7 @@ def run_stage_6(aligned_pairs: list[AlignedPair]) -> list[RawDiffRecord]:
         # Only Version B present → addition
         # ------------------------------------------------------------------
         if blk_b is not None and blk_a is None:
-            block_type = blk_b.get("block_type", "text")
+            block_type = blk_b.get("type") or blk_b.get("block_type", "text")
             if block_type == "table":
                 diff_type = DifferenceType.table_row_addition
             elif block_type == "annotation":
@@ -96,7 +96,7 @@ def run_stage_6(aligned_pairs: list[AlignedPair]) -> list[RawDiffRecord]:
                     bbox_version_a=None,
                     bbox_version_b=blk_b.get("bbox"),
                     block_id_version_a=None,
-                    block_id_version_b=blk_b.get("block_id"),
+                    block_id_version_b=blk_b.get("id"),
                 )
             )
             continue
@@ -104,8 +104,8 @@ def run_stage_6(aligned_pairs: list[AlignedPair]) -> list[RawDiffRecord]:
         # ------------------------------------------------------------------
         # Both present — determine block type and compute diff
         # ------------------------------------------------------------------
-        block_type_a = blk_a.get("block_type", "text")
-        block_type_b = blk_b.get("block_type", "text")
+        block_type_a = blk_a.get("type") or blk_a.get("block_type", "text")
+        block_type_b = blk_b.get("type") or blk_b.get("block_type", "text")
 
         # Annotation pair
         if block_type_a == "annotation" or block_type_b == "annotation":
@@ -127,8 +127,8 @@ def run_stage_6(aligned_pairs: list[AlignedPair]) -> list[RawDiffRecord]:
                     page_version_b=pair.page_version_b,
                     bbox_version_a=blk_a.get("bbox"),
                     bbox_version_b=blk_b.get("bbox"),
-                    block_id_version_a=blk_a.get("block_id"),
-                    block_id_version_b=blk_b.get("block_id"),
+                    block_id_version_a=blk_a.get("id"),
+                    block_id_version_b=blk_b.get("id"),
                 )
             )
             continue
@@ -148,8 +148,8 @@ def run_stage_6(aligned_pairs: list[AlignedPair]) -> list[RawDiffRecord]:
                         page_version_b=pair.page_version_b,
                         bbox_version_a=blk_a.get("bbox"),
                         bbox_version_b=blk_b.get("bbox"),
-                        block_id_version_a=blk_a.get("block_id"),
-                        block_id_version_b=blk_b.get("block_id"),
+                        block_id_version_a=blk_a.get("id"),
+                        block_id_version_b=blk_b.get("id"),
                     )
                 )
 
@@ -164,8 +164,8 @@ def run_stage_6(aligned_pairs: list[AlignedPair]) -> list[RawDiffRecord]:
                         page_version_b=pair.page_version_b,
                         bbox_version_a=blk_a.get("bbox"),
                         bbox_version_b=blk_b.get("bbox"),
-                        block_id_version_a=blk_a.get("block_id"),
-                        block_id_version_b=blk_b.get("block_id"),
+                        block_id_version_a=blk_a.get("id"),
+                        block_id_version_b=blk_b.get("id"),
                     )
                 )
 
@@ -180,8 +180,8 @@ def run_stage_6(aligned_pairs: list[AlignedPair]) -> list[RawDiffRecord]:
                         page_version_b=pair.page_version_b,
                         bbox_version_a=blk_a.get("bbox"),
                         bbox_version_b=blk_b.get("bbox"),
-                        block_id_version_a=blk_a.get("block_id"),
-                        block_id_version_b=blk_b.get("block_id"),
+                        block_id_version_a=blk_a.get("id"),
+                        block_id_version_b=blk_b.get("id"),
                     )
                 )
 
@@ -196,8 +196,8 @@ def run_stage_6(aligned_pairs: list[AlignedPair]) -> list[RawDiffRecord]:
                         page_version_b=pair.page_version_b,
                         bbox_version_a=blk_a.get("bbox"),
                         bbox_version_b=blk_b.get("bbox"),
-                        block_id_version_a=blk_a.get("block_id"),
-                        block_id_version_b=blk_b.get("block_id"),
+                        block_id_version_a=blk_a.get("id"),
+                        block_id_version_b=blk_b.get("id"),
                     )
                 )
             continue
@@ -231,8 +231,8 @@ def run_stage_6(aligned_pairs: list[AlignedPair]) -> list[RawDiffRecord]:
                     page_version_b=pair.page_version_b,
                     bbox_version_a=blk_a.get("bbox"),
                     bbox_version_b=blk_b.get("bbox"),
-                    block_id_version_a=blk_a.get("block_id"),
-                    block_id_version_b=blk_b.get("block_id"),
+                    block_id_version_a=blk_a.get("id"),
+                    block_id_version_b=blk_b.get("id"),
                 )
             )
 
@@ -250,7 +250,7 @@ def _build_context(blk_a: dict | None, blk_b: dict | None) -> str:
         title = blk_a.get("section_title") or blk_b.get("section_title") or ""
         if title:
             return f"Section: {title}"
-        block_type = blk_a.get("block_type") or blk_b.get("block_type") or "text"
+        block_type = blk_a.get("type") or blk_b.get("type") or "text"
         return f"Block type: {block_type}"
     block = blk_a or blk_b
     if block:

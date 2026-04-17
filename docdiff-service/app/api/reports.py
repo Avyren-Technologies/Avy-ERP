@@ -71,9 +71,23 @@ async def generate_report(
         "label_b": doc_b.label if doc_b else "Version B",
     }
 
-    # Determine if partial (not all verified)
+    # Determine if partial — count actual verified differences from DB
+    # (more accurate than job.differences_verified which may be stale)
+    from app.models.difference import VerificationStatus
+    from sqlalchemy import func
+    verified_count_result = await db.execute(
+        select(func.count()).select_from(DetectedDifference).where(
+            DetectedDifference.job_id == job_id,
+            DetectedDifference.verification_status.in_([
+                VerificationStatus.confirmed,
+                VerificationStatus.dismissed,
+                VerificationStatus.corrected,
+                VerificationStatus.flagged,
+            ]),
+        )
+    )
+    verified = verified_count_result.scalar() or 0
     total = job.total_differences or 0
-    verified = job.differences_verified or 0
     is_partial = total > 0 and verified < total
 
     job_data = {
