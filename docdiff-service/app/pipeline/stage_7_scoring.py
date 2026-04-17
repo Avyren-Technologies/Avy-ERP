@@ -82,6 +82,13 @@ async def run_stage_7(
                 )
         except Exception as e:
             logger.warning(f"Stage 7: failed to load corrections library: {e}")
+            # CRITICAL: rollback the failed transaction so subsequent queries work.
+            # Without this, PostgreSQL keeps the session in "aborted" state and
+            # all further SQL on this session fails with InFailedSQLTransactionError.
+            try:
+                await db.rollback()
+            except Exception:
+                pass
 
     scored: list[dict] = []
 
