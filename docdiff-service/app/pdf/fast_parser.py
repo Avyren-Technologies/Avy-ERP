@@ -60,6 +60,10 @@ def _extract_page(page: fitz.Page) -> dict:
         flags=fitz.TEXT_PRESERVE_WHITESPACE | fitz.TEXT_PRESERVE_LIGATURES,
     )["blocks"]
 
+    # Page dimensions for normalizing bboxes to 0-1 fractions
+    page_w = page.rect.width
+    page_h = page.rect.height
+
     result_blocks: list[dict] = []
     reading_order: list[str] = []
     sections: list[dict] = []
@@ -78,7 +82,7 @@ def _extract_page(page: fitz.Page) -> dict:
 
         block_counter += 1
         block_id = f"blk_{block_counter:03d}"
-        bbox = _bbox(raw)
+        bbox = _bbox_normalized(raw, page_w, page_h)
 
         block: dict = {
             "id": block_id,
@@ -142,8 +146,10 @@ def _extract_page(page: fitz.Page) -> dict:
                     "block_type": "table",
                     "type": "table",
                     "bbox": {
-                        "x": tb[0], "y": tb[1],
-                        "width": tb[2] - tb[0], "height": tb[3] - tb[1],
+                        "x": tb[0] / page_w if page_w else 0,
+                        "y": tb[1] / page_h if page_h else 0,
+                        "width": (tb[2] - tb[0]) / page_w if page_w else 0,
+                        "height": (tb[3] - tb[1]) / page_h if page_h else 0,
                     },
                     "text": "",
                     "table": {
@@ -185,6 +191,12 @@ def _first_span(raw: dict) -> dict | None:
     return None
 
 
-def _bbox(raw: dict) -> dict:
+def _bbox_normalized(raw: dict, page_w: float, page_h: float) -> dict:
+    """Convert PyMuPDF bbox (PDF points) to normalized 0-1 fractions of page size."""
     b = raw.get("bbox", (0, 0, 0, 0))
-    return {"x": b[0], "y": b[1], "width": b[2] - b[0], "height": b[3] - b[1]}
+    return {
+        "x": b[0] / page_w if page_w else 0,
+        "y": b[1] / page_h if page_h else 0,
+        "width": (b[2] - b[0]) / page_w if page_w else 0,
+        "height": (b[3] - b[1]) / page_h if page_h else 0,
+    }

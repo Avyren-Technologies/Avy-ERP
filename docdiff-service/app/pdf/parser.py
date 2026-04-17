@@ -10,6 +10,15 @@ def parse_document_with_docling(file_path: str) -> list[dict]:
         logger.error("Docling not installed. Install with: pip install docling")
         raise
 
+    # Get page dimensions for bbox normalization
+    import fitz
+    pdf_doc = fitz.open(file_path)
+    page_sizes: dict[int, tuple[float, float]] = {}
+    for i in range(pdf_doc.page_count):
+        p = pdf_doc[i]
+        page_sizes[i + 1] = (p.rect.width, p.rect.height)
+    pdf_doc.close()
+
     converter = DocumentConverter()
     result = converter.convert(file_path)
     doc = result.document
@@ -29,11 +38,17 @@ def parse_document_with_docling(file_path: str) -> list[dict]:
                 page_num = prov.page_no
             if hasattr(prov, "bbox"):
                 b = prov.bbox
+                pw, ph = page_sizes.get(page_num, (1, 1))
+                raw_x = getattr(b, "l", 0)
+                raw_y = getattr(b, "t", 0)
+                raw_w = getattr(b, "r", 0) - raw_x
+                raw_h = getattr(b, "b", 0) - raw_y
+                # Normalize to 0-1 fractions of page dimensions
                 bbox = {
-                    "x": getattr(b, "l", 0),
-                    "y": getattr(b, "t", 0),
-                    "width": getattr(b, "r", 0) - getattr(b, "l", 0),
-                    "height": getattr(b, "b", 0) - getattr(b, "t", 0),
+                    "x": raw_x / pw if pw else 0,
+                    "y": raw_y / ph if ph else 0,
+                    "width": raw_w / pw if pw else 0,
+                    "height": raw_h / ph if ph else 0,
                 }
 
         block_counter += 1
