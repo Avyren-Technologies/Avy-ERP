@@ -232,7 +232,24 @@ def _classify_text_modification(before: str, after: str) -> tuple[Significance, 
     if before.lower() == after.lower():
         return Significance.cosmetic, 0.95, "Capitalisation change only"
 
-    # Number / date / amount changes → MATERIAL (high stakes)
+    # Version/revision identifiers -> cosmetic
+    if re.search(r"(?:rev\.?\s*\d|version\s+\d|v\d+|rev\s*\.?\s*\d)", before, re.IGNORECASE) or \
+       re.search(r"(?:rev\.?\s*\d|version\s+\d|v\d+|rev\s*\.?\s*\d)", after, re.IGNORECASE):
+        return Significance.cosmetic, 0.93, (
+            f"Version/revision identifier changed: \"{_truncate(before, 50)}\" -> \"{_truncate(after, 50)}\""
+        )
+
+    # Document reference IDs (RPT-xxxx, DOC-xxxx, 6-44-0052, etc.) -> cosmetic
+    if re.search(r"[A-Z]{2,4}-\d{3,}", before) and re.search(r"[A-Z]{2,4}-\d{3,}", after):
+        # Both contain doc reference patterns -- check if only the suffix changed
+        before_stripped = re.sub(r"[A-Z]{2,4}-[\d-]+[A-Z]?", "", before).strip()
+        after_stripped = re.sub(r"[A-Z]{2,4}-[\d-]+[A-Z]?", "", after).strip()
+        if before_stripped == after_stripped:
+            return Significance.cosmetic, 0.92, (
+                f"Document reference ID changed: \"{_truncate(before, 50)}\" -> \"{_truncate(after, 50)}\""
+            )
+
+    # Number / date / amount changes -> MATERIAL (high stakes)
     if _contains_number(before) or _contains_number(after):
         if _numbers_changed(before, after):
             return Significance.material, 0.92, (

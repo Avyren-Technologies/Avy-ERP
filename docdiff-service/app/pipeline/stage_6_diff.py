@@ -254,7 +254,7 @@ def _build_context(blk_a: dict | None, blk_b: dict | None) -> str:
         return f"Block type: {block_type}"
     block = blk_a or blk_b
     if block:
-        return block.get("section_title") or block.get("block_type") or "unknown"
+        return block.get("section_title") or block.get("type") or block.get("block_type") or "unknown"
     return ""
 
 

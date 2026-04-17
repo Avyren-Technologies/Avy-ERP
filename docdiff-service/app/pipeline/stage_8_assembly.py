@@ -90,46 +90,114 @@ async def run_stage_8(
 
 
 def _deduplicate_differences(scored: list[dict]) -> list[dict]:
-    """Remove duplicate detections of the same logical difference.
+    """Enhanced deduplication and noise reduction.
 
-    A duplicate is when the same before->after value pair appears multiple times
-    on the same page in different content blocks. Keep the first occurrence
-    (typically the more prominent one, like a table cell over inline text).
+    Applies these filters in order:
+    1. Remove OCR garbage entries
+    2. Collapse header/footer changes repeated across pages into single entries
+    3. Remove page number pattern changes
+    4. Remove duplicate same-value changes on same page
     """
-    seen: set[tuple] = set()
-    deduped: list[dict] = []
+    from collections import defaultdict
 
+    from app.utils.diff_utils import is_ocr_garbage, is_page_number_text
+
+    # Pass 1: Filter OCR garbage
+    clean: list[dict] = []
+    ocr_removed = 0
     for diff in scored:
-        # Create a dedup key from the essential content
         before = (diff.get("value_before") or "").strip()
         after = (diff.get("value_after") or "").strip()
-
-        # Skip dedup for very short values (single characters) as they may be
-        # genuinely different occurrences
-        if len(before) <= 1 and len(after) <= 1:
-            deduped.append(diff)
+        if is_ocr_garbage(before) or is_ocr_garbage(after):
+            ocr_removed += 1
             continue
+        clean.append(diff)
+    if ocr_removed:
+        logger.info(f"Dedup: removed {ocr_removed} OCR garbage entries")
 
+    # Pass 2: Collapse header/footer repeats across pages
+    # Group by (before, after, diff_type) ignoring page numbers
+    content_groups: dict[tuple, list[dict]] = defaultdict(list)
+    for diff in clean:
+        before = (diff.get("value_before") or "").strip()
+        after = (diff.get("value_after") or "").strip()
+        key = (before, after, str(diff.get("difference_type")))
+        content_groups[key].append(diff)
+
+    collapsed: list[dict] = []
+    collapsed_count = 0
+    seen_keys: set[tuple] = set()
+
+    for diff in clean:
+        before = (diff.get("value_before") or "").strip()
+        after = (diff.get("value_after") or "").strip()
+        key = (before, after, str(diff.get("difference_type")))
+
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+
+        group = content_groups[key]
+        if len(group) >= 3:
+            # This change appears on 3+ pages -- it's a header/footer/repeated element
+            pages = sorted(set(
+                d.get("page_version_a") or d.get("page_version_b") or 0 for d in group
+            ))
+            representative = group[0].copy()
+            representative["summary"] = (
+                f"{representative.get('summary', '')} "
+                f"(found on {len(group)} pages: {', '.join(str(p) for p in pages[:5])}"
+                f"{'...' if len(pages) > 5 else ''})"
+            )
+            # Downgrade repeated header/footer changes to cosmetic
+            from app.models.difference import Significance
+            representative["significance"] = Significance.cosmetic
+            representative["auto_confirmed"] = True
+            representative["confidence"] = 0.98
+            collapsed.append(representative)
+            collapsed_count += len(group) - 1
+        else:
+            collapsed.append(diff)
+
+    if collapsed_count:
+        logger.info(f"Dedup: collapsed {collapsed_count} repeated header/footer entries")
+
+    # Pass 3: Filter page number changes
+    filtered: list[dict] = []
+    page_num_removed = 0
+    for diff in collapsed:
+        before = (diff.get("value_before") or "").strip()
+        after = (diff.get("value_after") or "").strip()
+        if is_page_number_text(before) or is_page_number_text(after):
+            page_num_removed += 1
+            continue
+        filtered.append(diff)
+    if page_num_removed:
+        logger.info(f"Dedup: removed {page_num_removed} page number entries")
+
+    # Pass 4: Same-value dedup on same page (existing logic)
+    seen: set[tuple] = set()
+    final: list[dict] = []
+    for diff in filtered:
+        before = (diff.get("value_before") or "").strip()
+        after = (diff.get("value_after") or "").strip()
+        if len(before) <= 1 and len(after) <= 1:
+            final.append(diff)
+            continue
         page_a = diff.get("page_version_a")
         page_b = diff.get("page_version_b")
-        diff_type = diff.get("difference_type")
-
-        key = (before, after, page_a, page_b, str(diff_type))
-
+        key = (before, after, page_a, page_b, str(diff.get("difference_type")))
         if key in seen:
-            logger.debug(
-                f"Dedup: dropping duplicate diff '{before}' -> '{after}' "
-                f"on page {page_a}/{page_b}"
-            )
             continue
-
         seen.add(key)
-        deduped.append(diff)
+        final.append(diff)
 
-    if len(scored) != len(deduped):
+    total_removed = len(scored) - len(final)
+    if total_removed:
         logger.info(
-            f"Deduplication: {len(scored)} -> {len(deduped)} "
-            f"({len(scored) - len(deduped)} duplicates removed)"
+            f"Dedup total: {len(scored)} -> {len(final)} "
+            f"({total_removed} entries removed: {ocr_removed} OCR, "
+            f"{collapsed_count} header/footer, {page_num_removed} page numbers, "
+            f"{len(scored) - len(final) - ocr_removed - collapsed_count - page_num_removed} same-value)"
         )
-
-    return deduped
+    return final

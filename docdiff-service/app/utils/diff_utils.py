@@ -121,3 +121,47 @@ def compute_similarity(text_a: str, text_b: str) -> float:
     levenshtein = dmp.diff_levenshtein(diffs)
     max_len = max(len(text_a), len(text_b))
     return 1.0 - (levenshtein / max_len)
+
+
+# ---------------------------------------------------------------------------
+# OCR garbage detection helpers
+# ---------------------------------------------------------------------------
+
+_RE_NON_LATIN_CLUSTER = re.compile(r"[^\x00-\x7F\u00C0-\u024F\u1E00-\u1EFF]{3,}")
+_RE_GARBLED = re.compile(r"[^\w\s.,;:!?()'\"-]{3,}")
+_RE_PAGE_NUMBER = re.compile(r"^\s*(?:page\s+)?\d+\s*(?:of\s+\d+)?\s*$", re.IGNORECASE)
+_RE_HEADER_FOOTER_PATTERN = re.compile(
+    r"(?:rev\.?\s*\d|page\s+\d|^\d+\s+of\s+\d+$|confidential|draft|proprietary)",
+    re.IGNORECASE,
+)
+
+
+def is_ocr_garbage(text: str) -> bool:
+    """Detect if text is likely OCR garbage (garbled characters, non-Latin clusters)."""
+    if not text or len(text.strip()) < 2:
+        return False
+    stripped = text.strip()
+    # Non-Latin character clusters (Hindi, symbol fonts, etc.)
+    if _RE_NON_LATIN_CLUSTER.search(stripped):
+        return True
+    # High ratio of non-alphanumeric characters
+    alnum = sum(1 for c in stripped if c.isalnum() or c.isspace())
+    if len(stripped) > 5 and alnum / len(stripped) < 0.4:
+        return True
+    # Contains garbled sequences
+    if _RE_GARBLED.search(stripped):
+        return True
+    return False
+
+
+def is_page_number_text(text: str) -> bool:
+    """Detect if text matches a page number pattern like 'Page 5 of 12'."""
+    return bool(_RE_PAGE_NUMBER.match(text.strip()))
+
+
+def is_header_footer_text(text: str) -> bool:
+    """Detect if text looks like a recurring header/footer element."""
+    stripped = text.strip()
+    if len(stripped) > 200:
+        return False  # Too long for header/footer
+    return bool(_RE_HEADER_FOOTER_PATTERN.search(stripped))

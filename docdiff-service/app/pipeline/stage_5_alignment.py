@@ -25,16 +25,72 @@ class AlignedPair:
     alignment_score: float
 
 
+async def _align_pages(
+    doc_a_id: uuid.UUID, doc_b_id: uuid.UUID, db: AsyncSession
+) -> dict[int, int | None]:
+    """Map each Version A page to its best-matching Version B page by content similarity.
+
+    Returns {page_a_num: page_b_num_or_None}. Pages below similarity threshold
+    are mapped to None (unmatched -- reported as scope difference, not line-by-line diffs).
+    """
+    PAGE_MATCH_THRESHOLD = 0.3  # Very low -- we just need to avoid catastrophic mismatches
+
+    pages_a = await _get_page_texts(doc_a_id, db)
+    pages_b = await _get_page_texts(doc_b_id, db)
+
+    mapping: dict[int, int | None] = {}
+    used_b: set[int] = set()
+
+    for page_num_a, text_a in sorted(pages_a.items()):
+        best_score = 0.0
+        best_page_b: int | None = None
+        for page_num_b, text_b in sorted(pages_b.items()):
+            if page_num_b in used_b:
+                continue
+            score = compute_similarity(text_a[:2000], text_b[:2000])
+            if score > best_score and score >= PAGE_MATCH_THRESHOLD:
+                best_score = score
+                best_page_b = page_num_b
+        if best_page_b is not None:
+            mapping[page_num_a] = best_page_b
+            used_b.add(best_page_b)
+        else:
+            mapping[page_num_a] = None  # No match -- appendix/attachment
+
+    return mapping
+
+
+async def _get_page_texts(document_id: uuid.UUID, db: AsyncSession) -> dict[int, str]:
+    """Get concatenated text per page for similarity comparison."""
+    result = await db.execute(
+        select(DocumentPage)
+        .where(DocumentPage.document_id == document_id,
+               DocumentPage.processing_status == PageProcessingStatus.completed)
+        .order_by(DocumentPage.page_number)
+    )
+    pages = result.scalars().all()
+    texts: dict[int, str] = {}
+    for page in pages:
+        if not page.content or "blocks" not in page.content:
+            continue
+        page_text = " ".join(
+            (b.get("text") or "") for b in page.content["blocks"]
+        )
+        texts[page.page_number] = page_text
+    return texts
+
+
 async def run_stage_5(job_id: uuid.UUID, db: AsyncSession) -> list[AlignedPair]:
     """Stage 5: Section alignment between Version A and Version B documents.
 
-    Uses a 3-pass matching strategy:
-      Pass 1 — Match by section title similarity (>= 0.7)
-      Pass 2 — Match tables by structural similarity (>= 0.5)
-      Pass 3 — Match remaining text blocks by content similarity (>= 0.4)
+    Uses page-level pre-alignment to handle different page counts, then
+    a 3-pass matching strategy on matched pages:
+      Pass 1 -- Match by section title similarity (>= 0.7)
+      Pass 2 -- Match tables by structural similarity (>= 0.5)
+      Pass 3 -- Match remaining text blocks by content similarity (>= 0.4)
 
-    Unmatched Version A blocks become deletions; unmatched Version B blocks
-    become additions. Returns the full list of AlignedPair objects.
+    Unmatched pages get a single scope-difference entry instead of per-block
+    deletions. Returns the full list of AlignedPair objects.
     """
     # Load both documents
     result = await db.execute(select(Document).where(Document.job_id == job_id))
@@ -57,18 +113,37 @@ async def run_stage_5(job_id: uuid.UUID, db: AsyncSession) -> list[AlignedPair]:
         f"{len(blocks_b)} Version B blocks (job {job_id})"
     )
 
+    # Page-level alignment first (prevents catastrophic mismatches when page counts differ)
+    page_mapping = await _align_pages(doc_a.id, doc_b.id, db)
+    unmatched_pages_a = [p for p, m in page_mapping.items() if m is None]
+    if unmatched_pages_a:
+        logger.info(
+            f"Stage 5: {len(unmatched_pages_a)} Version A pages have no Version B counterpart: "
+            f"{unmatched_pages_a} -- these will be reported as scope differences (job {job_id})"
+        )
+
+    # Filter blocks to only include blocks from matched pages
+    # Unmatched pages get a single summary entry instead of per-block deletions
+    matched_page_nums_a = {p for p, m in page_mapping.items() if m is not None}
+    matched_page_nums_b = set(page_mapping.values()) - {None}
+
+    blocks_a_filtered = [b for b in blocks_a if b.get("_page_number") in matched_page_nums_a]
+    blocks_b_filtered = [b for b in blocks_b if b.get("_page_number") in matched_page_nums_b]
+
     aligned: list[AlignedPair] = []
     used_a: set[int] = set()
     used_b: set[int] = set()
 
     # ------------------------------------------------------------------
-    # Pass 1: Match by section title similarity
+    # Pass 1: Match by section title similarity (using filtered blocks)
     # ------------------------------------------------------------------
     title_blocks_a = [
-        (i, b) for i, b in enumerate(blocks_a) if b.get("block_type") in ("heading", "title")
+        (i, b) for i, b in enumerate(blocks_a_filtered)
+        if (b.get("type") or b.get("block_type", "")) in ("heading", "title", "text") and b.get("section_title")
     ]
     title_blocks_b = [
-        (i, b) for i, b in enumerate(blocks_b) if b.get("block_type") in ("heading", "title")
+        (i, b) for i, b in enumerate(blocks_b_filtered)
+        if (b.get("type") or b.get("block_type", "")) in ("heading", "title", "text") and b.get("section_title")
     ]
 
     for idx_a, blk_a in title_blocks_a:
@@ -86,7 +161,7 @@ async def run_stage_5(job_id: uuid.UUID, db: AsyncSession) -> list[AlignedPair]:
                 best_score = score
                 best_idx_b = idx_b
         if best_idx_b >= 0:
-            blk_b = blocks_b[best_idx_b]
+            blk_b = blocks_b_filtered[best_idx_b]
             aligned.append(
                 AlignedPair(
                     version_a_block=blk_a,
@@ -100,13 +175,15 @@ async def run_stage_5(job_id: uuid.UUID, db: AsyncSession) -> list[AlignedPair]:
             used_b.add(best_idx_b)
 
     # ------------------------------------------------------------------
-    # Pass 2: Match tables by structural similarity
+    # Pass 2: Match tables by structural similarity (using filtered blocks)
     # ------------------------------------------------------------------
     table_blocks_a = [
-        (i, b) for i, b in enumerate(blocks_a) if b.get("block_type") == "table" and i not in used_a
+        (i, b) for i, b in enumerate(blocks_a_filtered)
+        if (b.get("type") or b.get("block_type", "")) == "table" and i not in used_a
     ]
     table_blocks_b = [
-        (i, b) for i, b in enumerate(blocks_b) if b.get("block_type") == "table" and i not in used_b
+        (i, b) for i, b in enumerate(blocks_b_filtered)
+        if (b.get("type") or b.get("block_type", "")) == "table" and i not in used_b
     ]
 
     for idx_a, blk_a in table_blocks_a:
@@ -120,7 +197,7 @@ async def run_stage_5(job_id: uuid.UUID, db: AsyncSession) -> list[AlignedPair]:
                 best_score = score
                 best_idx_b = idx_b
         if best_idx_b >= 0:
-            blk_b = blocks_b[best_idx_b]
+            blk_b = blocks_b_filtered[best_idx_b]
             aligned.append(
                 AlignedPair(
                     version_a_block=blk_a,
@@ -134,10 +211,10 @@ async def run_stage_5(job_id: uuid.UUID, db: AsyncSession) -> list[AlignedPair]:
             used_b.add(best_idx_b)
 
     # ------------------------------------------------------------------
-    # Pass 3: Match remaining text blocks by content similarity
+    # Pass 3: Match remaining text blocks by content similarity (using filtered blocks)
     # ------------------------------------------------------------------
-    remaining_a = [(i, b) for i, b in enumerate(blocks_a) if i not in used_a]
-    remaining_b = [(i, b) for i, b in enumerate(blocks_b) if i not in used_b]
+    remaining_a = [(i, b) for i, b in enumerate(blocks_a_filtered) if i not in used_a]
+    remaining_b = [(i, b) for i, b in enumerate(blocks_b_filtered) if i not in used_b]
 
     for idx_a, blk_a in remaining_a:
         text_a = blk_a.get("text", "") or ""
@@ -152,7 +229,7 @@ async def run_stage_5(job_id: uuid.UUID, db: AsyncSession) -> list[AlignedPair]:
                 best_score = score
                 best_idx_b = idx_b
         if best_idx_b >= 0:
-            blk_b = blocks_b[best_idx_b]
+            blk_b = blocks_b_filtered[best_idx_b]
             aligned.append(
                 AlignedPair(
                     version_a_block=blk_a,
@@ -166,9 +243,9 @@ async def run_stage_5(job_id: uuid.UUID, db: AsyncSession) -> list[AlignedPair]:
             used_b.add(best_idx_b)
 
     # ------------------------------------------------------------------
-    # Unmatched Version A blocks → deletions
+    # Unmatched filtered Version A blocks -> deletions
     # ------------------------------------------------------------------
-    for idx_a, blk_a in enumerate(blocks_a):
+    for idx_a, blk_a in enumerate(blocks_a_filtered):
         if idx_a not in used_a:
             aligned.append(
                 AlignedPair(
@@ -181,9 +258,9 @@ async def run_stage_5(job_id: uuid.UUID, db: AsyncSession) -> list[AlignedPair]:
             )
 
     # ------------------------------------------------------------------
-    # Unmatched Version B blocks → additions
+    # Unmatched filtered Version B blocks -> additions
     # ------------------------------------------------------------------
-    for idx_b, blk_b in enumerate(blocks_b):
+    for idx_b, blk_b in enumerate(blocks_b_filtered):
         if idx_b not in used_b:
             aligned.append(
                 AlignedPair(
@@ -194,6 +271,23 @@ async def run_stage_5(job_id: uuid.UUID, db: AsyncSession) -> list[AlignedPair]:
                     alignment_score=0.0,
                 )
             )
+
+    # ------------------------------------------------------------------
+    # Add single scope-difference entries for unmatched pages
+    # ------------------------------------------------------------------
+    for page_num in unmatched_pages_a:
+        page_blocks = [b for b in blocks_a if b.get("_page_number") == page_num]
+        page_text = " ".join((b.get("text") or "")[:100] for b in page_blocks[:3])
+        aligned.append(AlignedPair(
+            version_a_block={"id": f"scope_page_{page_num}", "type": "text",
+                             "text": f"[Entire page {page_num} content -- not present in Version B]",
+                             "bbox": {"x": 0, "y": 0, "width": 1, "height": 1},
+                             "_page_number": page_num},
+            version_b_block=None,
+            page_version_a=page_num,
+            page_version_b=None,
+            alignment_score=0.0,
+        ))
 
     matched = sum(1 for p in aligned if p.version_a_block and p.version_b_block)
     deletions = sum(1 for p in aligned if p.version_a_block and not p.version_b_block)
