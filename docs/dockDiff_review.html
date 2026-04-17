@@ -1,0 +1,2022 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocDiff Pro — Review Interface</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300;1,9..40,400&display=swap"
+        rel="stylesheet">
+
+    <style>
+        /* ─── RESET & BASE ─────────────────────────────────── */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: 'DM Sans', system-ui, sans-serif;
+            background: #0a0a08;
+            color: #e8e6df;
+            font-size: 13px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ─── DESIGN TOKENS ────────────────────────────────── */
+        :root {
+            /* Backgrounds */
+            --bg-base: #0a0a08;
+            --bg-surface: #111110;
+            --bg-raised: #181816;
+            --bg-elevated: #1e1e1b;
+            --bg-overlay: #242420;
+            --bg-hover: rgba(255, 255, 255, 0.04);
+            --bg-active: rgba(255, 255, 255, 0.07);
+
+            /* Borders */
+            --border-faint: rgba(255, 255, 255, 0.06);
+            --border-subtle: rgba(255, 255, 255, 0.10);
+            --border-muted: rgba(255, 255, 255, 0.15);
+            --border-strong: rgba(255, 255, 255, 0.22);
+
+            /* Text */
+            --text-primary: #e8e6df;
+            --text-secondary: #9b9890;
+            --text-tertiary: #5e5c57;
+            --text-disabled: #3a3835;
+
+            /* Accents */
+            --accent-blue: #4a9eff;
+            --accent-blue-dim: rgba(74, 158, 255, 0.12);
+            --accent-green: #4caf82;
+            --accent-green-dim: rgba(76, 175, 130, 0.12);
+
+            /* Significance palette */
+            --material-text: #f87171;
+            --material-bg: rgba(248, 113, 113, 0.10);
+            --material-border: rgba(248, 113, 113, 0.28);
+            --material-hl: rgba(248, 113, 113, 0.16);
+            --material-glow: rgba(248, 113, 113, 0.22);
+
+            --substantive-text: #fb923c;
+            --substantive-bg: rgba(251, 146, 60, 0.10);
+            --substantive-border: rgba(251, 146, 60, 0.28);
+            --substantive-hl: rgba(251, 146, 60, 0.14);
+
+            --cosmetic-text: #60a5fa;
+            --cosmetic-bg: rgba(96, 165, 250, 0.10);
+            --cosmetic-border: rgba(96, 165, 250, 0.25);
+            --cosmetic-hl: rgba(96, 165, 250, 0.10);
+
+            --uncertain-text: #a78bfa;
+            --uncertain-bg: rgba(167, 139, 250, 0.10);
+            --uncertain-border: rgba(167, 139, 250, 0.28);
+            --uncertain-hl: rgba(167, 139, 250, 0.14);
+
+            /* Status */
+            --status-confirmed: #4caf82;
+            --status-auto: #4caf82;
+            --status-pending: #fb923c;
+            --status-dismissed: #3a3835;
+            --status-flagged: #a78bfa;
+            --status-corrected: #60a5fa;
+
+            /* Radii */
+            --r-sm: 4px;
+            --r-md: 7px;
+            --r-lg: 10px;
+            --r-xl: 14px;
+            --r-pill: 999px;
+
+            /* Shadows */
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+        }
+
+        /* ─── ANIMATIONS ───────────────────────────────────── */
+        @keyframes pulse-uncertain {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(167, 139, 250, 0);
+            }
+
+            50% {
+                box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.25);
+            }
+        }
+
+        @keyframes pulse-badge {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.6;
+            }
+        }
+
+        @keyframes toast-in {
+            from {
+                transform: translateY(8px) translateX(-50%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0) translateX(-50%);
+                opacity: 1;
+            }
+        }
+
+        @keyframes toast-out {
+            from {
+                transform: translateY(0) translateX(-50%);
+                opacity: 1;
+            }
+
+            to {
+                transform: translateY(-8px) translateX(-50%);
+                opacity: 0;
+            }
+        }
+
+        @keyframes highlight-pulse {
+            0% {
+                outline-width: 1.5px;
+            }
+
+            50% {
+                outline-width: 2.5px;
+            }
+
+            100% {
+                outline-width: 1.5px;
+            }
+        }
+
+        @keyframes fade-in {
+            from {
+                opacity: 0;
+                transform: translateY(4px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ─── SCROLLBAR ────────────────────────────────────── */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-subtle);
+            border-radius: 99px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--border-muted);
+        }
+
+        /* ─── LAYOUT ROOT ──────────────────────────────────── */
+        .app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: var(--bg-base);
+            overflow: hidden;
+        }
+
+        /* ─── TOPBAR ───────────────────────────────────────── */
+        .topbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0 16px;
+            height: 52px;
+            min-height: 52px;
+            border-bottom: 1px solid var(--border-faint);
+            background: var(--bg-surface);
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        .topbar-identity {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            flex-shrink: 0;
+        }
+
+        .topbar-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-primary);
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .vs-sep {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            font-weight: 400;
+        }
+
+        .topbar-meta {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            font-family: 'IBM Plex Mono', monospace;
+            white-space: nowrap;
+        }
+
+        .topbar-divider {
+            width: 1px;
+            height: 20px;
+            background: var(--border-faint);
+            flex-shrink: 0;
+        }
+
+        .topbar-stats {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .stat-chip {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            font-weight: 500;
+            padding: 4px 9px;
+            border-radius: var(--r-pill);
+            border: 1px solid;
+            white-space: nowrap;
+            cursor: default;
+            transition: opacity 0.15s;
+        }
+
+        .stat-chip:hover {
+            opacity: 0.8;
+        }
+
+        .stat-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .stat-material {
+            color: var(--material-text);
+            background: var(--material-bg);
+            border-color: var(--material-border);
+        }
+
+        .stat-substantive {
+            color: var(--substantive-text);
+            background: var(--substantive-bg);
+            border-color: var(--substantive-border);
+        }
+
+        .stat-cosmetic {
+            color: var(--cosmetic-text);
+            background: var(--cosmetic-bg);
+            border-color: var(--cosmetic-border);
+        }
+
+        .stat-uncertain {
+            color: var(--uncertain-text);
+            background: var(--uncertain-bg);
+            border-color: var(--uncertain-border);
+        }
+
+        .dot-material {
+            background: var(--material-text);
+        }
+
+        .dot-substantive {
+            background: var(--substantive-text);
+        }
+
+        .dot-cosmetic {
+            background: var(--cosmetic-text);
+        }
+
+        .dot-uncertain {
+            background: var(--uncertain-text);
+        }
+
+        .topbar-spacer {
+            flex: 1;
+        }
+
+        .prog-wrap {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            flex-shrink: 0;
+        }
+
+        .prog-track {
+            width: 96px;
+            height: 4px;
+            background: var(--border-faint);
+            border-radius: 99px;
+            overflow: hidden;
+        }
+
+        .prog-fill {
+            height: 100%;
+            background: var(--accent-green);
+            border-radius: 99px;
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .prog-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-family: 'IBM Plex Mono', monospace;
+            white-space: nowrap;
+        }
+
+        .btn-report {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            font-family: 'DM Sans', sans-serif;
+            padding: 6px 13px;
+            background: var(--accent-green);
+            color: #000;
+            border: none;
+            border-radius: var(--r-md);
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.15s;
+            flex-shrink: 0;
+        }
+
+        .btn-report:hover {
+            background: #5dc495;
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-report:active {
+            transform: translateY(0);
+        }
+
+        .btn-report svg {
+            width: 12px;
+            height: 12px;
+        }
+
+        /* ─── MAIN BODY ────────────────────────────────────── */
+        .body {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ─── DIFF PANEL ───────────────────────────────────── */
+        .diff-panel {
+            width: 268px;
+            min-width: 268px;
+            border-right: 1px solid var(--border-faint);
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-surface);
+            flex-shrink: 0;
+        }
+
+        .diff-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px 9px;
+            border-bottom: 1px solid var(--border-faint);
+        }
+
+        .diff-panel-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+
+        .diff-panel-count {
+            font-size: 11px;
+            color: var(--text-tertiary);
+            font-family: 'IBM Plex Mono', monospace;
+        }
+
+        .filter-strip {
+            display: flex;
+            gap: 5px;
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--border-faint);
+            flex-wrap: wrap;
+        }
+
+        .fc {
+            font-size: 10.5px;
+            font-weight: 500;
+            padding: 3px 9px;
+            border-radius: var(--r-pill);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            cursor: pointer;
+            background: transparent;
+            transition: all 0.14s;
+            white-space: nowrap;
+            font-family: 'DM Sans', sans-serif;
+        }
+
+        .fc:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            border-color: var(--border-muted);
+        }
+
+        .fc.active {
+            background: var(--bg-active);
+            color: var(--text-primary);
+            border-color: var(--border-strong);
+        }
+
+        .fc-mat {
+            color: var(--material-text);
+            border-color: var(--material-border);
+        }
+
+        .fc-mat.active {
+            background: var(--material-bg);
+        }
+
+        .fc-mat:hover {
+            background: var(--material-bg);
+            border-color: var(--material-border);
+        }
+
+        .fc-low {
+            color: var(--uncertain-text);
+            border-color: var(--uncertain-border);
+        }
+
+        .fc-low.active {
+            background: var(--uncertain-bg);
+        }
+
+        .fc-low:hover {
+            background: var(--uncertain-bg);
+            border-color: var(--uncertain-border);
+        }
+
+        .diff-list {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        /* ─── DIFF ITEM ────────────────────────────────────── */
+        .di {
+            padding: 10px 14px 9px;
+            border-bottom: 1px solid var(--border-faint);
+            cursor: pointer;
+            transition: background 0.12s;
+            position: relative;
+            animation: fade-in 0.2s ease both;
+        }
+
+        .di:hover {
+            background: var(--bg-hover);
+        }
+
+        .di.active {
+            background: var(--bg-active);
+            border-left: 2px solid var(--accent-blue);
+            padding-left: 12px;
+        }
+
+        .di-row1 {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+
+        .di-num {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--text-tertiary);
+            min-width: 32px;
+        }
+
+        .di.active .di-num {
+            color: var(--accent-blue);
+        }
+
+        .sig-pip {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .pip-material {
+            background: var(--material-text);
+        }
+
+        .pip-substantive {
+            background: var(--substantive-text);
+        }
+
+        .pip-cosmetic {
+            background: var(--cosmetic-text);
+        }
+
+        .pip-uncertain {
+            background: var(--uncertain-text);
+        }
+
+        .di-type {
+            font-size: 10.5px;
+            color: var(--text-tertiary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+
+        .di-ba {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 4px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 10.5px;
+            min-height: 16px;
+        }
+
+        .di-before {
+            color: var(--material-text);
+            text-decoration: line-through;
+            opacity: 0.7;
+            max-width: 90px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .di-arrow {
+            color: var(--text-tertiary);
+            font-size: 10px;
+            flex-shrink: 0;
+        }
+
+        .di-after {
+            color: var(--text-primary);
+            max-width: 90px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex-shrink: 0;
+            font-weight: 500;
+        }
+
+        .di-new {
+            color: var(--accent-green);
+            font-style: italic;
+        }
+
+        .di-row3 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .di-page {
+            font-size: 10px;
+            color: var(--text-tertiary);
+            font-family: 'IBM Plex Mono', monospace;
+            white-space: nowrap;
+        }
+
+        .conf-micro {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            flex: 1;
+        }
+
+        .conf-track {
+            flex: 1;
+            max-width: 44px;
+            height: 3px;
+            background: var(--border-faint);
+            border-radius: 99px;
+            overflow: hidden;
+        }
+
+        .conf-bar {
+            height: 100%;
+            border-radius: 99px;
+            transition: width 0.3s;
+        }
+
+        .cb-green {
+            background: var(--accent-green);
+        }
+
+        .cb-amber {
+            background: var(--substantive-text);
+        }
+
+        .cb-red {
+            background: var(--material-text);
+        }
+
+        .conf-pct {
+            font-size: 10px;
+            color: var(--text-tertiary);
+            font-family: 'IBM Plex Mono', monospace;
+            white-space: nowrap;
+        }
+
+        .di-status {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 10.5px;
+        }
+
+        .st-confirmed {
+            color: var(--status-confirmed);
+        }
+
+        .st-auto {
+            color: var(--status-auto);
+            opacity: 0.8;
+        }
+
+        .st-pending {
+            color: var(--status-pending);
+        }
+
+        .st-dismissed {
+            color: var(--text-disabled);
+        }
+
+        .st-flagged {
+            color: var(--status-flagged);
+        }
+
+        .st-corrected {
+            color: var(--status-corrected);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            font-size: 9.5px;
+            font-weight: 500;
+            padding: 1px 6px;
+            border-radius: 3px;
+            border: 1px solid;
+            white-space: nowrap;
+            font-family: 'IBM Plex Mono', monospace;
+        }
+
+        .badge-auto {
+            background: rgba(76, 175, 130, 0.12);
+            color: var(--accent-green);
+            border-color: rgba(76, 175, 130, 0.3);
+        }
+
+        .badge-check {
+            background: var(--uncertain-bg);
+            color: var(--uncertain-text);
+            border-color: var(--uncertain-border);
+            animation: pulse-badge 1.8s ease-in-out infinite;
+        }
+
+        /* ─── DOCS AREA ────────────────────────────────────── */
+        .docs-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--bg-base);
+        }
+
+        .doc-col-headers {
+            display: flex;
+            border-bottom: 1px solid var(--border-faint);
+            background: var(--bg-surface);
+            flex-shrink: 0;
+        }
+
+        .dch {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 14px;
+            font-size: 11.5px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            border-right: 1px solid var(--border-faint);
+        }
+
+        .dch:last-child {
+            border-right: none;
+        }
+
+        .ver-pill {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 4px;
+            border: 1px solid var(--border-muted);
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            letter-spacing: 0.04em;
+        }
+
+        .doc-panes {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .doc-pane {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            border-right: 1px solid var(--border-faint);
+        }
+
+        .doc-pane:last-child {
+            border-right: none;
+        }
+
+        /* ─── DOCUMENT PAGE ────────────────────────────────── */
+        .doc-page {
+            background: var(--bg-raised);
+            border: 1px solid var(--border-faint);
+            border-radius: var(--r-md);
+            padding: 18px 20px;
+            font-size: 11.5px;
+            line-height: 1.85;
+            color: var(--text-secondary);
+            min-height: 300px;
+        }
+
+        /* Focus dimming */
+        .doc-page.has-focus .dim-row,
+        .doc-page.has-focus .dim-block {
+            opacity: 0.18;
+            transition: opacity 0.2s ease;
+        }
+
+        .doc-page .dim-row,
+        .doc-page .dim-block {
+            transition: opacity 0.2s ease;
+        }
+
+        .doc-page.has-focus .dim-row.lit,
+        .doc-page.has-focus .dim-block.lit {
+            opacity: 1;
+        }
+
+        .page-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border-faint);
+            padding-bottom: 6px;
+            margin-bottom: 12px;
+            opacity: 0.7;
+        }
+
+        .doc-page p {
+            margin-bottom: 10px;
+        }
+
+        .doc-page p:last-child {
+            margin-bottom: 0;
+        }
+
+        /* ─── HIGHLIGHTS ───────────────────────────────────── */
+        .hl {
+            border-radius: 3px;
+            padding: 0 2px;
+            transition: all 0.15s;
+        }
+
+        .hl-material {
+            background: var(--material-hl);
+            outline: 1.5px solid rgba(248, 113, 113, 0.35);
+        }
+
+        .hl-substantive {
+            background: var(--substantive-hl);
+            outline: 1.5px solid rgba(251, 146, 60, 0.35);
+        }
+
+        .hl-cosmetic {
+            background: var(--cosmetic-hl);
+            outline: 1.5px solid rgba(96, 165, 250, 0.25);
+        }
+
+        .hl-uncertain {
+            background: var(--uncertain-hl);
+            outline: 1.5px solid rgba(167, 139, 250, 0.35);
+            animation: highlight-pulse 2s ease-in-out infinite;
+        }
+
+        .hl-material.lit {
+            background: rgba(248, 113, 113, 0.28);
+            outline: 2px solid #f87171;
+            box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.12);
+            animation: none;
+        }
+
+        .hl-substantive.lit {
+            background: rgba(251, 146, 60, 0.24);
+            outline: 2px solid #fb923c;
+            box-shadow: 0 0 0 4px rgba(251, 146, 60, 0.10);
+            animation: none;
+        }
+
+        .hl-cosmetic.lit {
+            background: rgba(96, 165, 250, 0.18);
+            outline: 2px solid #60a5fa;
+            box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.08);
+            animation: none;
+        }
+
+        .hl-uncertain.lit {
+            background: rgba(167, 139, 250, 0.22);
+            outline: 2px solid #a78bfa;
+            box-shadow: 0 0 0 4px rgba(167, 139, 250, 0.15);
+            animation: pulse-uncertain 1.6s ease-in-out infinite;
+        }
+
+        /* ─── INLINE TABLE ─────────────────────────────────── */
+        .spec-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10.5px;
+            margin: 10px 0;
+            font-family: 'IBM Plex Mono', monospace;
+        }
+
+        .spec-table th {
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 10px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            padding: 5px 10px;
+            border: 1px solid var(--border-faint);
+            text-align: left;
+        }
+
+        .spec-table td {
+            padding: 4px 10px;
+            border: 1px solid var(--border-faint);
+            color: var(--text-secondary);
+            vertical-align: middle;
+        }
+
+        .spec-table tr:hover td {
+            background: var(--bg-hover);
+        }
+
+        .note-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 9.5px;
+            font-family: 'IBM Plex Mono', monospace;
+            padding: 1px 6px;
+            margin-left: 5px;
+            background: var(--uncertain-bg);
+            color: var(--uncertain-text);
+            border: 1px solid var(--uncertain-border);
+            border-radius: 3px;
+            vertical-align: middle;
+            animation: pulse-badge 2s ease-in-out infinite;
+        }
+
+        .page-footer {
+            font-size: 9.5px;
+            color: var(--text-disabled);
+            font-family: 'IBM Plex Mono', monospace;
+            text-align: right;
+            margin-top: 14px;
+            padding-top: 8px;
+            border-top: 1px solid var(--border-faint);
+        }
+
+        /* ─── DETAIL PANEL ─────────────────────────────────── */
+        .detail-panel {
+            border-top: 1px solid var(--border-faint);
+            background: var(--bg-surface);
+            padding: 10px 16px;
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+            flex-shrink: 0;
+            min-height: 78px;
+        }
+
+        .dp-left {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .dp-id {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 10px;
+            color: var(--text-tertiary);
+            margin-bottom: 5px;
+        }
+
+        .dp-ba-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 5px;
+            flex-wrap: wrap;
+        }
+
+        .dp-field-label {
+            font-size: 9.5px;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 2px;
+            font-family: 'IBM Plex Mono', monospace;
+        }
+
+        .dp-val {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            font-weight: 500;
+            padding: 3px 9px;
+            border-radius: var(--r-sm);
+            border: 1px solid;
+        }
+
+        .dp-val-a {
+            background: rgba(248, 113, 113, 0.10);
+            color: #fca5a5;
+            border-color: rgba(248, 113, 113, 0.25);
+        }
+
+        .dp-val-b {
+            background: rgba(76, 175, 130, 0.10);
+            color: #6ee7b7;
+            border-color: rgba(76, 175, 130, 0.25);
+        }
+
+        .dp-arrow-big {
+            color: var(--text-tertiary);
+            font-size: 14px;
+            margin-top: 16px;
+        }
+
+        .dp-reason {
+            font-size: 10.5px;
+            color: var(--text-tertiary);
+            font-style: italic;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-faint);
+            border-radius: var(--r-sm);
+            padding: 5px 9px;
+            line-height: 1.5;
+        }
+
+        .dp-reason-label {
+            font-style: normal;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 9.5px;
+            color: var(--accent-blue);
+            font-weight: 600;
+            margin-right: 4px;
+        }
+
+        .dp-right {
+            display: flex;
+            gap: 20px;
+            flex-shrink: 0;
+            align-items: flex-start;
+        }
+
+        .dp-meta-col {
+            min-width: 80px;
+        }
+
+        .dp-meta-label {
+            font-size: 9.5px;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 4px;
+            font-family: 'IBM Plex Mono', monospace;
+        }
+
+        .dp-meta-val {
+            font-size: 12px;
+            color: var(--text-primary);
+            font-weight: 400;
+        }
+
+        .dp-sig-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: var(--r-pill);
+            border: 1px solid;
+        }
+
+        .conf-block {}
+
+        .conf-bar-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .conf-track-lg {
+            width: 60px;
+            height: 5px;
+            background: var(--border-faint);
+            border-radius: 99px;
+            overflow: hidden;
+        }
+
+        .conf-bar-lg {
+            height: 100%;
+            border-radius: 99px;
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .conf-val-text {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .conf-meaning {
+            font-size: 10px;
+            color: var(--text-tertiary);
+            margin-top: 3px;
+            font-style: italic;
+        }
+
+        /* ─── ACTION BAR ───────────────────────────────────── */
+        .action-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border-top: 1px solid var(--border-faint);
+            background: var(--bg-surface);
+            flex-shrink: 0;
+        }
+
+        .nav-group {
+            display: flex;
+            gap: 4px;
+        }
+
+        .nav-btn {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            font-weight: 400;
+            font-family: 'DM Sans', sans-serif;
+            padding: 5px 11px;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--r-md);
+            background: var(--bg-raised);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.12s;
+            white-space: nowrap;
+        }
+
+        .nav-btn:hover {
+            background: var(--bg-elevated);
+            border-color: var(--border-muted);
+        }
+
+        .nav-btn:active {
+            transform: scale(0.97);
+        }
+
+        .nav-btn.smart {
+            color: var(--text-secondary);
+            font-size: 11.5px;
+        }
+
+        .nav-btn.smart:hover {
+            color: var(--text-primary);
+        }
+
+        .ab-diff-counter {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            color: var(--text-tertiary);
+            white-space: nowrap;
+            padding: 0 4px;
+        }
+
+        .ab-spacer {
+            flex: 1;
+        }
+
+        .action-group {
+            display: flex;
+            gap: 5px;
+        }
+
+        .act-btn {
+            font-size: 12px;
+            font-weight: 500;
+            font-family: 'DM Sans', sans-serif;
+            padding: 6px 13px;
+            border-radius: var(--r-md);
+            border: 1px solid;
+            cursor: pointer;
+            transition: all 0.12s;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .act-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .act-btn:active {
+            transform: translateY(0) scale(0.97);
+        }
+
+        .act-confirm {
+            background: rgba(76, 175, 130, 0.14);
+            color: #6ee7b7;
+            border-color: rgba(76, 175, 130, 0.35);
+        }
+
+        .act-confirm:hover {
+            background: rgba(76, 175, 130, 0.22);
+        }
+
+        .act-correct {
+            background: rgba(251, 146, 60, 0.12);
+            color: #fdba74;
+            border-color: rgba(251, 146, 60, 0.32);
+        }
+
+        .act-correct:hover {
+            background: rgba(251, 146, 60, 0.2);
+        }
+
+        .act-flag {
+            background: rgba(167, 139, 250, 0.10);
+            color: #c4b5fd;
+            border-color: rgba(167, 139, 250, 0.28);
+        }
+
+        .act-flag:hover {
+            background: rgba(167, 139, 250, 0.18);
+        }
+
+        .act-dismiss {
+            background: var(--bg-raised);
+            color: var(--text-secondary);
+            border-color: var(--border-subtle);
+        }
+
+        .act-dismiss:hover {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+        }
+
+        /* ─── KBD SHORTCUT ─────────────────────────────────── */
+        .kbd {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 9px;
+            font-weight: 600;
+            padding: 1px 4px;
+            min-width: 16px;
+            height: 16px;
+            border: 1px solid var(--border-muted);
+            border-radius: 3px;
+            background: var(--bg-elevated);
+            color: var(--text-tertiary);
+            line-height: 1;
+        }
+
+        /* ─── TOAST ────────────────────────────────────────── */
+        .toast {
+            position: fixed;
+            bottom: 72px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            font-weight: 500;
+            padding: 8px 16px;
+            background: var(--bg-overlay);
+            border: 1px solid var(--border-muted);
+            border-radius: var(--r-pill);
+            color: var(--text-primary);
+            z-index: 100;
+            white-space: nowrap;
+            pointer-events: none;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .toast.in {
+            animation: toast-in 0.2s ease forwards;
+        }
+
+        .toast.out {
+            animation: toast-out 0.25s ease forwards;
+        }
+
+        /* ─── HELP OVERLAY ─────────────────────────────────── */
+        .help-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .help-overlay.show {
+            display: flex;
+        }
+
+        .help-box {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-muted);
+            border-radius: var(--r-xl);
+            padding: 24px 28px;
+            min-width: 320px;
+            box-shadow: var(--shadow-lg);
+            animation: fade-in 0.18s ease;
+        }
+
+        .help-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .help-close {
+            font-size: 18px;
+            color: var(--text-tertiary);
+            cursor: pointer;
+            line-height: 1;
+            background: none;
+            border: none;
+            color: var(--text-tertiary);
+            font-family: sans-serif;
+        }
+
+        .help-close:hover {
+            color: var(--text-primary);
+        }
+
+        .help-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid var(--border-faint);
+            gap: 20px;
+        }
+
+        .help-row:last-child {
+            border-bottom: none;
+        }
+
+        .help-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .help-keys {
+            display: flex;
+            gap: 4px;
+        }
+
+        /* ─── EMPTY STATE ──────────────────────────────────── */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-disabled);
+            font-size: 12px;
+            gap: 6px;
+        }
+
+        /* ─── HOVER PREVIEW (diff list → doc) ─────────────── */
+        .di:hover .di-num {
+            color: var(--text-secondary);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="app">
+
+        <!-- ══ TOPBAR ════════════════════════════════════════ -->
+        <div class="topbar">
+            <div class="topbar-identity">
+                <div class="topbar-title">
+                    Rev 0 — Jan 2026
+                    <span class="vs-sep">vs</span>
+                    Rev 1 — Mar 2026
+                </div>
+                <div class="topbar-meta">Spec-P2204.pdf · Claude Sonnet 4.6 · 10 pages · 41s</div>
+            </div>
+
+            <div class="topbar-divider"></div>
+
+            <div class="topbar-stats">
+                <div class="stat-chip stat-material">
+                    <span class="stat-dot dot-material"></span>5 Material
+                </div>
+                <div class="stat-chip stat-substantive">
+                    <span class="stat-dot dot-substantive"></span>3 Substantive
+                </div>
+                <div class="stat-chip stat-cosmetic">
+                    <span class="stat-dot dot-cosmetic"></span>2 Cosmetic
+                </div>
+                <div class="stat-chip stat-uncertain">
+                    <span class="stat-dot dot-uncertain"></span>2 Uncertain
+                </div>
+            </div>
+
+            <div class="topbar-spacer"></div>
+
+            <div class="prog-wrap">
+                <div class="prog-track">
+                    <div class="prog-fill" id="prog-fill" style="width:42%"></div>
+                </div>
+                <span class="prog-label" id="prog-label">5 / 12 verified</span>
+            </div>
+
+            <button class="btn-report" id="btn-report">
+                <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M2 9L6 5l4 4M6 5V11M2 3h8" />
+                </svg>
+                Generate report
+            </button>
+        </div>
+
+        <!-- ══ BODY ══════════════════════════════════════════ -->
+        <div class="body">
+
+            <!-- ── DIFF PANEL ──────────────────────────────── -->
+            <div class="diff-panel">
+                <div class="diff-panel-header">
+                    <span class="diff-panel-title">Differences</span>
+                    <span class="diff-panel-count" id="dp-count">12 total</span>
+                </div>
+                <div class="filter-strip">
+                    <button class="fc active" data-filter="all" onclick="setFilter('all',this)">All</button>
+                    <button class="fc fc-mat" data-filter="material" onclick="setFilter('material',this)">●
+                        Material</button>
+                    <button class="fc fc-low" data-filter="lowconf" onclick="setFilter('lowconf',this)">⚠ Low
+                        conf</button>
+                    <button class="fc" data-filter="pending" onclick="setFilter('pending',this)">⏳ Pending</button>
+                </div>
+                <div class="diff-list" id="diff-list"></div>
+            </div>
+
+            <!-- ── DOCS AREA ────────────────────────────────── -->
+            <div class="docs-area">
+                <div class="doc-col-headers">
+                    <div class="dch"><span class="ver-pill">A</span> Rev 0 — Jan 2026</div>
+                    <div class="dch"><span class="ver-pill">B</span> Rev 1 — Mar 2026</div>
+                </div>
+
+                <div class="doc-panes">
+                    <div class="doc-pane" id="pane-a">
+                        <div class="doc-page" id="page-a">
+                            <div class="page-section-title">4. Material Specifications</div>
+
+                            <p class="dim-block" data-blocks="1,2">The housing assembly shall be fabricated from
+                                <span class="hl hl-material" data-diff="1">Grade 304 stainless steel</span>
+                                with a minimum wall thickness of
+                                <span class="hl hl-material" data-diff="2">2.0 mm</span>.
+                                Surface finish shall comply with Ra ≤ 1.6 µm on all sealing faces.
+                            </p>
+
+                            <p class="dim-block" data-blocks="3">Operating temperature range:
+                                <span class="hl hl-substantive" data-diff="3">-20°C to +85°C</span>.
+                                Storage: -40°C to +100°C. Humidity per IEC 60068-2-78.
+                            </p>
+
+                            <table class="spec-table">
+                                <thead>
+                                    <tr>
+                                        <th>Parameter</th>
+                                        <th>Min</th>
+                                        <th>Max</th>
+                                        <th>Unit</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="dim-row" data-blocks="4">
+                                        <td>Inlet pressure</td>
+                                        <td>0.5</td>
+                                        <td><span class="hl hl-material" data-diff="4">8.0</span></td>
+                                        <td>bar</td>
+                                    </tr>
+                                    <tr class="dim-row" data-blocks="">
+                                        <td>Flow rate</td>
+                                        <td>2</td>
+                                        <td>25</td>
+                                        <td>L/min</td>
+                                    </tr>
+                                    <tr class="dim-row" data-blocks="5">
+                                        <td>Seal torque</td>
+                                        <td>15</td>
+                                        <td><span class="hl hl-material" data-diff="5">22</span></td>
+                                        <td>N·m</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <p class="dim-block" data-blocks="6">All fasteners shall use
+                                <span class="hl hl-cosmetic" data-diff="6">ISO metric threads</span>.
+                                Torque specifications per Table 4.3.
+                            </p>
+
+                            <p class="dim-block" data-blocks="7">Coating:
+                                <span class="hl hl-uncertain" data-diff="7">Electroless nickel, 25–50 µm</span>.
+                            </p>
+
+                            <div class="page-footer">Page 4 of 10 · Rev 0 — Jan 2026</div>
+                        </div>
+                    </div>
+
+                    <div class="doc-pane" id="pane-b">
+                        <div class="doc-page" id="page-b">
+                            <div class="page-section-title">4. Material Specifications</div>
+
+                            <p class="dim-block" data-blocks="1,2">The housing assembly shall be fabricated from
+                                <span class="hl hl-material" data-diff="1">Grade 316L stainless steel</span>
+                                with a minimum wall thickness of
+                                <span class="hl hl-material" data-diff="2">2.5 mm</span>.
+                                Surface finish shall comply with Ra ≤ 1.6 µm on all sealing faces.
+                            </p>
+
+                            <p class="dim-block" data-blocks="3">Operating temperature range:
+                                <span class="hl hl-substantive" data-diff="3">-40°C to +120°C</span>.
+                                Storage: -40°C to +100°C. Humidity per IEC 60068-2-78.
+                            </p>
+
+                            <table class="spec-table">
+                                <thead>
+                                    <tr>
+                                        <th>Parameter</th>
+                                        <th>Min</th>
+                                        <th>Max</th>
+                                        <th>Unit</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="dim-row" data-blocks="4">
+                                        <td>Inlet pressure</td>
+                                        <td>0.5</td>
+                                        <td><span class="hl hl-material" data-diff="4">10.0</span></td>
+                                        <td>bar</td>
+                                    </tr>
+                                    <tr class="dim-row" data-blocks="">
+                                        <td>Flow rate</td>
+                                        <td>2</td>
+                                        <td>25</td>
+                                        <td>L/min</td>
+                                    </tr>
+                                    <tr class="dim-row" data-blocks="5">
+                                        <td>Seal torque</td>
+                                        <td>15</td>
+                                        <td><span class="hl hl-material" data-diff="5">28</span></td>
+                                        <td>N·m</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <p class="dim-block" data-blocks="6">All fasteners shall use
+                                <span class="hl hl-cosmetic" data-diff="6">ISO metric threads</span>.
+                                Torque specifications per Table 4.3.
+                            </p>
+
+                            <p class="dim-block" data-blocks="7">Coating:
+                                <span class="hl hl-uncertain" data-diff="7">Electroless nickel, 40–75 µm</span>.
+                                <span class="note-badge">⚠ verify annotation</span>
+                            </p>
+
+                            <div class="page-footer">Page 4 of 10 · Rev 1 — Mar 2026</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── DETAIL PANEL ─────────────────────────── -->
+                <div class="detail-panel" id="detail-panel">
+                    <div class="dp-left">
+                        <div class="dp-id" id="dp-id">Select a difference to inspect</div>
+                        <div class="dp-ba-row" id="dp-ba-row" style="display:none">
+                            <div>
+                                <div class="dp-field-label">Before</div>
+                                <div class="dp-val dp-val-a" id="dp-before">—</div>
+                            </div>
+                            <div class="dp-arrow-big">→</div>
+                            <div>
+                                <div class="dp-field-label">After</div>
+                                <div class="dp-val dp-val-b" id="dp-after">—</div>
+                            </div>
+                        </div>
+                        <div class="dp-reason" id="dp-reason" style="display:none">
+                            <span class="dp-reason-label">AI</span><span id="dp-reason-text"></span>
+                        </div>
+                    </div>
+                    <div class="dp-right">
+                        <div class="dp-meta-col">
+                            <div class="dp-meta-label">Type</div>
+                            <div class="dp-meta-val" id="dp-type" style="font-size:11.5px">—</div>
+                        </div>
+                        <div class="dp-meta-col">
+                            <div class="dp-meta-label">Significance</div>
+                            <div id="dp-sig">—</div>
+                        </div>
+                        <div class="dp-meta-col dp-conf-col">
+                            <div class="dp-meta-label">Confidence</div>
+                            <div class="conf-bar-row">
+                                <div class="conf-track-lg">
+                                    <div class="conf-bar-lg" id="dp-cbar"></div>
+                                </div>
+                                <span class="conf-val-text" id="dp-cval">—</span>
+                            </div>
+                            <div class="conf-meaning" id="dp-cmeaning"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══ ACTION BAR ════════════════════════════════════ -->
+        <div class="action-bar">
+            <div class="nav-group">
+                <button class="nav-btn" onclick="nav(-1)" title="Previous (K)">
+                    ← Prev <span class="kbd">K</span>
+                </button>
+                <button class="nav-btn" onclick="nav(1)" title="Next (J)">
+                    Next → <span class="kbd">J</span>
+                </button>
+            </div>
+            <button class="nav-btn smart" onclick="navSmart('pending')" title="Jump to next pending">
+                Next pending ↓
+            </button>
+            <button class="nav-btn smart" onclick="navSmart('material')" title="Jump to next material diff">
+                Next material ↓
+            </button>
+
+            <span class="ab-diff-counter" id="ab-counter">— of 12</span>
+            <div class="ab-spacer"></div>
+
+            <div class="action-group">
+                <button class="act-btn act-confirm" onclick="verify('confirmed')" title="Mark as confirmed (C)">
+                    Confirm <span class="kbd">C</span>
+                </button>
+                <button class="act-btn act-correct" onclick="verify('corrected')" title="Correct description (E)">
+                    Correct <span class="kbd">E</span>
+                </button>
+                <button class="act-btn act-flag" onclick="verify('flagged')" title="Flag for review (F)">
+                    Flag <span class="kbd">F</span>
+                </button>
+                <button class="act-btn act-dismiss" onclick="verify('dismissed')" title="Dismiss as false positive (D)">
+                    Dismiss <span class="kbd">D</span>
+                </button>
+            </div>
+
+            <button class="nav-btn" onclick="toggleHelp()" title="Keyboard shortcuts (?)">
+                ? Help
+            </button>
+        </div>
+    </div>
+
+    <!-- ══ HELP OVERLAY ════════════════════════════════════ -->
+    <div class="help-overlay" id="help-overlay" onclick="if(event.target===this)toggleHelp()">
+        <div class="help-box">
+            <div class="help-title">
+                Keyboard shortcuts
+                <button class="help-close" onclick="toggleHelp()">×</button>
+            </div>
+            <div class="help-row"><span class="help-desc">Next difference</span>
+                <div class="help-keys"><span class="kbd">J</span><span class="kbd">↓</span></div>
+            </div>
+            <div class="help-row"><span class="help-desc">Previous difference</span>
+                <div class="help-keys"><span class="kbd">K</span><span class="kbd">↑</span></div>
+            </div>
+            <div class="help-row"><span class="help-desc">Next pending</span>
+                <div class="help-keys"><span class="kbd">Space</span></div>
+            </div>
+            <div class="help-row"><span class="help-desc">Confirm difference</span>
+                <div class="help-keys"><span class="kbd">C</span></div>
+            </div>
+            <div class="help-row"><span class="help-desc">Dismiss (false positive)</span>
+                <div class="help-keys"><span class="kbd">D</span></div>
+            </div>
+            <div class="help-row"><span class="help-desc">Correct description</span>
+                <div class="help-keys"><span class="kbd">E</span></div>
+            </div>
+            <div class="help-row"><span class="help-desc">Flag for review</span>
+                <div class="help-keys"><span class="kbd">F</span></div>
+            </div>
+            <div class="help-row"><span class="help-desc">Show this help</span>
+                <div class="help-keys"><span class="kbd">?</span></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ─── DATA ──────────────────────────────────────────────
+        const DIFFS = [
+            { id: 1, num: 'D-01', sig: 'material', type: 'Text modification', page: 'p.4', before: 'Grade 304', after: 'Grade 316L', conf: 0.97, status: 'auto-confirmed', reason: 'Steel grade change — affects corrosion resistance & procurement cost. High-certainty extraction from digital text layer.' },
+            { id: 2, num: 'D-02', sig: 'material', type: 'Text modification', page: 'p.4', before: '2.0 mm', after: '2.5 mm', conf: 0.99, status: 'auto-confirmed', reason: 'Wall thickness increased 25%. Unambiguous numeric extraction, no layout overlap.' },
+            { id: 3, num: 'D-03', sig: 'substantive', type: 'Text modification', page: 'p.4', before: '-20°C–+85°C', after: '-40°C–+120°C', conf: 0.95, status: 'confirmed', reason: 'Operating range widened at both ends. Affects thermal validation & test protocols.' },
+            { id: 4, num: 'D-04', sig: 'material', type: 'Table cell change', page: 'p.4 · T4.1', before: '8.0 bar', after: '10.0 bar', conf: 0.98, status: 'confirmed', reason: 'Max inlet pressure raised 25%. Cell row 1 col 3 in Table 4.1, unambiguous value change.' },
+            { id: 5, num: 'D-05', sig: 'material', type: 'Table cell change', page: 'p.4 · T4.1', before: '22 N·m', after: '28 N·m', conf: 0.96, status: 'confirmed', reason: 'Max seal torque raised 27%. Impacts assembly tooling and torque wrench specifications.' },
+            { id: 6, num: 'D-06', sig: 'cosmetic', type: 'Formatting change', page: 'p.4', before: 'same content', after: 'same content', conf: 0.88, status: 'pending', reason: 'Font-weight difference detected between versions. Content is identical — likely a style-sheet change.' },
+            { id: 7, num: 'D-07', sig: 'uncertain', type: 'Annotation in B', page: 'p.4', before: '25–50 µm', after: '40–75 µm', conf: 0.61, status: 'pending', reason: 'Handwritten note overlaps printed coating spec. Transcription is uncertain — source image review required.' },
+            { id: 8, num: 'D-08', sig: 'material', type: 'Table row addition', page: 'p.5', before: '—', after: 'Vib 5–500 Hz 2g', conf: 0.93, status: 'pending', reason: 'New vibration spec row added to Table 5.2. No corresponding row in Version A — content addition.' },
+            { id: 9, num: 'D-09', sig: 'substantive', type: 'Text modification', page: 'p.6', before: '12 months', after: '24 months', conf: 0.99, status: 'pending', reason: 'Warranty period doubled. Clause 8.4 — significant commercial and legal implication.' },
+            { id: 10, num: 'D-10', sig: 'material', type: 'Text modification', page: 'p.7', before: 'ISO 9001:2015', after: '+AS9100D', conf: 0.94, status: 'pending', reason: 'Aerospace standard AS9100D added alongside existing ISO 9001. Broadens certification scope.' },
+            { id: 11, num: 'D-11', sig: 'cosmetic', type: 'Formatting change', page: 'p.8', before: '§ 6', after: '§ 7', conf: 0.91, status: 'pending', reason: 'Section numbering shifted by one due to a newly inserted section. No content change.' },
+            { id: 12, num: 'D-12', sig: 'uncertain', type: 'Annotation in B', page: 'p.9', before: '—', after: '[illegible]', conf: 0.43, status: 'pending', reason: 'Very low confidence: possible margin annotation, likely handwritten. Cannot auto-transcribe — manual inspection mandatory.' },
+        ];
+
+        let activeIdx = 0;
+        let activeFilter = 'all';
+        let toastTimer = null;
+
+        // ─── UTILITIES ─────────────────────────────────────────
+        function getFiltered() {
+            switch (activeFilter) {
+                case 'material': return DIFFS.filter(d => d.sig === 'material');
+                case 'lowconf': return DIFFS.filter(d => d.conf < 0.75);
+                case 'pending': return DIFFS.filter(d => d.status === 'pending');
+                default: return DIFFS;
+            }
+        }
+
+        function confClass(c) {
+            return c >= 0.85 ? 'cb-green' : c >= 0.70 ? 'cb-amber' : 'cb-red';
+        }
+
+        function confMeaning(c) {
+            if (c >= 0.95) return 'Auto-reliable';
+            if (c >= 0.80) return 'High confidence';
+            if (c >= 0.70) return 'Verify recommended';
+            if (c >= 0.50) return 'Needs attention';
+            return '⚠ Manual check required';
+        }
+
+        function sigPill(sig) {
+            const map = {
+                material: { label: 'Material', cls: 'stat-material', dot: 'dot-material' },
+                substantive: { label: 'Substantive', cls: 'stat-substantive', dot: 'dot-substantive' },
+                cosmetic: { label: 'Cosmetic', cls: 'stat-cosmetic', dot: 'dot-cosmetic' },
+                uncertain: { label: 'Uncertain', cls: 'stat-uncertain', dot: 'dot-uncertain' },
+            };
+            const m = map[sig] || map.uncertain;
+            return `<span class="dp-sig-pill ${m.cls}"><span class="stat-dot ${m.dot}"></span>${m.label}</span>`;
+        }
+
+        function statusHTML(d) {
+            const statusMap = {
+                'confirmed': { cls: 'st-confirmed', icon: '✓', label: 'confirmed' },
+                'auto-confirmed': { cls: 'st-auto', icon: '✓', label: 'auto-confirmed' },
+                'pending': { cls: 'st-pending', icon: '·', label: 'pending' },
+                'dismissed': { cls: 'st-dismissed', icon: '✕', label: 'dismissed' },
+                'flagged': { cls: 'st-flagged', icon: '⚑', label: 'flagged' },
+                'corrected': { cls: 'st-corrected', icon: '✎', label: 'corrected' },
+            };
+            const s = statusMap[d.status] || statusMap.pending;
+            let extra = '';
+            if (d.status === 'auto-confirmed') extra = `<span class="badge badge-auto">auto</span>`;
+            if (d.conf < 0.75 && d.status === 'pending') extra = `<span class="badge badge-check">⚠ check</span>`;
+            return `<span class="${s.cls}">${s.icon} ${s.label}</span>${extra ? ' ' + extra : ''}`;
+        }
+
+        // ─── RENDER DIFF LIST ───────────────────────────────────
+        function renderList() {
+            const fd = getFiltered();
+            const list = document.getElementById('diff-list');
+            document.getElementById('dp-count').textContent = fd.length + ' shown';
+            list.innerHTML = '';
+
+            if (fd.length === 0) {
+                list.innerHTML = '<div class="empty-state">No differences match this filter</div>';
+                return;
+            }
+
+            fd.forEach((d, i) => {
+                const isActive = d.id === DIFFS[activeIdx].id;
+                const el = document.createElement('div');
+                el.className = 'di' + (isActive ? ' active' : '');
+                el.setAttribute('data-id', d.id);
+                const pct = Math.round(d.conf * 100);
+                el.innerHTML = `
+      <div class="di-row1">
+        <span class="di-num">${d.num}</span>
+        <span class="sig-pip pip-${d.sig}"></span>
+        <span class="di-type">${d.type}</span>
+      </div>
+      <div class="di-ba">
+        <span class="di-before">${d.before}</span>
+        <span class="di-arrow">→</span>
+        <span class="di-after ${d.before === '—' ? 'di-new' : ''}">${d.after}</span>
+      </div>
+      <div class="di-row3">
+        <span class="di-page">${d.page}</span>
+        <div class="conf-micro">
+          <div class="conf-track"><div class="conf-bar ${confClass(d.conf)}" style="width:${pct}%"></div></div>
+          <span class="conf-pct">${pct}%</span>
+        </div>
+      </div>
+      <div class="di-status">${statusHTML(d)}</div>
+    `;
+
+                el.addEventListener('click', () => {
+                    activeIdx = DIFFS.indexOf(d);
+                    render();
+                });
+
+                // Hover preview in doc
+                el.addEventListener('mouseenter', () => {
+                    highlightDiff(d.id, true);
+                    dimOthers(d.id);
+                });
+                el.addEventListener('mouseleave', () => {
+                    if (d.id !== DIFFS[activeIdx].id) {
+                        clearHighlights();
+                        activateDiff(DIFFS[activeIdx].id);
+                    }
+                });
+
+                list.appendChild(el);
+            });
+        }
+
+        // ─── FOCUS / DIM LOGIC ─────────────────────────────────
+        function highlightDiff(diffId, isLit) {
+            document.querySelectorAll('.hl').forEach(el => {
+                if (parseInt(el.dataset.diff) === diffId) {
+                    if (isLit) el.classList.add('lit');
+                    else el.classList.remove('lit');
+                }
+            });
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.hl').forEach(el => el.classList.remove('lit'));
+        }
+
+        function dimOthers(activeDiffId) {
+            ['page-a', 'page-b'].forEach(pid => {
+                const pg = document.getElementById(pid);
+                if (!pg) return;
+                pg.classList.add('has-focus');
+                // Mark lit rows/blocks
+                pg.querySelectorAll('.dim-row, .dim-block').forEach(row => {
+                    const blocks = (row.dataset.blocks || '').split(',').map(s => s.trim()).filter(Boolean);
+                    if (blocks.includes(String(activeDiffId))) {
+                        row.classList.add('lit');
+                    } else {
+                        row.classList.remove('lit');
+                    }
+                });
+            });
+        }
+
+        function clearDimming() {
+            ['page-a', 'page-b'].forEach(pid => {
+                const pg = document.getElementById(pid);
+                if (!pg) return;
+                pg.classList.remove('has-focus');
+                pg.querySelectorAll('.dim-row, .dim-block').forEach(r => r.classList.remove('lit'));
+            });
+        }
+
+        function activateDiff(diffId) {
+            highlightDiff(diffId, true);
+            dimOthers(diffId);
+        }
+
+        // ─── RENDER DETAIL ──────────────────────────────────────
+        function renderDetail() {
+            const d = DIFFS[activeIdx];
+            const pct = Math.round(d.conf * 100);
+
+            document.getElementById('dp-id').textContent = `${d.num} · ${d.type} · ${d.page}`;
+            document.getElementById('dp-type').textContent = d.type;
+            document.getElementById('dp-sig').innerHTML = sigPill(d.sig);
+
+            const cbar = document.getElementById('dp-cbar');
+            cbar.style.width = pct + '%';
+            cbar.className = 'conf-bar-lg ' + confClass(d.conf);
+            document.getElementById('dp-cval').textContent = pct + '%';
+            document.getElementById('dp-cmeaning').textContent = confMeaning(d.conf);
+
+            document.getElementById('dp-ba-row').style.display = 'flex';
+            document.getElementById('dp-before').textContent = d.before;
+            document.getElementById('dp-after').textContent = d.after;
+
+            const reasonEl = document.getElementById('dp-reason');
+            reasonEl.style.display = 'block';
+            document.getElementById('dp-reason-text').textContent = d.reason;
+
+            document.getElementById('ab-counter').textContent = `Diff ${activeIdx + 1} of ${DIFFS.length}`;
+        }
+
+        // ─── RENDER PROGRESS ────────────────────────────────────
+        function renderProgress() {
+            const done = DIFFS.filter(d => d.status !== 'pending').length;
+            const pct = (done / DIFFS.length * 100).toFixed(0);
+            document.getElementById('prog-fill').style.width = pct + '%';
+            document.getElementById('prog-label').textContent = `${done} / ${DIFFS.length} verified`;
+        }
+
+        // ─── MASTER RENDER ──────────────────────────────────────
+        function render() {
+            renderList();
+            clearHighlights();
+            clearDimming();
+            activateDiff(DIFFS[activeIdx].id);
+            renderDetail();
+            renderProgress();
+            // Scroll active item into view
+            const activeEl = document.querySelector('.di.active');
+            if (activeEl) activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+
+        // ─── NAVIGATION ─────────────────────────────────────────
+        function nav(dir) {
+            const fd = getFiltered();
+            let i = fd.findIndex(d => d.id === DIFFS[activeIdx].id);
+            if (i === -1) i = 0;
+            i = Math.max(0, Math.min(fd.length - 1, i + dir));
+            activeIdx = DIFFS.indexOf(fd[i]);
+            render();
+        }
+
+        function navSmart(mode) {
+            const cur = activeIdx;
+            let next = null;
+            if (mode === 'pending') {
+                next = DIFFS.find((d, i) => i > cur && d.status === 'pending') || DIFFS.find(d => d.status === 'pending');
+            } else if (mode === 'material') {
+                next = DIFFS.find((d, i) => i > cur && d.sig === 'material') || DIFFS.find(d => d.sig === 'material');
+            }
+            if (next) { activeIdx = DIFFS.indexOf(next); render(); }
+        }
+
+        // ─── VERIFY ACTIONS ─────────────────────────────────────
+        const TOAST_MESSAGES = {
+            confirmed: '✓ Confirmed',
+            dismissed: '✕ Dismissed — excluded from report',
+            flagged: '⚑ Flagged for review',
+            corrected: '✎ Marked for correction',
+        };
+
+        function verify(status) {
+            const prev = DIFFS[activeIdx].status;
+            DIFFS[activeIdx].status = status;
+            showToast(TOAST_MESSAGES[status] || status);
+
+            // Advance to next pending
+            const fd = getFiltered();
+            const cur = fd.findIndex(d => d.id === DIFFS[activeIdx].id);
+            const next = fd.find((d, i) => i > cur && d.status === 'pending');
+            if (next) activeIdx = DIFFS.indexOf(next);
+            render();
+        }
+
+        // ─── FILTER ─────────────────────────────────────────────
+        function setFilter(f, el) {
+            activeFilter = f;
+            document.querySelectorAll('.fc').forEach(c => c.classList.remove('active'));
+            el.classList.add('active');
+            render();
+        }
+
+        // ─── TOAST ──────────────────────────────────────────────
+        function showToast(msg) {
+            if (toastTimer) { clearTimeout(toastTimer); document.querySelectorAll('.toast').forEach(t => t.remove()); }
+            const t = document.createElement('div');
+            t.className = 'toast in';
+            t.textContent = msg;
+            document.body.appendChild(t);
+            toastTimer = setTimeout(() => {
+                t.className = 'toast out';
+                setTimeout(() => t.remove(), 300);
+            }, 1800);
+        }
+
+        // ─── HELP ───────────────────────────────────────────────
+        function toggleHelp() {
+            document.getElementById('help-overlay').classList.toggle('show');
+        }
+
+        // ─── KEYBOARD ───────────────────────────────────────────
+        document.addEventListener('keydown', e => {
+            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+            switch (e.key) {
+                case 'j': case 'ArrowDown': nav(1); e.preventDefault(); break;
+                case 'k': case 'ArrowUp': nav(-1); e.preventDefault(); break;
+                case ' ': navSmart('pending'); e.preventDefault(); break;
+                case 'c': case 'C': verify('confirmed'); break;
+                case 'd': case 'D': verify('dismissed'); break;
+                case 'f': case 'F': verify('flagged'); break;
+                case 'e': case 'E': verify('corrected'); break;
+                case '?': toggleHelp(); break;
+                case 'Escape': document.getElementById('help-overlay').classList.remove('show'); break;
+            }
+        });
+
+        // ─── REPORT BUTTON ──────────────────────────────────────
+        document.getElementById('btn-report').addEventListener('click', () => {
+            const done = DIFFS.filter(d => d.status !== 'pending').length;
+            showToast(`Generating report — ${done} of ${DIFFS.length} verified…`);
+        });
+
+        // ─── INIT ────────────────────────────────────────────────
+        render();
+    </script>
+</body>
+
+</html>
