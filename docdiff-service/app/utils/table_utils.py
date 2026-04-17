@@ -49,16 +49,31 @@ def _normalize_cell_value(text: str) -> str:
         return text
 
 
+def _unwrap_table(block: dict) -> dict:
+    """Unwrap table data from block dict.
+
+    fast_parser nests table data under a "table" key, while some other code
+    passes the table dict directly. This handles both cases.
+    """
+    if "table" in block and isinstance(block["table"], dict):
+        return block["table"]
+    return block
+
+
 def compare_tables(table_a: dict, table_b: dict) -> TableDiff:
-    cells_a = _build_cell_map(table_a.get("cells", []))
-    cells_b = _build_cell_map(table_b.get("cells", []))
-    headers_a = table_a.get("headers", [])
-    headers_b = table_b.get("headers", [])
+    # Unwrap nested table structure (fast_parser nests under "table" key)
+    ta = _unwrap_table(table_a)
+    tb = _unwrap_table(table_b)
+
+    cells_a = _build_cell_map(ta.get("cells", []))
+    cells_b = _build_cell_map(tb.get("cells", []))
+    headers_a = ta.get("headers", [])
+    headers_b = tb.get("headers", [])
 
     cell_changes: list[CellDiff] = []
     structure_changed = (
-        table_a.get("rows") != table_b.get("rows")
-        or table_a.get("cols") != table_b.get("cols")
+        ta.get("rows") != tb.get("rows")
+        or ta.get("cols") != tb.get("cols")
     )
 
     header_changes: list[CellDiff] = []
@@ -106,11 +121,13 @@ def _build_cell_map(cells: list[dict]) -> dict[tuple[int, int], str]:
 
 
 def compute_table_similarity(table_a: dict, table_b: dict) -> float:
-    headers_a = " ".join(table_a.get("headers", []))
-    headers_b = " ".join(table_b.get("headers", []))
+    ta = _unwrap_table(table_a)
+    tb = _unwrap_table(table_b)
+    headers_a = " ".join(ta.get("headers", []))
+    headers_b = " ".join(tb.get("headers", []))
     header_sim = compute_similarity(headers_a, headers_b)
-    size_a = table_a.get("rows", 0) * table_a.get("cols", 0)
-    size_b = table_b.get("rows", 0) * table_b.get("cols", 0)
+    size_a = ta.get("rows", 0) * ta.get("cols", 0)
+    size_b = tb.get("rows", 0) * tb.get("cols", 0)
     if max(size_a, size_b) == 0:
         size_sim = 1.0
     else:

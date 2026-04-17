@@ -112,7 +112,7 @@ async def run_pipeline(job_id: str) -> None:
             job.stage_progress = dict(progress["stages"])
             await db.commit()
             scored = await run_stage_7(
-                diff_records, ai_provider, settings.confidence_threshold, job.auto_confirm_threshold
+                diff_records, ai_provider, settings.confidence_threshold, job.auto_confirm_threshold, db=db
             )
             _update_progress(progress, 7, "completed", "Classifying Differences")
 

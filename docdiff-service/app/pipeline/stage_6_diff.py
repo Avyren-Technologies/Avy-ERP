@@ -333,6 +333,12 @@ def _build_context(blk_a: dict | None, blk_b: dict | None) -> str:
 
 
 def _table_headers_str(block: dict) -> str:
-    """Return a comma-separated string of table headers from a block dict."""
-    headers = block.get("headers", [])
+    """Return a comma-separated string of table headers from a block dict.
+
+    Handles both top-level headers (legacy) and nested table.headers (fast_parser).
+    """
+    table = block.get("table", {})
+    headers = table.get("headers", []) if isinstance(table, dict) else []
+    if not headers:
+        headers = block.get("headers", [])
     return ", ".join(str(h) for h in headers)

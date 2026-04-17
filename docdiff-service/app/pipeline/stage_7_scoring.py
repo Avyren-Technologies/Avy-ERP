@@ -52,15 +52,37 @@ async def run_stage_7(
     ai_provider: AIProvider,
     confidence_threshold: float = 0.75,
     auto_confirm_threshold: float = 0.95,
+    db=None,
 ) -> list[dict]:
     """
     Stage 7: confidence scoring + significance classification.
 
     For each RawDiffRecord:
       1. Deterministic rule engine → significance + confidence (no API cost).
-      2. If rule engine is uncertain (confidence < 0.72) → AI classify.
+      2. If rule engine is uncertain (confidence < 0.72) → AI classify,
+         injecting few-shot examples from the corrections library.
       3. Set needs_verification / auto_confirmed flags.
     """
+    # Load corrections library for few-shot learning
+    corrections_cache: dict[str, str] = {}
+    if db is not None:
+        try:
+            from app.prompts.corrections_library import (
+                format_corrections_for_prompt,
+                get_relevant_corrections,
+            )
+            # Pre-load corrections for common diff types
+            for diff_type_val in set(r.difference_type.value for r in diff_records):
+                corrections = await get_relevant_corrections(diff_type_val, db, limit=5)
+                if corrections:
+                    corrections_cache[diff_type_val] = format_corrections_for_prompt(corrections)
+            if corrections_cache:
+                logger.info(
+                    f"Stage 7: loaded corrections for {len(corrections_cache)} diff types"
+                )
+        except Exception as e:
+            logger.warning(f"Stage 7: failed to load corrections library: {e}")
+
     scored: list[dict] = []
 
     ai_call_count = 0
@@ -88,6 +110,11 @@ async def run_stage_7(
                     value_after=record.value_after,
                     context=record.context,
                 )
+                # Inject corrections library as few-shot examples
+                corrections_text = corrections_cache.get(diff_type.value, "")
+                if corrections_text:
+                    prompt = prompt + corrections_text
+
                 ai_response = await ai_provider.classify_difference(
                     context=record.context or "",
                     prompt=prompt,

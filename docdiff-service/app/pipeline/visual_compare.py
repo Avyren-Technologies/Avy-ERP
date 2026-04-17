@@ -85,16 +85,28 @@ async def visual_compare_pages(
     if not isinstance(raw_diffs, list):
         return []
 
-    # Convert to pipeline-compatible format
+    # Convert to pipeline-compatible format (must use enum values, not raw strings)
+    from app.models.difference import DifferenceType, Significance
+
+    _TYPE_MAP = {v.value: v for v in DifferenceType}
+    _SIG_MAP = {v.value: v for v in Significance}
+
     results: list[dict] = []
     for i, d in enumerate(raw_diffs, start=1):
         if not isinstance(d, dict):
             continue
+
+        raw_type = d.get("type", "text_modification")
+        raw_sig = d.get("significance", "uncertain")
+        diff_type = _TYPE_MAP.get(raw_type, DifferenceType.text_modification)
+        significance = _SIG_MAP.get(raw_sig, Significance.uncertain)
+        conf = float(d.get("confidence", 0.80))
+
         results.append({
             "difference_number": i,
-            "difference_type": d.get("type", "text_modification"),
-            "significance": d.get("significance", "uncertain"),
-            "confidence": d.get("confidence", 0.80),
+            "difference_type": diff_type,
+            "significance": significance,
+            "confidence": conf,
             "page_version_a": page_num_a,
             "page_version_b": page_num_b,
             "bbox_version_a": d.get("bbox_version_a"),
@@ -105,8 +117,8 @@ async def visual_compare_pages(
             "summary": d.get("summary", ""),
             "block_id_version_a": None,
             "block_id_version_b": None,
-            "needs_verification": d.get("confidence", 0.80) < 0.75,
-            "auto_confirmed": d.get("confidence", 0.80) >= 0.95,
+            "needs_verification": conf < 0.75,
+            "auto_confirmed": conf >= 0.95 and significance != Significance.uncertain,
             "source": "visual_comparison",
         })
 

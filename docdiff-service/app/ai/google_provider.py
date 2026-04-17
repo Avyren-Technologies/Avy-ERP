@@ -40,11 +40,12 @@ class GoogleProvider(AIProvider):
                 contents.append(types.Part.from_bytes(data=img, mime_type="image/png"))
         contents.append(prompt)
 
-        # Tight generation config: low temp, JSON mode, hard token cap
-        # This cuts output tokens by ~80% and forces structured responses.
+        # Adaptive generation config based on whether this is extraction (needs more tokens)
+        # or classification (needs fewer tokens). Detect by image presence.
+        is_extraction = images is not None and len(images) > 0
         generation_config = types.GenerateContentConfig(
             temperature=0.1,
-            max_output_tokens=512,           # enough for structured JSON, no essays
+            max_output_tokens=8192 if is_extraction else 512,
             response_mime_type="application/json",
         )
         if system:
