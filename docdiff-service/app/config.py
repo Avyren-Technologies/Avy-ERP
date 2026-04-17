@@ -29,14 +29,14 @@ class Settings(BaseSettings):
     qwen_local_endpoint: str = "http://localhost:8080/v1"
 
     # AI Defaults
-    default_provider: str = "anthropic"
-    default_model: str = "claude-sonnet-4-6"
+    default_provider: str = "google"
+    default_model: str = "gemini-2.5-flash"
     confidence_threshold: float = 0.75
     auto_confirm_threshold: float = 0.95
     page_render_dpi: int = 250
 
     # Processing
-    max_pages: int = 10
+    max_pages: int = 20
     max_file_size_mb: int = 50
     max_retries: int = 3
     retry_backoff_base: int = 1

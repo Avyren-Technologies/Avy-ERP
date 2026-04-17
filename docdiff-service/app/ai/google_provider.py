@@ -4,11 +4,19 @@ from google.genai import types
 from app.ai.base import AIProvider, AIResponse, RateLimitError, ServerError, TokenUsage, ai_retry
 from app.config import settings
 
-AVAILABLE_MODELS = ["gemini-3.1-pro", "gemini-3-flash"]
+AVAILABLE_MODELS = [
+    "gemini-2.5-pro",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-001",
+    "gemini-2.0-flash-lite",
+    "gemini-2.0-flash-lite-001",
+]
 
 
 class GoogleProvider(AIProvider):
-    def __init__(self, model_name: str = "gemini-3.1-pro"):
+    def __init__(self, model_name: str = "gemini-2.5-flash"):
         self._model_name = model_name
         self._client = genai.Client(api_key=settings.google_api_key)
 
@@ -32,10 +40,19 @@ class GoogleProvider(AIProvider):
                 contents.append(types.Part.from_bytes(data=img, mime_type="image/png"))
         contents.append(prompt)
 
+        # Tight generation config: low temp, JSON mode, hard token cap
+        # This cuts output tokens by ~80% and forces structured responses.
+        generation_config = types.GenerateContentConfig(
+            temperature=0.1,
+            max_output_tokens=512,           # enough for structured JSON, no essays
+            response_mime_type="application/json",
+        )
+
         try:
             response = await self._client.aio.models.generate_content(
                 model=self._model_name,
                 contents=contents,
+                config=generation_config,
             )
         except Exception as e:
             error_str = str(e).lower()

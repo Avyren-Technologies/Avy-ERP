@@ -22,8 +22,8 @@ async def create_job(
     user: CurrentUser,
     version_a: UploadFile = File(..., description="Version A PDF document"),
     version_b: UploadFile = File(..., description="Version B PDF document"),
-    model_provider: str = Form(default="anthropic"),
-    model_name: str = Form(default="claude-sonnet-4-6"),
+    model_provider: str = Form(default=settings.default_provider),
+    model_name: str = Form(default=settings.default_model),
     label_a: str = Form(default="Version A"),
     label_b: str = Form(default="Version B"),
     auto_confirm_threshold: float = Form(default=0.95),
@@ -97,7 +97,7 @@ async def list_jobs(db: DbSession, user: CurrentUser):
         material_result = await db.execute(
             select(func.count()).select_from(DetectedDifference).where(
                 DetectedDifference.job_id == j.id,
-                DetectedDifference.significance == Significance.MATERIAL,
+                DetectedDifference.significance == Significance.material,
             )
         )
         material_count = material_result.scalar() or 0

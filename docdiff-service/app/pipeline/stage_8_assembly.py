@@ -35,6 +35,13 @@ async def run_stage_8(
         logger.error(f"Stage 8: job {job_id} not found")
         return False
 
+    # Deduplicate before saving
+    scored_differences = _deduplicate_differences(scored_differences)
+
+    # Re-number after dedup
+    for i, diff in enumerate(scored_differences, start=1):
+        diff["difference_number"] = i
+
     auto_confirmed_count = 0
 
     for scored in scored_differences:
@@ -80,3 +87,49 @@ async def run_stage_8(
         f"{auto_confirmed_count} auto-confirmed; job status → ready_for_review"
     )
     return True
+
+
+def _deduplicate_differences(scored: list[dict]) -> list[dict]:
+    """Remove duplicate detections of the same logical difference.
+
+    A duplicate is when the same before->after value pair appears multiple times
+    on the same page in different content blocks. Keep the first occurrence
+    (typically the more prominent one, like a table cell over inline text).
+    """
+    seen: set[tuple] = set()
+    deduped: list[dict] = []
+
+    for diff in scored:
+        # Create a dedup key from the essential content
+        before = (diff.get("value_before") or "").strip()
+        after = (diff.get("value_after") or "").strip()
+
+        # Skip dedup for very short values (single characters) as they may be
+        # genuinely different occurrences
+        if len(before) <= 1 and len(after) <= 1:
+            deduped.append(diff)
+            continue
+
+        page_a = diff.get("page_version_a")
+        page_b = diff.get("page_version_b")
+        diff_type = diff.get("difference_type")
+
+        key = (before, after, page_a, page_b, str(diff_type))
+
+        if key in seen:
+            logger.debug(
+                f"Dedup: dropping duplicate diff '{before}' -> '{after}' "
+                f"on page {page_a}/{page_b}"
+            )
+            continue
+
+        seen.add(key)
+        deduped.append(diff)
+
+    if len(scored) != len(deduped):
+        logger.info(
+            f"Deduplication: {len(scored)} -> {len(deduped)} "
+            f"({len(scored) - len(deduped)} duplicates removed)"
+        )
+
+    return deduped

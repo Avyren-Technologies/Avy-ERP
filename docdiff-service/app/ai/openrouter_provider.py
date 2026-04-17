@@ -6,11 +6,11 @@ from app.ai.base import AIProvider, AIResponse, RateLimitError, ServerError, Tok
 from app.config import settings
 
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
-AVAILABLE_MODELS = ["google/gemini-2.5-pro-preview", "anthropic/claude-sonnet-4"]
+AVAILABLE_MODELS = ["google/gemma-4-31b-it:free", "google/gemini-2.5-pro-preview"]
 
 
 class OpenRouterProvider(AIProvider):
-    def __init__(self, model_name: str = "google/gemini-2.5-pro-preview"):
+    def __init__(self, model_name: str = "google/gemma-4-31b-it:free"):
         self._model_name = model_name
 
     @property

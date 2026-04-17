@@ -5,11 +5,11 @@ import anthropic
 from app.ai.base import AIProvider, AIResponse, RateLimitError, ServerError, TokenUsage, ai_retry
 from app.config import settings
 
-AVAILABLE_MODELS = ["claude-sonnet-4-6", "claude-opus-4-6"]
+AVAILABLE_MODELS = ["claude-3-7-sonnet-20250219", "claude-3-opus-20240229"]
 
 
 class AnthropicProvider(AIProvider):
-    def __init__(self, model_name: str = "claude-sonnet-4-6"):
+    def __init__(self, model_name: str = "claude-3-7-sonnet-20250219"):
         self._model_name = model_name
         self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 

@@ -53,10 +53,11 @@ def validate_pdf(file_path: str, max_pages: int, max_size_mb: int) -> tuple[bool
     if doc.is_encrypted:
         doc.close()
         return False, "PDF is password-protected or encrypted"
-    if doc.page_count > max_pages:
+    cnt = doc.page_count
+    if cnt > max_pages:
         doc.close()
-        return False, f"Page count ({doc.page_count}) exceeds {max_pages} page limit"
-    if doc.page_count == 0:
+        return False, f"Page count ({cnt}) exceeds {max_pages} page limit"
+    if cnt == 0:
         doc.close()
         return False, "PDF has no pages"
     doc.close()

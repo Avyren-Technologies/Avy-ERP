@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.document import Document, DocumentPage
+from app.models.document import Document, DocumentPage, PageType
 from app.models.job import ComparisonJob, JobStatus
 from app.pdf.metadata import extract_metadata, validate_pdf
 from app.pdf.renderer import render_all_pages
@@ -71,6 +71,7 @@ async def run_stage_1(job_id: uuid.UUID, db: AsyncSession) -> bool:
             page = DocumentPage(
                 document_id=doc.id,
                 page_number=page_num + 1,
+                page_type=PageType.mixed,
             )
             db.add(page)
 

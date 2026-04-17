@@ -34,8 +34,8 @@ class ServerError(Exception):
 
 ai_retry = retry(
     retry=retry_if_exception_type((RateLimitError, ServerError, TimeoutError)),
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=1, max=30),
+    stop=stop_after_attempt(6),
+    wait=wait_exponential(multiplier=3, min=5, max=60),
     before_sleep=lambda rs: logger.warning(
         f"AI call failed (attempt {rs.attempt_number}), retrying: {rs.outcome.exception()}"
     ),

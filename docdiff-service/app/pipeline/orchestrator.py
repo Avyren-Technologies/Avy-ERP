@@ -89,6 +89,7 @@ async def run_pipeline(job_id: str) -> None:
             _update_progress(progress, 5, "in_progress", "Section Alignment")
             job.current_stage = 5
             job.status = JobStatus.aligning
+            job.stage_progress = dict(progress["stages"])
             await db.commit()
             aligned_pairs = await run_stage_5(uid, db)
             _update_progress(progress, 5, "completed", "Section Alignment")
@@ -97,6 +98,7 @@ async def run_pipeline(job_id: str) -> None:
             _update_progress(progress, 6, "in_progress", "Computing Differences")
             job.current_stage = 6
             job.status = JobStatus.diffing
+            job.stage_progress = dict(progress["stages"])
             await db.commit()
             diff_records = run_stage_6(aligned_pairs)
             _update_progress(progress, 6, "completed", "Computing Differences")
@@ -105,6 +107,7 @@ async def run_pipeline(job_id: str) -> None:
             _update_progress(progress, 7, "in_progress", "Classifying Differences")
             job.current_stage = 7
             job.status = JobStatus.classifying
+            job.stage_progress = dict(progress["stages"])
             await db.commit()
             scored = await run_stage_7(
                 diff_records, ai_provider, settings.confidence_threshold, job.auto_confirm_threshold
@@ -115,6 +118,7 @@ async def run_pipeline(job_id: str) -> None:
             _update_progress(progress, 8, "in_progress", "Assembling Results")
             job.current_stage = 8
             job.status = JobStatus.assembling
+            job.stage_progress = dict(progress["stages"])
             await db.commit()
             await run_stage_8(uid, scored, db)
             _update_progress(progress, 8, "completed", "Assembling Results")

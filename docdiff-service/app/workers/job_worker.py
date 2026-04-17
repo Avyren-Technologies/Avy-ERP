@@ -19,7 +19,9 @@ class WorkerSettings:
     functions = [process_comparison_job]
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     max_jobs = 1
-    job_timeout = 600
+    job_timeout = 3600          # 60 min — Docling on large docs can be slow
+    keep_result = 60            # keep job result in Redis for 60 seconds
+    retry_jobs = False          # don't silently re-queue failed/cancelled jobs
 
 
 async def enqueue_job(job_id: str) -> None:
