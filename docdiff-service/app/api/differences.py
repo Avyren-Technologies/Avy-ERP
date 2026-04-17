@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession
 from app.models.difference import (
@@ -66,8 +66,9 @@ async def list_differences(
         query = query.where(DetectedDifference.confidence <= confidence_max)
 
     # Count total
-    count_result = await db.execute(query)
-    total = len(count_result.scalars().all())
+    count_query = select(func.count()).select_from(query.subquery())
+    count_result = await db.execute(count_query)
+    total = count_result.scalar() or 0
 
     # Paginate
     query = (
@@ -160,7 +161,7 @@ async def verify_difference(
 
 
 @router.patch(
-    "/{job_id}/differences",
+    "/{job_id}/differences/bulk",
     response_model=SuccessResponse[list[DifferenceResponse]],
 )
 async def bulk_verify_differences(

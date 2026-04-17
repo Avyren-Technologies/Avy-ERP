@@ -1,7 +1,7 @@
 import hashlib
 import secrets
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,7 +32,7 @@ async def validate_api_key(key: str, db: AsyncSession) -> APIKeyUser | None:
     if api_key is None:
         return None
     await db.execute(
-        update(APIKey).where(APIKey.id == api_key.id).values(last_used_at=datetime.utcnow())
+        update(APIKey).where(APIKey.id == api_key.id).values(last_used_at=datetime.now(tz=timezone.utc))
     )
     await db.commit()
     return APIKeyUser(api_key_id=str(api_key.id), name=api_key.name)

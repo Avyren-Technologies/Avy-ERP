@@ -2,11 +2,12 @@ import os
 import uuid
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, DbSession
 from app.config import settings
+from app.models.difference import DetectedDifference, Significance
 from app.models.document import Document, DocumentRole
 from app.models.job import ComparisonJob, JobStatus
 from app.schemas.job import JobListResponse, JobResponse
@@ -92,6 +93,15 @@ async def list_jobs(db: DbSession, user: CurrentUser):
         docs = {d.role: d for d in j.documents}
         doc_a = docs.get(DocumentRole.version_a)
         doc_b = docs.get(DocumentRole.version_b)
+
+        material_result = await db.execute(
+            select(func.count()).select_from(DetectedDifference).where(
+                DetectedDifference.job_id == j.id,
+                DetectedDifference.significance == Significance.MATERIAL,
+            )
+        )
+        material_count = material_result.scalar() or 0
+
         response_list.append(JobListResponse(
             id=j.id,
             status=j.status,
@@ -101,7 +111,7 @@ async def list_jobs(db: DbSession, user: CurrentUser):
             label_b=doc_b.label if doc_b else None,
             total_differences=j.total_differences,
             differences_verified=j.differences_verified,
-            material_count=None,
+            material_count=material_count,
             processing_time_ms=j.processing_time_ms,
             created_at=j.created_at,
         ))
