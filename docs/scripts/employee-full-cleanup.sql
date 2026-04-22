@@ -36,13 +36,13 @@ UNION ALL SELECT 'employee_salaries', COUNT(*) FROM employee_salaries WHERE "emp
 UNION ALL SELECT 'overtime_requests', COUNT(*) FROM overtime_requests WHERE "employeeId" IN (SELECT id FROM employees WHERE "companyId" = :target_company)
 UNION ALL SELECT 'expense_claims', COUNT(*) FROM expense_claims WHERE "employeeId" IN (SELECT id FROM employees WHERE "companyId" = :target_company)
 UNION ALL SELECT 'notifications', COUNT(*) FROM notifications WHERE "userId" IN (SELECT id FROM users WHERE "employeeId" IN (SELECT id FROM employees WHERE "companyId" = :target_company))
-UNION ALL SELECT 'no_series_configs (EMP)', COUNT(*) FROM no_series_configs WHERE "companyId" = :target_company AND "linkedScreen" = 'Employee Onboarding'
+UNION ALL SELECT 'no_series_configs (EMP)', COUNT(*) FROM no_series_configs WHERE "companyId" = :target_company AND "linkedScreen" = 'Employee'
 ORDER BY 1;
 
 -- ═══════════════════════════════════════════════════════════════════════
 -- ACTUAL DELETION — Runs in a single transaction (all-or-nothing)
 -- ═══════════════════════════════════════════════════════════════════════
-/*
+
 BEGIN;
 
 -- ─────────────────────────────────────────────────────────────────────
@@ -95,18 +95,18 @@ DELETE FROM employee_promotions WHERE "employeeId" IN (SELECT id FROM employees 
 -- (only for users that are employee-linked, NOT the company admin user)
 -- ─────────────────────────────────────────────────────────────────────
 
-DELETE FROM notifications WHERE "userId" IN (SELECT id FROM users WHERE "employeeId" IN (SELECT id FROM employees WHERE "companyId" = :target_company));
-DELETE FROM active_sessions WHERE "userId" IN (SELECT id FROM users WHERE "employeeId" IN (SELECT id FROM employees WHERE "companyId" = :target_company));
-DELETE FROM user_devices WHERE "userId" IN (SELECT id FROM users WHERE "employeeId" IN (SELECT id FROM employees WHERE "companyId" = :target_company));
-DELETE FROM user_notification_preferences WHERE "userId" IN (SELECT id FROM users WHERE "employeeId" IN (SELECT id FROM employees WHERE "companyId" = :target_company));
-DELETE FROM user_notification_category_preferences WHERE "userId" IN (SELECT id FROM users WHERE "employeeId" IN (SELECT id FROM employees WHERE "companyId" = :target_company));
+DELETE FROM notifications WHERE "userId" IN (SELECT id FROM users WHERE "employeeId" IN (SELECT id FROM employees WHERE "companyId" = :target_company) AND "role" != 'COMPANY_ADMIN');
+DELETE FROM active_sessions WHERE "userId" IN (SELECT id FROM users WHERE "employeeId" IN (SELECT id FROM employees WHERE "companyId" = :target_company) AND "role" != 'COMPANY_ADMIN');
+DELETE FROM user_devices WHERE "userId" IN (SELECT id FROM users WHERE "employeeId" IN (SELECT id FROM employees WHERE "companyId" = :target_company) AND "role" != 'COMPANY_ADMIN');
+DELETE FROM user_notification_preferences WHERE "userId" IN (SELECT id FROM users WHERE "employeeId" IN (SELECT id FROM employees WHERE "companyId" = :target_company) AND "role" != 'COMPANY_ADMIN');
+DELETE FROM user_notification_category_preferences WHERE "userId" IN (SELECT id FROM users WHERE "employeeId" IN (SELECT id FROM employees WHERE "companyId" = :target_company) AND "role" != 'COMPANY_ADMIN');
 
 -- ─────────────────────────────────────────────────────────────────────
 -- STEP 3: Delete TenantUser + User records
 -- ─────────────────────────────────────────────────────────────────────
 
-DELETE FROM tenant_users WHERE "userId" IN (SELECT id FROM users WHERE "employeeId" IN (SELECT id FROM employees WHERE "companyId" = :target_company));
-DELETE FROM users WHERE "employeeId" IN (SELECT id FROM employees WHERE "companyId" = :target_company);
+DELETE FROM tenant_users WHERE "userId" IN (SELECT id FROM users WHERE "employeeId" IN (SELECT id FROM employees WHERE "companyId" = :target_company) AND "role" != 'COMPANY_ADMIN');
+DELETE FROM users WHERE "employeeId" IN (SELECT id FROM employees WHERE "companyId" = :target_company) AND "role" != 'COMPANY_ADMIN';
 
 -- ─────────────────────────────────────────────────────────────────────
 -- STEP 4: Clear employee self-references (reporting/functional manager)
@@ -115,6 +115,9 @@ DELETE FROM users WHERE "employeeId" IN (SELECT id FROM employees WHERE "company
 
 UPDATE employees SET "reportingManagerId" = NULL WHERE "companyId" = :target_company;
 UPDATE employees SET "functionalManagerId" = NULL WHERE "companyId" = :target_company;
+
+-- Safety: Detach Company Admin from their employee profile so they aren't affected by employee deletion
+UPDATE users SET "employeeId" = NULL WHERE "companyId" = :target_company AND "role" = 'COMPANY_ADMIN';
 
 -- ─────────────────────────────────────────────────────────────────────
 -- STEP 5: Delete all employees
@@ -134,7 +137,7 @@ DELETE FROM employees WHERE "companyId" = :target_company;
 -- Next bulk upload will start from EMP-000001
 -- ─────────────────────────────────────────────────────────────────────
 
-UPDATE no_series_configs SET "startNumber" = 1 WHERE "companyId" = :target_company AND "linkedScreen" = 'Employee Onboarding';
+UPDATE no_series_configs SET "startNumber" = 1 WHERE "companyId" = :target_company AND "linkedScreen" = 'Employee';
 
 COMMIT;
 
@@ -144,6 +147,5 @@ COMMIT;
 
 SELECT 'employees' as table_name, COUNT(*) as remaining FROM employees WHERE "companyId" = :target_company
 UNION ALL SELECT 'users (employee-linked)', COUNT(*) FROM users WHERE "employeeId" IS NOT NULL AND "companyId" = :target_company
-UNION ALL SELECT 'no_series (startNumber)', "startNumber" FROM no_series_configs WHERE "companyId" = :target_company AND "linkedScreen" = 'Employee Onboarding'
+UNION ALL SELECT 'no_series (startNumber)', "startNumber" FROM no_series_configs WHERE "companyId" = :target_company AND "linkedScreen" = 'Employee'
 ORDER BY 1;
-*/
